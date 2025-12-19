@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "bookstore",
 ]
 
 MIDDLEWARE = [
@@ -76,8 +77,16 @@ WSGI_APPLICATION = "MyBookwise.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.mysql",
+        'NAME': 'bookstoredb',      # 数据库名
+        'USER': 'root',           # MySQL用户名
+        'PASSWORD': 'xdhsp520',       # MySQL密码
+        'HOST': 'localhost',              # 数据库地址
+        'PORT': '3306',                    # 端口号
+        'OPTIONS': {
+            'charset': 'utf8mb4',         # 字符集
+        }
+
     }
 }
 
