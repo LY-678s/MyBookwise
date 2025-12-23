@@ -14,6 +14,11 @@ from .models import (
     Procurementdetail,
 )
 
+# 启动时打印，确认signals.py被加载
+print("="*60)
+print("🚀 bookstore/signals.py loaded successfully!")
+print("="*60)
+
 
 @receiver(post_save, sender=Shortagerecord)
 def handle_shortagerecord_post_save(sender, instance, created, **kwargs):
@@ -93,6 +98,31 @@ from django.core.exceptions import ValidationError
 from .models import Orders, Customer, Creditlevel
 
 
+def _calculate_credit_level(totalspent):
+    """
+    根据累计消费金额计算信用等级
+    规则：
+    - TotalSpent >= 10000 → 5级
+    - TotalSpent >= 5000  → 4级
+    - TotalSpent >= 2000  → 3级
+    - TotalSpent >= 1000  → 2级
+    - 否则               → 1级
+    """
+    from decimal import Decimal
+    totalspent = Decimal(str(totalspent)) if totalspent else Decimal('0')
+    
+    if totalspent >= Decimal('10000'):
+        return 5
+    elif totalspent >= Decimal('5000'):
+        return 4
+    elif totalspent >= Decimal('2000'):
+        return 3
+    elif totalspent >= Decimal('1000'):
+        return 2
+    else:
+        return 1
+
+
 def _get_old_order_values(instance):
     """Return (old_status, old_totalamount) for existing order, or (None, None) for new."""
     if not instance.pk:
@@ -109,18 +139,25 @@ def _handle_deduct_or_refund(instance, old_status, old_totalamount):
     Perform customer balance deduction/refund and TotalSpent updates in application layer.
     This mirrors previous trigger logic but runs in Django for correctness and to avoid MySQL 1442.
     """
+    print(f"🟢 [HANDLE] Starting _handle_deduct_or_refund")
+    print(f"   Order: {instance.orderid}, Status: {old_status}→{instance.status}, Amount: {instance.totalamount}")
+    
     # Use atomic transaction and select_for_update on customer to ensure consistency
     with transaction.atomic():
         customer = Customer.objects.select_for_update().select_related('levelid').get(pk=instance.customerid_id)
         creditlevel = customer.levelid
+        
+        print(f"   Customer: {customer.name} (ID={customer.customerid})")
+        print(f"   Before: Balance={customer.balance}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
 
         # 1) Deduct difference when TotalAmount changes and status=0
         if instance.totalamount is not None and (old_totalamount != instance.totalamount) and instance.status == 0:
+            print(f"   💰 [DEDUCT] Deducting balance...")
             amount_diff = instance.totalamount - (old_totalamount or 0)
             if amount_diff != 0:
                 # Determine overdraft policy: prefer customer's overdraftlimit if present
                 overdraft_limit = customer.overdraftlimit or creditlevel.overdraftlimit
-                can_overdraft = creditlevel.candoverdraft
+                can_overdraft = creditlevel.canoverdraft
                 new_balance = customer.balance - amount_diff
                 if can_overdraft == 0:
                     if new_balance < 0:
@@ -132,19 +169,54 @@ def _handle_deduct_or_refund(instance, old_status, old_totalamount):
                 # All checks passed; update balance
                 customer.balance = new_balance
                 customer.save(update_fields=['balance'])
+                print(f"   ✅ Balance updated: {customer.balance}")
 
         # 2) Refund when order cancelled (status becomes 4)
         if instance.status == 4 and old_status != 4 and instance.totalamount is not None:
+            print(f"   💸 [REFUND] Processing refund...")
+            old_level = customer.levelid.levelid
             customer.balance = customer.balance + instance.totalamount
             # If order was previously completed, reduce TotalSpent
             if old_status == 2:
                 customer.totalspent = max(customer.totalspent - (instance.totalamount or 0), 0)
-            customer.save(update_fields=['balance', 'totalspent'])
+                
+                # 检查是否需要降级
+                new_level_id = _calculate_credit_level(customer.totalspent)
+                if new_level_id != old_level:
+                    from .models import Creditlevel
+                    customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
+                    customer.save(update_fields=['balance', 'totalspent', 'levelid'])
+                    print(f"   ✅ Refund completed: Balance={customer.balance}, TotalSpent={customer.totalspent}")
+                    print(f"   ⬇️ Level downgraded: {old_level} → {new_level_id}")
+                else:
+                    customer.save(update_fields=['balance', 'totalspent'])
+                    print(f"   ✅ Refund completed: Balance={customer.balance}, TotalSpent={customer.totalspent}")
+            else:
+                customer.save(update_fields=['balance'])
+                print(f"   ✅ Refund completed: Balance={customer.balance}")
 
         # 3) When order becomes completed, add to TotalSpent
         if instance.status == 2 and old_status != 2 and instance.totalamount is not None:
+            print(f"   📈 [COMPLETE] Adding to TotalSpent...")
+            print(f"      Condition check: status={instance.status}, old_status={old_status}, amount={instance.totalamount}")
+            old_totalspent = customer.totalspent
+            old_level = customer.levelid.levelid
             customer.totalspent = (customer.totalspent or 0) + instance.totalamount
-            customer.save(update_fields=['totalspent'])
+            
+            # 根据新的TotalSpent计算应该的信用等级
+            new_level_id = _calculate_credit_level(customer.totalspent)
+            
+            # 如果等级需要变化，同时更新
+            if new_level_id != old_level:
+                from .models import Creditlevel
+                customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
+                customer.save(update_fields=['totalspent', 'levelid'])
+                print(f"   ✅ TotalSpent updated: {old_totalspent} + {instance.totalamount} = {customer.totalspent}")
+                print(f"   🎖️ Level upgraded: {old_level} → {new_level_id} ⭐")
+            else:
+                customer.save(update_fields=['totalspent'])
+                print(f"   ✅ TotalSpent updated: {old_totalspent} + {instance.totalamount} = {customer.totalspent}")
+                print(f"   ℹ️ Level unchanged: {customer.levelid.levelid}")
 
 
 @receiver(pre_save, sender=Orders)
@@ -153,18 +225,33 @@ def orders_capture_old(sender, instance, **kwargs):
     old_status, old_total = _get_old_order_values(instance)
     instance._old_status = old_status
     instance._old_totalamount = old_total
+    
+    # 调试信息
+    print(f"\n{'='*60}")
+    print(f"🔵 [PRE_SAVE] Order {instance.orderid}")
+    print(f"   Old Status: {old_status} → New Status: {instance.status}")
+    print(f"   Old Amount: {old_total} → New Amount: {instance.totalamount}")
+    print(f"   Customer ID: {instance.customerid_id}")
+    print(f"{'='*60}\n")
 
 
 @receiver(post_save, sender=Orders)
 def orders_post_save(sender, instance, created, **kwargs):
     old_status = getattr(instance, '_old_status', None)
     old_totalamount = getattr(instance, '_old_totalamount', None)
+    
+    # 调试日志
+    print(f"🔔 [Signal] Order {instance.orderid} saved: old_status={old_status}, new_status={instance.status}, amount={instance.totalamount}")
+    
     try:
         _handle_deduct_or_refund(instance, old_status, old_totalamount)
+        print(f"✅ [Signal] Order {instance.orderid} processed successfully")
     except ValidationError as e:
+        print(f"❌ [Signal] ValidationError for Order {instance.orderid}: {e}")
         # Re-raise so admin/view layer can catch and display friendly message
         raise
-    except Exception:
+    except Exception as e:
+        print(f"❌ [Signal] Exception for Order {instance.orderid}: {e}")
         logging.exception("Error processing Orders post_save")
 
 

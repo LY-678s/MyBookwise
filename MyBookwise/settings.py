@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "bookstore",
+    "bookstore.apps.BookstoreConfig",  # 使用完整配置类路径
 ]
 
 MIDDLEWARE = [
@@ -80,7 +80,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         'NAME': 'bookstoredb',      # 数据库名
         'USER': 'root',           # MySQL用户名
-        'PASSWORD': 'yl15924',       # MySQL密码
+        'PASSWORD': 'sql35912',       # MySQL密码
         'HOST': 'localhost',              # 数据库地址
         'PORT': '3306',                    # 端口号
         'OPTIONS': {

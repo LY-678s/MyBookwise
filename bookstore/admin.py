@@ -31,9 +31,11 @@ class BookAdmin(admin.ModelAdmin):
 class CustomerAdmin(admin.ModelAdmin):
     """顾客：方便管理员按用户名/姓名/等级管理顾客账户。"""
 
-    list_display = ("customerid", "username", "name", "email", "balance", "levelid")
+    list_display = ("customerid", "username", "name", "email", "balance", "totalspent", "levelid")
     search_fields = ("username", "name", "email")
     list_filter = ("levelid",)
+    # 按累计消费排序（可选）
+    ordering = ("-totalspent",)
 
 
 @admin.register(Orders)
@@ -106,36 +108,27 @@ class OrdersAdmin(admin.ModelAdmin):
     mark_as_shipped.short_description = "标记所选订单为：已发货（status=1）"
 
     def mark_as_completed(self, request, queryset):
-        """将订单状态设为：2 = 已完成"""
+        """将订单状态设为：2 = 已完成（逐条保存以触发信号）"""
         total = queryset.count()
         usable_qs = queryset.exclude(status=4)
-        try:
-            updated = usable_qs.update(status=2)
-            skipped = total - updated
-            self.message_user(request, f"已将 {updated} 个订单标记为【已完成】")
-            if skipped:
-                self.message_user(request, f"跳过 {skipped} 个已取消的订单（不能修改状态）", level=messages.WARNING)
-            return
-        except DatabaseError as e:
-            if getattr(e, "args", None) and e.args[0] == 1442:
-                updated = 0
-                failed = []
-                for order in usable_qs:
-                    try:
-                        order.status = 2
-                        order.save()
-                        updated += 1
-                    except Exception as ex:
-                        failed.append((getattr(order, "orderno", order.pk), str(ex)))
-                skipped = total - updated
-                self.message_user(request, f"已将 {updated} 个订单标记为【已完成】（逐条回退）")
-                if skipped:
-                    self.message_user(request, f"跳过 {skipped} 个已取消或更新失败的订单", level=messages.WARNING)
-                for ordno, err in failed[:10]:
-                    self.message_user(request, f"订单 {ordno} 未更新：{err}", level=messages.ERROR)
-                return
-            self.message_user(request, f"数据库错误，无法批量修改订单为已完成：{e}", level=messages.ERROR)
-            return
+        updated = 0
+        failed = []
+        
+        # 逐条保存以触发Django信号（更新TotalSpent）
+        for order in usable_qs:
+            try:
+                order.status = 2
+                order.save()  # 触发信号
+                updated += 1
+            except Exception as ex:
+                failed.append((getattr(order, "orderno", order.pk), str(ex)))
+        
+        skipped = total - updated
+        self.message_user(request, f"已将 {updated} 个订单标记为【已完成】")
+        if skipped:
+            self.message_user(request, f"跳过 {skipped} 个已取消或更新失败的订单", level=messages.WARNING)
+        for ordno, err in failed[:10]:
+            self.message_user(request, f"订单 {ordno} 更新失败：{err}", level=messages.ERROR)
 
     mark_as_completed.short_description = "标记所选订单为：已完成（status=2）"
 
