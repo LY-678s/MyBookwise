@@ -1,0 +1,64 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>订单详情：{{ order.orderno }}</h2>
+
+<p><strong>订单状态：</strong>
+  {% if order.status == 0 %}已下单
+  {% elif order.status == 1 %}已发货
+  {% elif order.status == 2 %}已完成
+  {% elif order.status == 4 %}已取消
+  {% else %}未知状态
+  {% endif %}
+</p>
+<p><strong>下单时间：</strong>{{ order.orderdate }}</p>
+<p><strong>收货地址：</strong>{{ order.shipaddress }}</p>
+
+{% if customer %}
+  <p><strong>会员等级：</strong>{{ customer.levelid.levelid }}级（{{ discount_percent|floatformat:0 }}% 折扣）</p>
+{% endif %}
+
+<h3>订单明细</h3>
+<table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr>
+      <th>图书</th>
+      <th>ISBN</th>
+      <th>数量</th>
+      <th>单价</th>
+      <th>原始小计</th>
+      <th>折扣后小计</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in details_with_discount %}
+      <tr>
+        <td>{{ item.detail.isbn.title }}</td>
+        <td>{{ item.detail.isbn.isbn }}</td>
+        <td>{{ item.detail.quantity }}</td>
+        <td>¥{{ item.detail.unitprice }}</td>
+        <td>¥{{ item.original_item_amount|floatformat:2 }}</td>
+        <td><strong>¥{{ item.discounted_item_amount|floatformat:2 }}</strong></td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="6">暂无订单详情</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="4"><strong>合计</strong></td>
+      <td>¥{{ original_amount|floatformat:2 }}</td>
+      <td><strong>¥{{ order.totalamount|floatformat:2 }}</strong></td>
+    </tr>
+    <tr>
+      <td colspan="4"><strong>节省金额</strong></td>
+      <td colspan="2" style="color: green;"><strong>¥{{ discount_amount|floatformat:2 }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
+
+<p style="margin-top: 20px;">
+  <a href="{% url 'bookstore:order_list' %}">返回订单列表</a>
+</p>
+{% endblock %}

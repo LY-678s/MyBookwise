@@ -1,0 +1,48 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>确认订单</h2>
+
+{% if customer %}
+  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong></p>
+  <p>折扣率：{{ discount_percent|floatformat:0 }}% 折扣（{{ discount_rate|floatformat:2 }}折）</p>
+{% endif %}
+
+<table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
+  <thead>
+    <tr>
+      <th>图书</th>
+      <th>数量</th>
+      <th>单价</th>
+      <th>原始小计</th>
+      <th>折扣后小计</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+      <tr>
+        <td>{{ item.book.title }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>¥{{ item.book.price }}</td>
+        <td>¥{{ item.original_amount|floatformat:2 }}</td>
+        <td><strong>¥{{ item.discounted_amount|floatformat:2 }}</strong></td>
+      </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td colspan="3"><strong>合计</strong></td>
+      <td>¥{{ original_total|floatformat:2 }}</td>
+      <td><strong>¥{{ discounted_total|floatformat:2 }}</strong></td>
+    </tr>
+    <tr>
+      <td colspan="3"><strong>节省金额</strong></td>
+      <td colspan="2" style="color: green;"><strong>¥{{ discount_amount|floatformat:2 }}</strong></td>
+    </tr>
+  </tfoot>
+</table>
+
+<form method="post" style="margin-top: 20px;">
+  {% csrf_token %}
+  <button type="submit" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">确认下单</button>
+</form>
+{% endblock %}

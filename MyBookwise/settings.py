@@ -80,7 +80,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         'NAME': 'bookstoredb',      # 数据库名
         'USER': 'root',           # MySQL用户名
-        'PASSWORD': 'xdhsp520',       # MySQL密码
+        'PASSWORD': 'yl15924',       # MySQL密码
         'HOST': 'localhost',              # 数据库地址
         'PORT': '3306',                    # 端口号
         'OPTIONS': {

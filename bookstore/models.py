@@ -145,13 +145,30 @@ class Supplier(models.Model):
         db_table = 'supplier'
 
 
+class SupplierbookManager(models.Manager):
+    """自定义 Manager 来处理联合主键的查找"""
+    def get(self, **kwargs):
+        # 如果使用 supplierid 查找，需要同时提供 isbn
+        if 'supplierid' in kwargs and 'isbn' not in kwargs:
+            raise ValueError("Supplierbook requires both supplierid and isbn to uniquely identify a record")
+        return super().get(**kwargs)
+
+
 class Supplierbook(models.Model):
-    supplierid = models.OneToOneField(Supplier, models.DO_NOTHING, db_column='SupplierID', primary_key=True)  # Field name made lowercase.
+    # 注意：数据库中是联合主键 (supplierid, isbn)
+    # Django 不支持联合主键，所以我们使用 supplierid 作为主键（仅用于 Django admin）
+    # 实际查询时会使用 unique_together 约束
+    supplierid = models.ForeignKey(Supplier, models.DO_NOTHING, db_column='SupplierID', primary_key=True)  # Field name made lowercase.
     isbn = models.ForeignKey(Book, models.DO_NOTHING, db_column='ISBN')  # Field name made lowercase.
     supplyprice = models.DecimalField(db_column='SupplyPrice', max_digits=10, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
     lastsupplydate = models.DateTimeField(db_column='LastSupplyDate', blank=True, null=True)  # Field name made lowercase.
+
+    objects = SupplierbookManager()
 
     class Meta:
         managed = False
         db_table = 'supplierbook'
         unique_together = (('supplierid', 'isbn'),)
+    
+    def __str__(self):
+        return f"{self.supplierid.suppliername} - {self.isbn.title} (ISBN: {self.isbn.isbn})"

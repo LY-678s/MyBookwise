@@ -1,0 +1,14 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>搜索结果：{{ query }}</h2>
+<ul>
+  {% for book in books %}
+    <li>
+      <a href="{% url 'bookstore:book_detail' book.isbn %}">{{ book.title }}</a>
+      - 价格：{{ book.price }} 元
+    </li>
+  {% empty %}
+    <li>没有找到相关图书</li>
+  {% endfor %}
+</ul>
+{% endblock %}

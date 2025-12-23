@@ -1,0 +1,57 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>我的订单</h2>
+
+{% if customer %}
+  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong></p>
+{% endif %}
+
+{% if orders_with_details %}
+  <table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th>订单号</th>
+        <th>下单时间</th>
+        <th>原始金额</th>
+        <th>折扣后金额</th>
+        <th>节省金额</th>
+        <th>状态</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in orders_with_details %}
+        <tr>
+          <td>{{ item.order.orderno }}</td>
+          <td>{{ item.order.orderdate }}</td>
+          <td>¥{{ item.original_amount|floatformat:2 }}</td>
+          <td><strong>¥{{ item.order.totalamount|floatformat:2 }}</strong></td>
+          <td style="color: green;">¥{{ item.discount_amount|floatformat:2 }}</td>
+          <td>
+            {% if item.order.status == 0 %}已下单
+            {% elif item.order.status == 1 %}已发货
+            {% elif item.order.status == 2 %}已完成
+            {% elif item.order.status == 4 %}已取消
+            {% else %}未知状态
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'bookstore:order_detail' item.order.orderid %}">查看详情</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>暂无订单</p>
+{% endif %}
+
+<p style="margin-top: 20px;">
+  <a href="{% url 'bookstore:index' %}">返回首页</a>
+</p>
+{% endblock %}
+
+
+
+
+

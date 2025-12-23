@@ -1,0 +1,9 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>{{ book.title }}</h2>
+<p>ISBN：{{ book.isbn }}</p>
+<p>出版社：{{ book.publisher }}</p>
+<p>价格：{{ book.price }} 元</p>
+<p>库存：{{ book.stockqty }}</p>
+<a href="{% url 'bookstore:cart_add' book.isbn %}">加入购物车</a>
+{% endblock %}
