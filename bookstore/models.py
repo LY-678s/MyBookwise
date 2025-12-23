@@ -22,6 +22,8 @@ class Book(models.Model):
     class Meta:
         managed = False
         db_table = 'book'
+        verbose_name = '图书'
+        verbose_name_plural = '图书'
 
 
 class Bookauthor(models.Model):
@@ -33,6 +35,8 @@ class Bookauthor(models.Model):
     class Meta:
         managed = False
         db_table = 'bookauthor'
+        verbose_name = '图书作者'
+        verbose_name_plural = '图书作者'
 
 
 class Creditlevel(models.Model):
@@ -44,6 +48,8 @@ class Creditlevel(models.Model):
     class Meta:
         managed = False
         db_table = 'creditlevel'
+        verbose_name = '信用等级'
+        verbose_name_plural = '信用等级'
 
 
 class Customer(models.Model):
@@ -62,6 +68,8 @@ class Customer(models.Model):
     class Meta:
         managed = False
         db_table = 'customer'
+        verbose_name = '客户'
+        verbose_name_plural = '客户'
 
 
 class Orderdetail(models.Model):
@@ -75,6 +83,8 @@ class Orderdetail(models.Model):
     class Meta:
         managed = False
         db_table = 'orderdetail'
+        verbose_name = '订单明细'
+        verbose_name_plural = '订单明细'
 
 
 class Orders(models.Model):
@@ -89,6 +99,8 @@ class Orders(models.Model):
     class Meta:
         managed = False
         db_table = 'orders'
+        verbose_name = '订单'
+        verbose_name_plural = '订单'
 
 
 class Procurement(models.Model):
@@ -102,6 +114,8 @@ class Procurement(models.Model):
     class Meta:
         managed = False
         db_table = 'procurement'
+        verbose_name = '采购单'
+        verbose_name_plural = '采购单'
 
 
 class Procurementdetail(models.Model):
@@ -115,6 +129,8 @@ class Procurementdetail(models.Model):
     class Meta:
         managed = False
         db_table = 'procurementdetail'
+        verbose_name = '采购明细'
+        verbose_name_plural = '采购明细'
 
 
 class Shortagerecord(models.Model):
@@ -130,6 +146,8 @@ class Shortagerecord(models.Model):
     class Meta:
         managed = False
         db_table = 'shortagerecord'
+        verbose_name = '缺货记录'
+        verbose_name_plural = '缺货记录'
 
 
 class Supplier(models.Model):
@@ -143,6 +161,8 @@ class Supplier(models.Model):
     class Meta:
         managed = False
         db_table = 'supplier'
+        verbose_name = '供应商'
+        verbose_name_plural = '供应商'
 
 
 class SupplierbookManager(models.Manager):
@@ -169,6 +189,8 @@ class Supplierbook(models.Model):
         managed = False
         db_table = 'supplierbook'
         unique_together = (('supplierid', 'isbn'),)
+        verbose_name = '供应商图书'
+        verbose_name_plural = '供应商图书'
     
     def __str__(self):
         return f"{self.supplierid.suppliername} - {self.isbn.title} (ISBN: {self.isbn.isbn})"
