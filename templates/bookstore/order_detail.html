@@ -22,7 +22,7 @@
     {% elif order.paymentstatus == 1 %}
       <span style="color: #27ae60;">✓ 已全额支付</span>
     {% elif order.paymentstatus == 2 %}
-      <span style="color: #f39c12;">⏳ 未全额支付（使用了信用额度）</span>
+      <span style="color: #f39c12;">⏳ 待补款</span>
     {% elif order.paymentstatus == 3 %}
       <span style="color: #7f8c8d;">已退款</span>
     {% endif %}

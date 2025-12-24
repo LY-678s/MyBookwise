@@ -191,43 +191,10 @@ def process_payment(order, customer, use_credit_only=False):
     return True, (msg, actual_paid, payment_status)
 
 
-def calculate_current_overdraft(customer):
-    """
-    计算客户的当前透支金额
-    = 负余额的绝对值（真正欠款的部分）
-    注意：不包括未付款订单（那些只是占用额度，不是真正的透支）
-    """
-    from decimal import Decimal
-    
-    # 只计算负余额部分
-    if customer.balance < 0:
-        return abs(customer.balance)
-    else:
-        return Decimal('0')
-
-
-def get_unpaid_orders_total(customer):
-    """获取客户的未付款订单总额"""
-    from decimal import Decimal
-    from .models import Orders
-    
-    return Orders.objects.filter(
-        customerid=customer,
-        paymentstatus=0,  # 未付款
-        status__in=[0, 1]  # 排除已取消的订单
-    ).aggregate(
-        total=Sum('totalamount')
-    )['total'] or Decimal('0')
-
-
-def get_available_overdraft(customer):
-    """
-    计算可用透支额度
-    = 透支限额 - 当前透支 - 未付款订单总额
-    """
-    current_overdraft = calculate_current_overdraft(customer)
-    unpaid_total = get_unpaid_orders_total(customer)
-    return customer.overdraftlimit - current_overdraft - unpaid_total
+# 这些函数在新的信用支付系统中不再需要
+# def calculate_current_overdraft(customer): ...
+# def get_unpaid_orders_total(customer): ...
+# def get_available_overdraft(customer): ...
 
 
 def _calculate_credit_level(totalspent):
@@ -282,7 +249,7 @@ def _handle_deduct_or_refund(instance, old_status, old_totalamount):
         creditlevel = customer.levelid
         
         print(f"   Customer: {customer.name} (ID={customer.customerid})")
-        print(f"   Before: Balance={customer.balance}, CurrentOverdraft={customer.currentoverdraft}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
+        print(f"   Before: Balance={customer.balance}, UsedCredit={customer.usedcredit}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
 
         # 暂时保留原有扣款逻辑（用于订单金额变化时的差额调整）
         # 实际付款逻辑将在前台视图中处理

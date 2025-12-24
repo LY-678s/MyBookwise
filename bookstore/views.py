@@ -3,7 +3,7 @@ from django.http import HttpRequest, HttpResponse
 from django.urls import reverse
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, F, Sum
 from django.db import transaction
 
 from .models import Book, Customer, Orders, Orderdetail, Creditlevel
@@ -225,6 +225,21 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
             order.refresh_from_db()
             total_amount = order.totalamount or Decimal('0')
             
+            print(f"🔍 [DEBUG] Order created: OrderID={order.orderid}, TotalAmount={total_amount}")
+            
+            if total_amount == 0:
+                # TotalAmount为0说明触发器没有正确计算，可能是事务问题
+                # 手动计算总金额
+                from django.db.models import Sum
+                manual_total = Orderdetail.objects.filter(orderid=order).aggregate(
+                    total=Sum(F('quantity') * F('unitprice'))
+                )['total'] or Decimal('0')
+                # 应用折扣
+                total_amount = manual_total * customer.levelid.discountrate
+                order.totalamount = total_amount
+                order.save(update_fields=['totalamount'])
+                print(f"🔍 [DEBUG] Manual calculation: TotalAmount={total_amount}")
+            
             # 4. 处理付款
             payment_choice = request.POST.get("payment_choice", "balance")  # balance或credit
             
@@ -378,10 +393,8 @@ def account_recharge(request: HttpRequest) -> HttpResponse:
                 with transaction.atomic():
                     customer = Customer.objects.select_for_update().get(pk=customer.customerid)
                     customer.balance += amount
-                    # 重新计算透支金额（充值后可能减少）
-                    from .signals import calculate_current_overdraft
-                    customer.currentoverdraft = calculate_current_overdraft(customer)
-                    customer.save(update_fields=['balance', 'currentoverdraft'])
+                    # 充值不影响UsedCredit，只更新余额
+                    customer.save(update_fields=['balance'])
                 messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
                 return redirect("bookstore:account")
         except (ValueError, TypeError):
