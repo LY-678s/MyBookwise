@@ -141,8 +141,12 @@ def process_payment(order, customer):
     customer.balance = new_balance
     customer.totalspent = (customer.totalspent or Decimal('0')) + amount
     
-    # 重新计算透支金额（考虑其他未付款订单）
-    customer.currentoverdraft = calculate_current_overdraft(customer)
+    # 更新透支金额（只计算负余额部分，不包括未付款订单）
+    # 因为当前订单即将标记为已付款，不应再计入未付款订单
+    if customer.balance < 0:
+        customer.currentoverdraft = abs(customer.balance)
+    else:
+        customer.currentoverdraft = Decimal('0')
     
     # 检查信用等级升级
     new_level_id = _calculate_credit_level(customer.totalspent)
@@ -164,24 +168,40 @@ def process_payment(order, customer):
 def calculate_current_overdraft(customer):
     """
     计算客户的当前透支金额
-    = 负余额的绝对值 + 未付款订单总额
+    = 负余额的绝对值（真正欠款的部分）
+    注意：不包括未付款订单（那些只是占用额度，不是真正的透支）
     """
+    from decimal import Decimal
+    
+    # 只计算负余额部分
+    if customer.balance < 0:
+        return abs(customer.balance)
+    else:
+        return Decimal('0')
+
+
+def get_unpaid_orders_total(customer):
+    """获取客户的未付款订单总额"""
     from decimal import Decimal
     from .models import Orders
     
-    # 1. 负余额部分
-    negative_balance = abs(min(customer.balance, Decimal('0')))
-    
-    # 2. 未付款订单总额
-    unpaid_orders_total = Orders.objects.filter(
+    return Orders.objects.filter(
         customerid=customer,
         paymentstatus=0,  # 未付款
         status__in=[0, 1]  # 排除已取消的订单
     ).aggregate(
-        total=models.Sum('totalamount')
+        total=Sum('totalamount')
     )['total'] or Decimal('0')
-    
-    return negative_balance + unpaid_orders_total
+
+
+def get_available_overdraft(customer):
+    """
+    计算可用透支额度
+    = 透支限额 - 当前透支 - 未付款订单总额
+    """
+    current_overdraft = calculate_current_overdraft(customer)
+    unpaid_total = get_unpaid_orders_total(customer)
+    return customer.overdraftlimit - current_overdraft - unpaid_total
 
 
 def _calculate_credit_level(totalspent):

@@ -206,18 +206,20 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 status=0,
             )
 
-            # 2. 为购物车中每本书创建 Orderdetail
+            # 2. 为购物车中每本书创建 Orderdetail（触发器会自动扣减库存）
+            created_details = []
             for isbn, data in cart.items():
                 book = get_object_or_404(Book, pk=isbn)
                 quantity = data["quantity"]
 
-                Orderdetail.objects.create(
+                detail = Orderdetail.objects.create(
                     orderid=order,
                     isbn=book,
                     quantity=quantity,
                     unitprice=book.price,
                     isshipped=0,
                 )
+                created_details.append((book, quantity))
 
             # 3. 刷新订单获取触发器计算的总金额
             order.refresh_from_db()
@@ -236,30 +238,34 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                     
                     # 5. 清空购物车
                     request.session["cart"] = {}
+                    request.session.modified = True  # 确保session保存
                     messages.success(request, f"下单成功！订单号：{order.orderno}，已付款：¥{total_amount}")
                     return redirect("bookstore:order_list")
                 else:
-                    # 付款失败，删除订单
-                    order.delete()
-                    messages.error(request, f"下单失败：{msg}")
+                    # 付款失败，取消订单（触发器会自动回补库存）
+                    order.status = 4  # 标记为已取消
+                    order.save(update_fields=['status'])
+                    messages.error(request, f"下单失败：{msg}。订单已自动取消。")
                     return redirect("bookstore:cart_detail")
             
             else:
                 # 暂缓付款（仅3-5级会员）
                 if customer.levelid.canoverdraft == 0:
-                    order.delete()
-                    messages.error(request, "您的信用等级不支持暂缓付款，请选择立即付款")
+                    # 不支持暂缓付款，取消订单（触发器回补库存）
+                    order.status = 4
+                    order.save(update_fields=['status'])
+                    messages.error(request, "您的信用等级不支持暂缓付款，请选择立即付款。订单已取消。")
                     return redirect("bookstore:order_confirm")
                 
                 # 检查是否超出透支额度
-                from .signals import calculate_current_overdraft
-                # 假设创建这个订单后的透支额度
-                projected_overdraft = calculate_current_overdraft(customer) + total_amount
+                from .signals import get_available_overdraft
+                available = get_available_overdraft(customer)
                 
-                if projected_overdraft > customer.overdraftlimit:
-                    order.delete()
-                    available = customer.overdraftlimit - calculate_current_overdraft(customer)
-                    messages.error(request, f"暂缓付款金额(¥{total_amount})超出可用透支额度(¥{available})，请充值或选择立即付款")
+                if total_amount > available:
+                    # 超出额度，取消订单（触发器回补库存）
+                    order.status = 4
+                    order.save(update_fields=['status'])
+                    messages.error(request, f"暂缓付款金额(¥{total_amount})超出可用透支额度(¥{available:.2f})，请充值或选择立即付款。订单已取消。")
                     return redirect("bookstore:order_confirm")
                 
                 # 暂缓付款成功
@@ -272,6 +278,7 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 
                 # 5. 清空购物车
                 request.session["cart"] = {}
+                request.session.modified = True  # 确保session保存
                 messages.success(request, f"下单成功！订单号：{order.orderno}，应付金额：¥{total_amount}（暂未付款，已计入透支额度）")
                 return redirect("bookstore:order_list")
 
