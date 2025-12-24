@@ -818,8 +818,8 @@ BEGIN
     DECLARE v_Price DECIMAL(10,2);
     DECLARE v_Discount DECIMAL(3,2);
     DECLARE v_LevelID INT;
-    DECLARE v_CanOverdraft TINYINT;
-    DECLARE v_OverdraftLimit DECIMAL(10,2);
+    DECLARE v_CanUseCredit TINYINT;
+    DECLARE v_CreditLimit DECIMAL(10,2);
     DECLARE v_OrderAmount DECIMAL(10,2);
     DECLARE v_CurrentBalance DECIMAL(10,2);
     DECLARE v_OrderNo VARCHAR(30);
@@ -847,10 +847,10 @@ BEGIN
     END IF;
     
     -- 获取客户信用信息
-    SELECT c.LevelID, c.OverdraftLimit, c.Balance, c.Address,
-           cl.DiscountRate, cl.CanOverdraft
-    INTO v_LevelID, v_OverdraftLimit, v_CurrentBalance, v_ShipAddress,
-         v_Discount, v_CanOverdraft
+    SELECT c.LevelID, c.CreditLimit, c.Balance, c.Address,
+           cl.DiscountRate, cl.CanUseCredit
+    INTO v_LevelID, v_CreditLimit, v_CurrentBalance, v_ShipAddress,
+         v_Discount, v_CanUseCredit
     FROM Customer c
     JOIN CreditLevel cl ON c.LevelID = cl.LevelID
     WHERE c.CustomerID = p_CustomerID;
@@ -859,12 +859,12 @@ BEGIN
     SET v_OrderAmount = v_Price * p_Quantity * v_Discount;
     
     -- 检查余额和信用
-    IF v_CurrentBalance < v_OrderAmount AND v_CanOverdraft = 0 THEN
+    IF v_CurrentBalance < v_OrderAmount AND v_CanUseCredit = 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '余额不足且不允许透支';
     END IF;
     
-    IF v_CanOverdraft = 1 AND v_OverdraftLimit > 0 
-       AND (v_CurrentBalance - v_OrderAmount) < -v_OverdraftLimit THEN
+    IF v_CanUseCredit = 1 AND v_CreditLimit > 0 
+       AND (v_CurrentBalance - v_OrderAmount) < -v_CreditLimit THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '超出透支额度限制';
     END IF;
     
@@ -932,8 +932,8 @@ BEGIN
     DECLARE v_OrderedQuantity INT;
     DECLARE v_CustomerID INT;
     DECLARE v_LevelID INT;
-    DECLARE v_CanOverdraft TINYINT;
-    DECLARE v_OverdraftLimit DECIMAL(10,2);
+    DECLARE v_CanUseCredit TINYINT;
+    DECLARE v_CreditLimit DECIMAL(10,2);
     DECLARE v_UnitPrice DECIMAL(10,2);
     DECLARE v_DiscountRate DECIMAL(3,2);
     DECLARE v_AmountToDeduct DECIMAL(10,2);
@@ -970,10 +970,10 @@ BEGIN
     END IF;
     
     -- 获取客户信用信息
-    SELECT c.LevelID, c.Balance, c.OverdraftLimit,
-           cl.CanOverdraft, cl.DiscountRate
-    INTO v_LevelID, v_CurrentBalance, v_OverdraftLimit,
-         v_CanOverdraft, v_DiscountRate
+    SELECT c.LevelID, c.Balance, c.CreditLimit,
+           cl.CanUseCredit, cl.DiscountRate
+    INTO v_LevelID, v_CurrentBalance, v_CreditLimit,
+         v_CanUseCredit, v_DiscountRate
     FROM Customer c
     JOIN CreditLevel cl ON c.LevelID = cl.LevelID
     WHERE c.CustomerID = v_CustomerID;
@@ -982,12 +982,12 @@ BEGIN
     SET v_AmountToDeduct = v_UnitPrice * p_ShipQuantity * v_DiscountRate;
     
     -- 检查余额和信用
-    IF v_CurrentBalance < v_AmountToDeduct AND v_CanOverdraft = 0 THEN
+    IF v_CurrentBalance < v_AmountToDeduct AND v_CanUseCredit = 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '余额不足且不允许透支';
     END IF;
     
-    IF v_CanOverdraft = 1 AND v_OverdraftLimit > 0
-       AND (v_CurrentBalance - v_AmountToDeduct) < -v_OverdraftLimit THEN
+    IF v_CanUseCredit = 1 AND v_CreditLimit > 0
+       AND (v_CurrentBalance - v_AmountToDeduct) < -v_CreditLimit THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '超出透支额度限制';
     END IF;
     
@@ -1315,9 +1315,9 @@ DROP TRIGGER IF EXISTS `trg_creditlevel_update_customer_overdraft`;
 delimiter ;;
 CREATE TRIGGER `trg_creditlevel_update_customer_overdraft` AFTER UPDATE ON `creditlevel` FOR EACH ROW BEGIN
     -- 如果透支额度发生变化，同步更新所有该等级顾客的透支额度
-    IF NEW.OverdraftLimit <> OLD.OverdraftLimit THEN
+    IF NEW.CreditLimit <> OLD.CreditLimit THEN
         UPDATE customer
-        SET OverdraftLimit = NEW.OverdraftLimit
+        SET CreditLimit = NEW.CreditLimit
         WHERE LevelID = NEW.LevelID;
     END IF;
 END
