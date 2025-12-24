@@ -42,8 +42,8 @@ class Bookauthor(models.Model):
 class Creditlevel(models.Model):
     levelid = models.IntegerField(db_column='LevelID', primary_key=True)  # Field name made lowercase.
     discountrate = models.DecimalField(db_column='DiscountRate', max_digits=3, decimal_places=2)  # Field name made lowercase.
-    canoverdraft = models.IntegerField(db_column='CanOverdraft')  # Field name made lowercase.
-    overdraftlimit = models.DecimalField(db_column='OverdraftLimit', max_digits=10, decimal_places=2)  # Field name made lowercase.
+    canusecredit = models.IntegerField(db_column='CanUseCredit')  # 是否可使用信用支付
+    creditlimit = models.DecimalField(db_column='CreditLimit', max_digits=10, decimal_places=2)  # 信用额度上限
 
     class Meta:
         managed = False
@@ -59,11 +59,11 @@ class Customer(models.Model):
     name = models.CharField(db_column='Name', max_length=50)  # Field name made lowercase.
     address = models.CharField(db_column='Address', max_length=200, blank=True, null=True)  # Field name made lowercase.
     email = models.CharField(db_column='Email', unique=True, max_length=100, blank=True, null=True)  # Field name made lowercase.
-    balance = models.DecimalField(db_column='Balance', max_digits=10, decimal_places=2)  # Field name made lowercase.
+    balance = models.DecimalField(db_column='Balance', max_digits=10, decimal_places=2)  # 账户余额（最低为0）
     levelid = models.ForeignKey(Creditlevel, models.DO_NOTHING, db_column='LevelID')  # Field name made lowercase.
-    overdraftlimit = models.DecimalField(db_column='OverdraftLimit', max_digits=10, decimal_places=2)  # Field name made lowercase.
-    currentoverdraft = models.DecimalField(db_column='CurrentOverdraft', max_digits=10, decimal_places=2, default=0)  # 当前已透支金额
-    totalspent = models.DecimalField(db_column='TotalSpent', max_digits=12, decimal_places=2)  # Field name made lowercase.
+    creditlimit = models.DecimalField(db_column='CreditLimit', max_digits=10, decimal_places=2)  # 信用额度上限
+    usedcredit = models.DecimalField(db_column='UsedCredit', max_digits=10, decimal_places=2, default=0)  # 已使用信用额度
+    totalspent = models.DecimalField(db_column='TotalSpent', max_digits=12, decimal_places=2)  # 累计消费（从余额支付的总额）
     registerdate = models.DateTimeField(db_column='RegisterDate')  # Field name made lowercase.
 
     class Meta:
