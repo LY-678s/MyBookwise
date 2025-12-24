@@ -1,69 +1,88 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>购物车</h2>
+<div class="container animate-fade-in">
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h1 style="font-weight: 400; color: var(--text-primary);">🛒 购物车</h1>
+        <p style="color: var(--text-secondary);">确认商品并前往结算</p>
+    </div>
 
-{% if customer %}
-  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong></p>
-  <p>折扣率：{{ discount_percent|floatformat:0 }}% 折扣（{{ discount_rate|floatformat:2 }}折）</p>
-{% endif %}
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-body">
+            {% if items %}
+            <div style="overflow-x: auto;">
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead style="background: var(--secondary-bg);">
+                        <tr>
+                            <th style="padding: 1rem; text-align: left;">图书</th>
+                            <th style="padding: 1rem; text-align: center;">数量</th>
+                            <th style="padding: 1rem; text-align: center;">单价</th>
+                            <th style="padding: 1rem; text-align: center;">小计</th>
+                            <th style="padding: 1rem; text-align: center;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 1rem;">
+                                <div style="display:flex; gap:1rem; align-items:center;">
+                                    <div style="width:60px; height:90px; background:var(--accent-light); border-radius:6px; overflow:hidden; flex-shrink:0;">
+                                        {% if item.book.coverimage %}
+                                        <img src="data:image/jpeg;base64,{{ item.book.coverimage|safe }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;">
+                                        {% else %}
+                                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">📖</div>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <div style="font-weight:600; color:var(--text-primary);">{{ item.book.title }}</div>
+                                        <div style="color:var(--text-secondary); font-size:0.9rem;">ISBN: {{ item.book.isbn }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding:1rem; text-align:center;">
+                                <form method="post" action="{% url 'bookstore:cart_update' item.book.isbn %}" style="display:flex; gap:0.5rem; justify-content:center; align-items:center;">
+                                    {% csrf_token %}
+                                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0" max="{{ item.book.stockqty }}" class="form-control" style="width:80px; text-align:center;">
+                                    <button type="submit" class="btn btn-secondary" style="padding:0.4rem 0.8rem;">更新</button>
+                                </form>
+                            </td>
+                            <td style="padding:1rem; text-align:center; color:var(--text-secondary);">¥{{ item.book.price }}</td>
+                            <td style="padding:1rem; text-align:center; font-weight:700;">¥{{ item.discounted_amount|floatformat:2 }}</td>
+                            <td style="padding:1rem; text-align:center;">
+                                <a href="{% url 'bookstore:cart_remove' item.book.isbn %}" onclick="return confirm('确定要移除《{{ item.book.title }}》吗？')" class="btn btn-danger" style="padding:0.4rem 0.8rem;">移除</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: var(--secondary-bg);">
+                            <td colspan="2" style="padding:1rem; text-align:left; font-weight:600;">合计</td>
+                            <td style="padding:1rem; text-align:center;">¥{{ original_total|floatformat:2 }}</td>
+                            <td style="padding:1rem; text-align:center; font-weight:700; color:var(--error);">¥{{ discounted_total|floatformat:2 }}</td>
+                            <td style="padding:1rem;"></td>
+                        </tr>
+                        {% if discount_amount > 0 %}
+                        <tr>
+                            <td colspan="4" style="padding:1rem; text-align:right; color:var(--success); font-weight:600;">已节省：</td>
+                            <td style="padding:1rem; text-align:center; color:var(--success); font-weight:700;">-¥{{ discount_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% endif %}
+                    </tfoot>
+                </table>
+            </div>
+            {% else %}
+            <div style="text-align:center; padding:3rem; color:var(--text-secondary);">
+                <div style="font-size:3rem; margin-bottom:1rem;">🛍️</div>
+                <div>购物车为空，快去选购喜欢的书吧！</div>
+                <p style="margin-top:1rem;"><a href="{% url 'bookstore:index' %}" class="btn btn-primary">去逛逛</a></p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 
-<table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
-  <thead>
-    <tr>
-      <th>图书</th>
-      <th>数量</th>
-      <th>单价</th>
-      <th>原始小计</th>
-      <th>折扣后小计</th>
-      <th>操作</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in items %}
-      <tr>
-        <td>{{ item.book.title }}</td>
-        <td>
-          <form method="post" action="{% url 'bookstore:cart_update' item.book.isbn %}" style="display: flex; gap: 0.5rem; align-items: center;">
-            {% csrf_token %}
-            <input type="number" name="quantity" value="{{ item.quantity }}" min="0" max="{{ item.book.stockqty }}"
-                   style="width: 70px; padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px;">
-            <button type="submit" class="btn" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">更新</button>
-          </form>
-        </td>
-        <td>¥{{ item.book.price }}</td>
-        <td>¥{{ item.original_amount|floatformat:2 }}</td>
-        <td><strong>¥{{ item.discounted_amount|floatformat:2 }}</strong></td>
-        <td>
-          <a href="{% url 'bookstore:cart_remove' item.book.isbn %}" 
-             onclick="return confirm('确定要移除《{{ item.book.title }}》吗？')"
-             style="color: #e74c3c; text-decoration: none;">
-            🗑️ 移除
-          </a>
-        </td>
-      </tr>
-    {% empty %}
-      <tr>
-        <td colspan="6">购物车为空</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr>
-      <td colspan="3"><strong>合计</strong></td>
-      <td>¥{{ original_total|floatformat:2 }}</td>
-      <td><strong>¥{{ discounted_total|floatformat:2 }}</strong></td>
-      <td></td>
-    </tr>
-    <tr>
-      <td colspan="3"><strong>节省金额</strong></td>
-      <td colspan="3" style="color: green;"><strong>¥{{ discount_amount|floatformat:2 }}</strong></td>
-    </tr>
-  </tfoot>
-</table>
-
-{% if items %}
-  <p style="margin-top: 20px;">
-    <a href="{% url 'bookstore:order_confirm' %}" style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">去结算</a>
-  </p>
-{% endif %}
+    {% if items %}
+    <div style="display:flex; gap:1rem; justify-content:flex-end;">
+        <a href="{% url 'bookstore:order_confirm' %}" class="btn btn-primary" style="padding:0.8rem 1.6rem;">🚀 去结算</a>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

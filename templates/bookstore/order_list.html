@@ -1,72 +1,85 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>我的订单</h2>
+<div class="container animate-fade-in">
+    <div style="text-align:center; margin-bottom:2rem;">
+        <h1 style="font-weight:400; color:var(--text-primary);">📦 我的订单</h1>
+        <p style="color:var(--text-secondary);">查看历史订单与支付状态</p>
+    </div>
 
-{% if customer %}
-  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong></p>
-{% endif %}
+    {% if orders_with_details %}
+    <div class="card">
+        <div class="card-body">
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead style="background:var(--secondary-bg);">
+                        <tr>
+                            <th style="padding:1rem; text-align:left;">订单号</th>
+                            <th style="padding:1rem; text-align:center;">下单时间</th>
+                            <th style="padding:1rem; text-align:center;">应付金额</th>
+                            <th style="padding:1rem; text-align:center;">实付金额</th>
+                            <th style="padding:1rem; text-align:center;">付款状态</th>
+                            <th style="padding:1rem; text-align:center;">订单状态</th>
+                            <th style="padding:1rem; text-align:center;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in orders_with_details %}
+                        <tr style="border-bottom:1px solid var(--border);">
+                            <td style="padding:1rem; font-weight:600; color:var(--text-primary);">{{ item.order.orderno }}</td>
+                            <td style="padding:1rem; text-align:center;">{{ item.order.orderdate|date:"Y-m-d H:i" }}</td>
+                            <td style="padding:1rem; text-align:center; font-weight:700;">¥{{ item.order.totalamount|floatformat:2 }}</td>
+                            <td style="padding:1rem; text-align:center;">¥{{ item.order.actualpaid|floatformat:2 }}</td>
+                            <td style="padding:1rem; text-align:center;">
+                                {% if item.order.status == 4 %}
+                                  <span style="color: var(--text-secondary);">已退款</span>
+                                {% elif item.order.paymentstatus == 0 %}
+                                  <span style="color: var(--error);">❌ 未支付</span>
+                                {% elif item.order.paymentstatus == 1 %}
+                                  <span style="color: var(--success);">✓ 已支付</span>
+                                {% elif item.order.paymentstatus == 2 %}
+                                  <span style="color: var(--warning);">⏳ 待补款</span>
+                                {% elif item.order.paymentstatus == 3 %}
+                                  <span style="color: var(--text-secondary);">已退款</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding:1rem; text-align:center;">
+                                {% if item.order.status == 0 %}
+                                  <span style="color: var(--warning);">已下单</span>
+                                {% elif item.order.status == 1 %}
+                                  <span style="color: var(--accent);">已发货</span>
+                                {% elif item.order.status == 2 %}
+                                  <span style="color: var(--success);">已完成</span>
+                                {% elif item.order.status == 4 %}
+                                  <span style="color: var(--text-secondary);">已取消</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding:1rem; text-align:center;">
+                                <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-secondary" style="padding:0.4rem 0.8rem;">查看详情</a>
+                                {% if item.order.paymentstatus == 0 and item.order.status != 4 %}
+                                  <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-primary" style="padding:0.4rem 0.8rem; margin-left:0.5rem;">💳 去支付</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body" style="text-align:center; padding:3rem;">
+            <div style="font-size:3rem; margin-bottom:1rem;">📭</div>
+            <div style="color:var(--text-secondary);">暂无订单记录</div>
+            <p style="margin-top:1rem;"><a href="{% url 'bookstore:index' %}" class="btn btn-primary">去购物</a></p>
+        </div>
+    </div>
+    {% endif %}
 
-{% if orders_with_details %}
-  <table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
-    <thead>
-      <tr>
-        <th>订单号</th>
-        <th>下单时间</th>
-        <th>应付金额</th>
-        <th>实付金额</th>
-        <th>付款状态</th>
-        <th>订单状态</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in orders_with_details %}
-        <tr>
-          <td>{{ item.order.orderno }}</td>
-          <td>{{ item.order.orderdate|date:"Y-m-d H:i" }}</td>
-          <td><strong>¥{{ item.order.totalamount|floatformat:2 }}</strong></td>
-          <td>¥{{ item.order.actualpaid|floatformat:2 }}</td>
-          <td>
-            {% if item.order.status == 4 %}
-              <span style="color: #7f8c8d;">已退款</span>
-            {% elif item.order.paymentstatus == 0 %}
-              <span style="color: #e74c3c;">❌ 未支付</span>
-            {% elif item.order.paymentstatus == 1 %}
-              <span style="color: #27ae60;">✓ 已全额支付</span>
-            {% elif item.order.paymentstatus == 2 %}
-              <span style="color: #f39c12;">⏳ 待补款</span>
-            {% elif item.order.paymentstatus == 3 %}
-              <span style="color: #7f8c8d;">已退款</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if item.order.status == 0 %}
-              <span style="color: #f39c12;">已下单</span>
-            {% elif item.order.status == 1 %}
-              <span style="color: #3498db;">已发货</span>
-            {% elif item.order.status == 2 %}
-              <span style="color: #27ae60;">已完成</span>
-            {% elif item.order.status == 4 %}
-              <span style="color: #95a5a6;">已取消</span>
-            {% endif %}
-          </td>
-          <td>
-            <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">查看详情</a>
-            {% if item.order.paymentstatus == 0 and item.order.status != 4 %}
-              <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-success" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">💳 去支付</a>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-{% else %}
-  <p>暂无订单</p>
-{% endif %}
-
-<p style="margin-top: 20px;">
-  <a href="{% url 'bookstore:index' %}">返回首页</a>
-</p>
+    <div style="margin-top:1.5rem; text-align:center;">
+        <a href="{% url 'bookstore:index' %}" class="btn btn-secondary">返回首页</a>
+    </div>
+</div>
 {% endblock %}
 
 

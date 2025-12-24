@@ -315,20 +315,15 @@ CREATE TABLE `customer`  (
 -- ----------------------------
 -- 字段顺序: CustomerID, Username, Password, Name, Address, Email, Balance, LevelID, CreditLimit, UsedCredit, TotalSpent, RegisterDate
 -- 张三: 1级会员，无信用额度
--- - 余额: 1000 - 160.20(订单4) - 125.10(订单6) = 714.70
--- - TotalSpent: 0 + 160.20 + 125.10 = 285.30（从余额支付的总额）
--- - UsedCredit: 0（未使用信用）
 INSERT INTO `customer` VALUES (1, 'zhangsan', 'pass123', '张三', '湖北省武汉市洪山区', 'zhangsan@email.com', 714.70, 1, 0.00, 0.00, 285.30, '2025-12-19 16:45:13');
 -- 李四: 4级会员，信用额度1000
--- - 余额: 5000 - 2577.20(订单3) = 2422.80
--- - TotalSpent: 2500 + 2577.20 = 5077.20（从余额支付）
--- - UsedCredit: 83.30（订单7未全额支付，ActualPaid=0，全用信用）
-INSERT INTO `customer` VALUES (2, 'lisi', 'pass456', '李四', '湖北省武汉市武昌区', 'lisi@email.com', 2422.80, 4, 1000.00, 83.30, 5077.20, '2025-12-19 16:45:13');
--- 王五: 4级会员，信用额度1000
--- - 余额: 10000 - 307.20(订单5) - 126.40(订单8) = 9566.40
--- - TotalSpent: 6000 + 307.20 + 126.40 = 6433.60（从余额支付）
--- - UsedCredit: 0（全部用余额支付）
-INSERT INTO `customer` VALUES (3, 'wangwu', 'pass789', '王五', '湖北省武汉市江汉区', 'wangwu@email.com', 9566.40, 4, 1000.00, 0.00, 6433.60, '2025-12-19 16:45:13');
+INSERT INTO `customer` VALUES (2, 'lisi', 'pass456', '李四', '湖北省武汉市武昌区', 'lisi@email.com', 2000.00, 4, 1000.00, 0.00, 1300.00, '2025-12-19 16:45:13');
+-- 王五: 5级会员，信用额度无上限
+INSERT INTO `customer` VALUES (3, 'wangwu', 'pass789', '王五', '湖北省武汉市江汉区', 'wangwu@email.com', 714.70, 5, 99999999.00, 0.00, 285.30, '2025-12-19 16:45:13');
+-- 陈六: 2级会员，无信用额度
+INSERT INTO `customer` VALUES (4, 'chenliu', 'pass666', '陈六', '湖北省武汉市江夏区', 'chenliu@email.com', 2000.00, 2, 0.00, 0.00, 1300.00, '2025-12-19 16:45:13');
+-- 赵七: 3级会员，信用额度500
+INSERT INTO `customer` VALUES (5, 'zhaoqi', 'pass777', '赵七', '湖北省武汉市东湖区', 'zhaoqi@email.com', 3000.00, 3, 500.00, 0.00, 2022.15, '2025-12-19 16:45:13');
 
 -- ----------------------------
 -- Table structure for customer_update_queue
@@ -1614,10 +1609,10 @@ CREATE TRIGGER `tr_AfterUpdateProcurement` AFTER UPDATE ON `procurement` FOR EAC
         INNER JOIN ProcurementDetail pd ON b.ISBN = pd.ISBN
         SET b.StockQty = b.StockQty + pd.ReceivedQty
         WHERE pd.ProcID = NEW.ProcID;
-        
-        -- 更新关联的缺书记录状态
+
+        -- 更新关联的缺书记录状态为已处理（1）
         UPDATE ShortageRecord
-        SET Status = 2
+        SET Status = 1
         WHERE RecordID = NEW.RecordID AND NEW.RecordID IS NOT NULL;
     END IF;
 END

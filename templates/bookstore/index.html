@@ -1,46 +1,125 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>图书列表</h2>
+<div class="container animate-fade-in">
+    <!-- 页面标题 -->
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h1 style="color: var(--text-primary); font-size: 2.5rem; font-weight: 300; margin-bottom: 0.5rem;">
+            📚 精选图书
+        </h1>
+        <p style="color: var(--text-secondary); font-size: 1.1rem;">
+            发现您心仪的图书，开启阅读之旅
+        </p>
+    </div>
 
-<form action="{% url 'bookstore:search' %}" method="get">
-  <input type="text" name="q" placeholder="搜索书名 / 关键词 /isbn">
-  <button type="submit">搜索</button>
-</form>
+    <!-- 搜索栏 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-body">
+            <form action="{% url 'bookstore:search' %}" method="get" style="display: flex; gap: 1rem; align-items: center;">
+                <div style="flex: 1;">
+                    <input type="text" name="q" placeholder="🔍 搜索书名 / 关键词 / ISBN"
+                           class="form-control"
+                           style="font-size: 1.1rem; padding: 1rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                    搜索
+                </button>
+            </form>
+        </div>
+    </div>
 
-<ul style="list-style: none; padding: 0;">
-  {% for book in books %}
-    <li style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-      <div class="book-info" style="flex: 1;">
-        <a href="{% url 'bookstore:book_detail' book.isbn %}" style="font-size: 1.1rem; font-weight: 500;">
-          {{ book.title }}
-        </a>
-        <div style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.3rem;">
-          ISBN: {{ book.isbn }} | 出版社: {{ book.publisher }}
+    <!-- 图书网格 -->
+    {% if books %}
+    <div class="grid grid-3">
+        {% for book in books %}
+        <div class="card book-card animate-fade-in" style="animation-delay: {{ forloop.counter0 }}00ms;">
+            <!-- 图书封面 -->
+            <div style="position: relative; overflow: hidden;">
+                {% if book.coverimage %}
+                    <!-- 如果有封面图片，显示图片 -->
+                    <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;">
+                {% else %}
+                    <!-- 默认封面图片 -->
+                    <div style="width: 100%; height: 250px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">
+                        📖
+                    </div>
+                {% endif %}
+
+                <!-- 悬浮信息 -->
+                <div class="book-overlay">
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">{{ book.title }}</h4>
+                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
+                        ISBN: {{ book.isbn }}<br>
+                        出版社: {{ book.publisher|default:"未知" }}
+                    </p>
+                </div>
+            </div>
+
+            <!-- 图书信息 -->
+            <div class="card-body">
+                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem; font-weight: 600; color: var(--text-primary);">
+                    <a href="{% url 'bookstore:book_detail' book.isbn %}"
+                       style="color: inherit; text-decoration: none;">
+                        {{ book.title|truncatechars:30 }}
+                    </a>
+                </h3>
+
+                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    <p style="margin: 0;">ISBN: {{ book.isbn }}</p>
+                    <p style="margin: 0;">出版社: {{ book.publisher|default:"未知" }}</p>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <span style="font-size: 1.4rem; font-weight: 700; color: var(--error);">
+                        ¥{{ book.price }}
+                    </span>
+                    <span style="color: var(--text-secondary); font-size: 0.9rem;">
+                        库存: {{ book.stockqty }}
+                    </span>
+                </div>
+
+                <!-- 操作按钮 -->
+                {% if request.session.customer_id %}
+                <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
+                    {% csrf_token %}
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
+                        <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem; font-weight: 600;">数量:</label>
+                        <input type="number" name="quantity" id="qty_{{ book.isbn }}" value="1" min="1" max="{{ book.stockqty }}"
+                               class="form-control" style="width: 80px; padding: 0.5rem;">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+                        🛒 加入购物车
+                    </button>
+                </form>
+                {% else %}
+                <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center;">
+                    🔐 登录后购买
+                </a>
+                {% endif %}
+            </div>
         </div>
-        <div style="margin-top: 0.3rem;">
-          <span class="price" style="color: #e74c3c; font-weight: bold; font-size: 1.1rem;">¥{{ book.price }}</span>
-          <span class="stock" style="margin-left: 1rem; color: #7f8c8d;">库存: {{ book.stockqty }}</span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body" style="text-align: center; padding: 4rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
+            <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">暂无图书</h3>
+            <p style="color: var(--text-secondary);">当前没有可用的图书，请稍后再试。</p>
         </div>
-      </div>
-      
-      <div class="book-actions" style="display: flex; gap: 0.5rem; align-items: center;">
-        {% if request.session.customer_id %}
-        <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}" style="display: flex; gap: 0.5rem; align-items: center;">
-          {% csrf_token %}
-          <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem;">数量:</label>
-          <input type="number" name="quantity" id="qty_{{ book.isbn }}" value="1" min="1" max="{{ book.stockqty }}"
-                 style="width: 60px; padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px;">
-          <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
-            🛒 加入购物车
-          </button>
-        </form>
-        {% else %}
-        <a href="{% url 'bookstore:login' %}" class="btn" style="padding: 0.5rem 1rem;">登录后购买</a>
-        {% endif %}
-      </div>
-    </li>
-  {% empty %}
-    <li style="padding: 2rem; text-align: center; color: #7f8c8d;">暂无图书</li>
-  {% endfor %}
-</ul>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* 自定义动画延迟 */
+.animate-fade-in:nth-child(1) { animation-delay: 0ms; }
+.animate-fade-in:nth-child(2) { animation-delay: 100ms; }
+.animate-fade-in:nth-child(3) { animation-delay: 200ms; }
+.animate-fade-in:nth-child(4) { animation-delay: 300ms; }
+.animate-fade-in:nth-child(5) { animation-delay: 400ms; }
+.animate-fade-in:nth-child(6) { animation-delay: 500ms; }
+.animate-fade-in:nth-child(7) { animation-delay: 600ms; }
+.animate-fade-in:nth-child(8) { animation-delay: 700ms; }
+.animate-fade-in:nth-child(9) { animation-delay: 800ms; }
+</style>
 {% endblock %}

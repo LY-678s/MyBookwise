@@ -29,6 +29,69 @@ def customer_login(request: HttpRequest) -> HttpResponse:
     return render(request, "bookstore/login.html")
     
 
+def customer_register(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "").strip()
+        confirm_password = request.POST.get("confirm_password", "").strip()
+        name = request.POST.get("name", "").strip()
+        email = request.POST.get("email", "").strip()
+        address = request.POST.get("address", "").strip()
+
+        # 验证输入
+        if not username or not password or not name or not email:
+            messages.error(request, "所有字段都是必填的")
+            return render(request, "bookstore/register.html")
+
+        if password != confirm_password:
+            messages.error(request, "两次输入的密码不一致")
+            return render(request, "bookstore/register.html")
+
+        if len(password) < 6:
+            messages.error(request, "密码长度至少6位")
+            return render(request, "bookstore/register.html")
+
+        # 检查用户名是否已存在
+        if Customer.objects.filter(username=username).exists():
+            messages.error(request, "用户名已存在")
+            return render(request, "bookstore/register.html")
+
+        # 检查邮箱是否已存在
+        if Customer.objects.filter(email=email).exists():
+            messages.error(request, "邮箱已被注册")
+            return render(request, "bookstore/register.html")
+
+        try:
+            from django.utils import timezone
+            # 创建新用户
+            customer = Customer.objects.create(
+                username=username,
+                password=password,  # 注意：生产环境中应该加密密码
+                name=name,
+                email=email,
+                address=address,
+                balance=Decimal('0.00'),
+                levelid_id=1,  # 默认1级会员
+                creditlimit=Decimal('0.00'),  # 1级无信用额度
+                usedcredit=Decimal('0.00'),
+                totalspent=Decimal('0.00'),
+                registerdate=timezone.now()  # 显式设置注册时间
+            )
+
+            # 自动登录新用户
+            request.session["customer_id"] = customer.customerid
+            request.session["customer_name"] = customer.name
+
+            messages.success(request, f"注册成功！欢迎加入，{customer.name}")
+            return redirect("bookstore:index")
+
+        except Exception as e:
+            messages.error(request, f"注册失败：{e}")
+            return render(request, "bookstore/register.html")
+
+    return render(request, "bookstore/register.html")
+
+
 def customer_logout(request: HttpRequest) -> HttpResponse:
     request.session.pop("customer_id", None)
     request.session.pop("customer_name", None)
@@ -48,11 +111,59 @@ def customer_required(view_func):
 
 def index(request: HttpRequest) -> HttpResponse:
     books = Book.objects.all().order_by("title")
-    return render(request, "bookstore/index.html", {"books": books})
+
+    # 处理图书封面图片的base64编码
+    import base64
+    books_with_covers = []
+    for book in books:
+        book_data = {
+            'isbn': book.isbn,
+            'title': book.title,
+            'publisher': book.publisher,
+            'price': book.price,
+            'keywords': book.keywords,
+            'stockqty': book.stockqty,
+            'location': book.location,
+            'minstocklimit': book.minstocklimit,
+            'coverimage': None
+        }
+
+        # 如果有封面图片，转换为base64
+        if book.coverimage:
+            try:
+                book_data['coverimage'] = base64.b64encode(book.coverimage).decode('utf-8')
+            except:
+                book_data['coverimage'] = None
+
+        books_with_covers.append(book_data)
+
+    return render(request, "bookstore/index.html", {"books": books_with_covers})
 
 def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
-    return render(request, "bookstore/book_detail.html", {"book": book})
+
+    # 处理图书封面图片的base64编码
+    import base64
+    book_data = {
+        'isbn': book.isbn,
+        'title': book.title,
+        'publisher': book.publisher,
+        'price': book.price,
+        'keywords': book.keywords,
+        'stockqty': book.stockqty,
+        'location': book.location,
+        'minstocklimit': book.minstocklimit,
+        'coverimage': None
+    }
+
+    # 如果有封面图片，转换为base64
+    if book.coverimage:
+        try:
+            book_data['coverimage'] = base64.b64encode(book.coverimage).decode('utf-8')
+        except:
+            book_data['coverimage'] = None
+
+    return render(request, "bookstore/book_detail.html", {"book": book_data})
 
 def search(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "")
@@ -179,12 +290,22 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
     discount_percent = (Decimal('1') - discount_rate) * 100
 
     if request.method == "POST":
-        payment_method = request.POST.get("payment_method", "immediate")  # immediate或defer
-        
+        payment_choice = request.POST.get("payment_choice", "balance")
+
+        # 获取发货地址信息
+        shipping_name = request.POST.get("shipping_name", customer.name)
+        shipping_contact = request.POST.get("shipping_contact", customer.email)
+        shipping_address = request.POST.get("shipping_address", customer.address)
+
+        # 验证发货地址
+        if not shipping_address or not shipping_address.strip():
+            messages.error(request, "请填写发货地址")
+            return redirect("bookstore:order_confirm")
+
         with transaction.atomic():
             # 锁定客户记录
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
-            
+
             # 1. 创建订单
             now = timezone.now()
             # 生成订单号：YYYYMMDDNN（年月日+两位序号）
@@ -194,12 +315,15 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 orderno__startswith=date_prefix
             ).count()
             order_number = f"{date_prefix}{today_orders_count + 1:02d}"
-            
+
+            # 组合发货地址信息
+            full_shipping_address = f"{shipping_name} ({shipping_contact}) - {shipping_address}"
+
             order = Orders.objects.create(
                 orderno=order_number,
                 orderdate=now,
                 customerid=customer,
-                shipaddress=customer.address or "默认地址",
+                shipaddress=full_shipping_address,
                 totalamount=Decimal('0'),
                 actualpaid=Decimal('0'),
                 paymentstatus=0,  # 默认未付款
@@ -240,8 +364,7 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 order.save(update_fields=['totalamount'])
                 print(f"🔍 [DEBUG] Manual calculation: TotalAmount={total_amount}")
             
-            # 4. 处理付款
-            payment_choice = request.POST.get("payment_choice", "balance")  # balance或credit
+            # 4. 处理付款 (payment_choice已经在前面获取了)
             
             if payment_choice == "credit":
                 # 纯信用支付
@@ -377,6 +500,60 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
             "customer": customer,
         },
     )
+
+
+@customer_required
+def account_edit(request: HttpRequest) -> HttpResponse:
+    """编辑账户信息"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        email = request.POST.get("email", "").strip()
+        address = request.POST.get("address", "").strip()
+        current_password = request.POST.get("current_password", "")
+        new_password = request.POST.get("new_password", "").strip()
+        confirm_password = request.POST.get("confirm_password", "").strip()
+
+        # 验证输入
+        if not name or not email:
+            messages.error(request, "姓名和邮箱不能为空")
+            return redirect("bookstore:account")
+
+        # 检查邮箱是否已被其他用户使用
+        if Customer.objects.filter(email=email).exclude(customerid=customer.customerid).exists():
+            messages.error(request, "邮箱已被其他用户使用")
+            return redirect("bookstore:account")
+
+        # 如果要修改密码
+        if new_password:
+            if customer.password != current_password:
+                messages.error(request, "当前密码不正确")
+                return redirect("bookstore:account")
+
+            if new_password != confirm_password:
+                messages.error(request, "两次输入的新密码不一致")
+                return redirect("bookstore:account")
+
+            if len(new_password) < 6:
+                messages.error(request, "新密码长度至少6位")
+                return redirect("bookstore:account")
+
+            customer.password = new_password
+
+        # 更新基本信息
+        customer.name = name
+        customer.email = email
+        customer.address = address
+        customer.save()
+
+        # 更新session中的姓名
+        request.session["customer_name"] = name
+
+        messages.success(request, "账户信息更新成功")
+        return redirect("bookstore:account")
+
+    return redirect("bookstore:account")
 
 
 @customer_required
@@ -559,19 +736,50 @@ def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
 
 
 @customer_required
+def cancel_order(request: HttpRequest, order_id: int) -> HttpResponse:
+    """取消订单（只能取消未发货的订单）"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    order = get_object_or_404(Orders, pk=order_id, customerid=customer)
+
+    # 检查订单是否可以取消
+    if order.status == 4:
+        messages.info(request, "该订单已取消")
+        return redirect("bookstore:order_detail", order_id=order_id)
+
+    if order.status == 1:
+        messages.error(request, "已发货的订单不能取消，请联系客服")
+        return redirect("bookstore:order_detail", order_id=order_id)
+
+    if order.status == 2:
+        messages.error(request, "已完成的订单不能取消")
+        return redirect("bookstore:order_detail", order_id=order_id)
+
+    if request.method == "POST":
+        with transaction.atomic():
+            # 更新订单状态为已取消
+            order.status = 4
+            order.save(update_fields=['status'])
+
+            messages.success(request, "订单已取消")
+            return redirect("bookstore:order_detail", order_id=order_id)
+
+    return redirect("bookstore:order_detail", order_id=order_id)
+
+
+@customer_required
 def confirm_receipt(request: HttpRequest, order_id: int) -> HttpResponse:
     """确认收货"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
-    
+
     if order.status != 1:
         messages.error(request, "只有已发货的订单才能确认收货")
         return redirect("bookstore:order_detail", order_id=order_id)
-    
+
     if request.method == "POST":
         order.status = 2  # 已完成
         order.save(update_fields=['status'])
         messages.success(request, "已确认收货，感谢您的购买！")
         return redirect("bookstore:order_detail", order_id=order_id)
-    
+
     return redirect("bookstore:order_detail", order_id=order_id)

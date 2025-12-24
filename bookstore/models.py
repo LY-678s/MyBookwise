@@ -25,6 +25,9 @@ class Book(models.Model):
         verbose_name = '图书'
         verbose_name_plural = '图书'
 
+    def __str__(self):
+        return f"{self.title} ({self.isbn})"
+
 
 class Bookauthor(models.Model):
     id = models.AutoField(db_column='ID', primary_key=True)  # Field name made lowercase.
@@ -38,6 +41,9 @@ class Bookauthor(models.Model):
         verbose_name = '图书作者'
         verbose_name_plural = '图书作者'
 
+    def __str__(self):
+        return f"{self.authorname} ({self.isbn.title})"
+
 
 class Creditlevel(models.Model):
     levelid = models.IntegerField(db_column='LevelID', primary_key=True)  # Field name made lowercase.
@@ -50,6 +56,9 @@ class Creditlevel(models.Model):
         db_table = 'creditlevel'
         verbose_name = '信用等级'
         verbose_name_plural = '信用等级'
+
+    def __str__(self):
+        return f"等级{self.levelid} ({self.discountrate*100:.0f}折)"
 
 
 class Customer(models.Model):
@@ -72,6 +81,9 @@ class Customer(models.Model):
         verbose_name = '客户'
         verbose_name_plural = '客户'
 
+    def __str__(self):
+        return f"{self.username} ({self.name})"
+
 
 class Orderdetail(models.Model):
     detailid = models.AutoField(db_column='DetailID', primary_key=True)  # Field name made lowercase.
@@ -86,6 +98,9 @@ class Orderdetail(models.Model):
         db_table = 'orderdetail'
         verbose_name = '订单明细'
         verbose_name_plural = '订单明细'
+
+    def __str__(self):
+        return f"{self.orderid.orderno} - {self.isbn.title} x{self.quantity}"
 
 
 class Orders(models.Model):
@@ -105,6 +120,9 @@ class Orders(models.Model):
         verbose_name = '订单'
         verbose_name_plural = '订单'
 
+    def __str__(self):
+        return self.orderno
+
 
 class Procurement(models.Model):
     procid = models.AutoField(db_column='ProcID', primary_key=True)  # Field name made lowercase.
@@ -120,6 +138,9 @@ class Procurement(models.Model):
         verbose_name = '采购单'
         verbose_name_plural = '采购单'
 
+    def __str__(self):
+        return self.procno
+
 
 class Procurementdetail(models.Model):
     detailid = models.AutoField(db_column='DetailID', primary_key=True)  # Field name made lowercase.
@@ -134,6 +155,9 @@ class Procurementdetail(models.Model):
         db_table = 'procurementdetail'
         verbose_name = '采购明细'
         verbose_name_plural = '采购明细'
+
+    def __str__(self):
+        return f"{self.procid.procno} - {self.isbn.title} x{self.quantity}"
 
 
 class Shortagerecord(models.Model):
@@ -152,6 +176,9 @@ class Shortagerecord(models.Model):
         verbose_name = '缺货记录'
         verbose_name_plural = '缺货记录'
 
+    def __str__(self):
+        return self.recordno
+
 
 class Supplier(models.Model):
     supplierid = models.AutoField(db_column='SupplierID', primary_key=True)  # Field name made lowercase.
@@ -166,6 +193,9 @@ class Supplier(models.Model):
         db_table = 'supplier'
         verbose_name = '供应商'
         verbose_name_plural = '供应商'
+
+    def __str__(self):
+        return f"{self.suppliername} ({self.suppliercode})"
 
 
 class SupplierbookManager(models.Manager):

@@ -1,107 +1,423 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>确认订单</h2>
+<div class="container animate-fade-in">
+    <!-- 页面标题 -->
+    <div style="text-align: center; margin-bottom: 3rem;">
+        <h1 style="color: var(--text-primary); font-size: 2.5rem; font-weight: 300; margin-bottom: 0.5rem;">
+            📋 确认订单
+        </h1>
+        <p style="color: var(--text-secondary); font-size: 1.1rem;">
+            请确认订单信息并选择支付方式
+        </p>
+    </div>
 
-{% if customer %}
-<div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong> | 折扣率：{{ discount_percent|floatformat:0 }}% 优惠</p>
-  <p><strong>账户余额：</strong>
-    <span style="{% if customer.balance < 0 %}color: #e74c3c;{% else %}color: #27ae60;{% endif %} font-weight: bold;">
-      ¥{{ customer.balance }}
-    </span>
-    {% if customer.levelid.canoverdraft %}
-      | <strong>可用透支额度：</strong>¥{{ customer.overdraftlimit|floatformat:2 }}
-      （当前已透支：¥{{ customer.currentoverdraft|floatformat:2 }}）
+    {% if customer %}
+    <!-- 账户信息卡片 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+            <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span>👤</span> 账户信息
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-3">
+                <div style="text-align: center;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">会员等级</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">
+                        {{ customer.levelid.levelid }}级
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        {{ discount_percent|floatformat:0 }}% 优惠
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">账户余额</div>
+                    <div style="font-size: 1.5rem; font-weight: 600;
+                         color: {% if customer.balance < 0 %}var(--error){% else %}var(--success){% endif %}">
+                        ¥{{ customer.balance }}
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        {% if customer.balance < 0 %}欠款{% else %}可用{% endif %}
+                    </div>
+                </div>
+
+                {% if customer.levelid.canusecredit %}
+                <div style="text-align: center;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">信用额度</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; color: var(--warning);">
+                        ¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        可用额度
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
     {% endif %}
-  </p>
-</div>
-{% endif %}
 
-<table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
-  <thead>
-    <tr>
-      <th>图书</th>
-      <th>数量</th>
-      <th>单价</th>
-      <th>原始小计</th>
-      <th>折扣后小计</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in items %}
-      <tr>
-        <td>{{ item.book.title }}</td>
-        <td>{{ item.quantity }}</td>
-        <td>¥{{ item.book.price }}</td>
-        <td>¥{{ item.original_amount|floatformat:2 }}</td>
-        <td><strong>¥{{ item.discounted_amount|floatformat:2 }}</strong></td>
-      </tr>
-    {% endfor %}
-  </tbody>
-  <tfoot>
-    <tr>
-      <td colspan="3"><strong>合计</strong></td>
-      <td>¥{{ original_total|floatformat:2 }}</td>
-      <td><strong>¥{{ discounted_total|floatformat:2 }}</strong></td>
-    </tr>
-    <tr>
-      <td colspan="3"><strong>节省金额</strong></td>
-      <td colspan="2" style="color: green;"><strong>¥{{ discount_amount|floatformat:2 }}</strong></td>
-    </tr>
-  </tfoot>
-</table>
+    <!-- 订单商品列表 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+            <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span>📦</span> 订单商品
+            </h3>
+        </div>
+        <div class="card-body">
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: var(--secondary-bg);">
+                            <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border); color: var(--text-primary);">图书</th>
+                            <th style="padding: 1rem; text-align: center; border-bottom: 2px solid var(--border); color: var(--text-primary);">数量</th>
+                            <th style="padding: 1rem; text-align: center; border-bottom: 2px solid var(--border); color: var(--text-primary);">单价</th>
+                            <th style="padding: 1rem; text-align: center; border-bottom: 2px solid var(--border); color: var(--text-primary);">折扣后</th>
+                            <th style="padding: 1rem; text-align: center; border-bottom: 2px solid var(--border); color: var(--text-primary);">小计</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <!-- 图书封面 -->
+                                    <div style="width: 50px; height: 70px; background: var(--accent-light);
+                                         border-radius: 4px; display: flex; align-items: center; justify-content: center;
+                                         flex-shrink: 0;">
+                                        {% if item.book.coverimage %}
+                                            <img src="data:image/jpeg;base64,{{ item.book.coverimage|safe }}"
+                                                 alt="{{ item.book.title }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;">
+                                        {% else %}
+                                            <span style="font-size: 1.5rem;">📖</span>
+                                        {% endif %}
+                                    </div>
+                                    <!-- 图书信息 -->
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.25rem;">
+                                            {{ item.book.title }}
+                                        </div>
+                                        <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                                            ISBN: {{ item.book.isbn }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding: 1rem; text-align: center; font-weight: 600;">
+                                {{ item.quantity }}
+                            </td>
+                            <td style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+                                ¥{{ item.book.price }}
+                            </td>
+                            <td style="padding: 1rem; text-align: center;">
+                                {% if discount_percent < 100 %}
+                                <span style="color: var(--error); font-weight: 600;">
+                                    ¥{{ item.discounted_price|floatformat:2 }}
+                                </span>
+                                {% else %}
+                                <span>¥{{ item.book.price }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem; text-align: center; font-weight: 700; color: var(--text-primary);">
+                                ¥{{ item.discounted_amount|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: var(--secondary-bg);">
+                            <td colspan="4" style="padding: 1rem; text-align: right; font-weight: 600; color: var(--text-primary);">
+                                商品总价：
+                            </td>
+                            <td style="padding: 1rem; text-align: center; font-weight: 700; color: var(--text-primary);">
+                                ¥{{ original_total|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% if discount_amount > 0 %}
+                        <tr>
+                            <td colspan="4" style="padding: 1rem; text-align: right; font-weight: 600; color: var(--success);">
+                                优惠节省：
+                            </td>
+                            <td style="padding: 1rem; text-align: center; font-weight: 700; color: var(--success);">
+                                -¥{{ discount_amount|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        <tr style="background: var(--accent-light); border-top: 2px solid var(--accent);">
+                            <td colspan="4" style="padding: 1rem; text-align: right; font-weight: 700; font-size: 1.1rem; color: var(--text-primary);">
+                                应付金额：
+                            </td>
+                            <td style="padding: 1rem; text-align: center; font-weight: 700; font-size: 1.2rem; color: var(--error);">
+                                ¥{{ discounted_total|floatformat:2 }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
 
-<div style="background: white; border: 2px solid #3498db; border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;">
-  <h3 style="margin-top: 0; color: #2c3e50;">选择支付方式</h3>
-  
-  <form method="post">
-    {% csrf_token %}
-    
-    <div style="margin-bottom: 1.5rem;">
-      <!-- 余额支付（余额优先，不足时用信用） -->
-      <label style="display: block; padding: 1rem; border: 2px solid #27ae60; border-radius: 8px; margin-bottom: 1rem; cursor: pointer; background: #e8f5e9;">
-        <input type="radio" name="payment_choice" value="balance" checked style="margin-right: 0.5rem;">
-        <strong style="color: #27ae60;">💰 余额支付</strong>
-        <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
-          支付 ¥{{ discounted_total|floatformat:2 }}
-          {% if customer.balance >= discounted_total %}
-            <br><span style="color: #27ae60;">✓ 余额充足，全部从余额扣款</span>
-          {% else %}
-            <br><span style="color: #f39c12;">⚠ 余额不足，</span>
-            {% if customer.levelid.canusecredit %}
-              <span style="color: #3498db;">先用完余额(¥{{ customer.balance }})，剩余使用信用额度</span>
-            {% else %}
-              <span style="color: #e74c3c;">该等级不支持信用，请充值</span>
-            {% endif %}
-          {% endif %}
-        </p>
-      </label>
-      
-      <!-- 信用支付（仅3-5级，全部用信用） -->
-      {% if customer.levelid.canusecredit %}
-      <label style="display: block; padding: 1rem; border: 2px solid #3498db; border-radius: 8px; cursor: pointer; background: #e3f2fd;">
-        <input type="radio" name="payment_choice" value="credit" style="margin-right: 0.5rem;">
-        <strong style="color: #3498db;">💳 信用支付</strong>
-        <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
-          不使用余额，全部使用信用额度 ¥{{ discounted_total|floatformat:2 }}
-          <br>
-          信用额度：¥{{ customer.creditlimit|floatformat:2 }}，
-          已使用：¥{{ customer.usedcredit|floatformat:2 }}
-        </p>
-      </label>
-      {% endif %}
+    <!-- 发货地址 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+            <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span>📍</span> 发货地址
+                <button class="btn btn-secondary" onclick="toggleAddressEdit()"
+                        style="margin-left: auto; padding: 0.25rem 0.75rem; font-size: 0.8rem;">
+                    ✏️ 编辑
+                </button>
+            </h3>
+        </div>
+        <div class="card-body">
+            <!-- 显示地址 -->
+            <div id="address-display">
+                <div style="padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
+                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">
+                        {{ customer.name }} ({{ customer.username }})
+                    </div>
+                    <div style="color: var(--text-secondary);">
+                        📞 {{ customer.email }}<br>
+                        📍 {{ customer.address|default:"未设置地址，请编辑后填写" }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 编辑地址 -->
+            <div id="address-edit" style="display: none;">
+                <form id="address-form" style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">收货人姓名</label>
+                        <input type="text" class="form-control" name="shipping_name" value="{{ customer.name }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">联系电话/邮箱</label>
+                        <input type="text" class="form-control" name="shipping_contact" value="{{ customer.email }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">详细地址</label>
+                        <textarea class="form-control" name="shipping_address" rows="3" required>{{ customer.address }}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <button type="button" class="btn btn-primary" onclick="saveAddress()">保存地址</button>
+                        <button type="button" class="btn btn-secondary" onclick="toggleAddressEdit()">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
-    
-    <div style="display: flex; gap: 1rem;">
-      <button type="submit" class="btn btn-success" style="padding: 0.75rem 2rem; font-size: 1.1rem;">
-        确认下单
-      </button>
-      <a href="{% url 'bookstore:cart_detail' %}" class="btn" style="padding: 0.75rem 2rem;">
-        返回购物车
-      </a>
+
+    <!-- 支付方式选择 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+            <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                <span>💳</span> 选择支付方式
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="post" id="order-form">
+                {% csrf_token %}
+
+                <!-- 余额支付选项 -->
+                <label class="payment-option" style="display: block; margin-bottom: 1rem;">
+                    <input type="radio" name="payment_choice" value="balance" checked style="margin-right: 0.5rem;">
+                    <div class="payment-card" style="border: 2px solid var(--success); background: linear-gradient(135deg, rgba(168, 218, 220, 0.1) 0%, rgba(184, 216, 216, 0.1) 100%);">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="font-size: 2rem;">💰</div>
+                            <div>
+                                <h4 style="margin: 0 0 0.5rem 0; color: var(--success);">余额支付</h4>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                                    支付金额：¥{{ discounted_total|floatformat:2 }}
+                                    {% if customer.balance >= discounted_total %}
+                                        <br><span style="color: var(--success);">✓ 余额充足，全部从余额扣款</span>
+                                    {% else %}
+                                        <br><span style="color: var(--warning);">⚠ 余额不足，</span>
+                                        {% if customer.levelid.canusecredit %}
+                                            <span style="color: var(--accent);">先用余额(¥{{ customer.balance }})，剩余使用信用额度</span>
+                                        {% else %}
+                                            <span style="color: var(--error);">该等级不支持信用，请充值</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+
+                <!-- 信用支付选项（仅3-5级） -->
+                {% if customer.levelid.canusecredit %}
+                <label class="payment-option" style="display: block;">
+                    <input type="radio" name="payment_choice" value="credit" style="margin-right: 0.5rem;">
+                    <div class="payment-card" style="border: 2px solid var(--accent); background: linear-gradient(135deg, rgba(212, 197, 185, 0.1) 0%, rgba(232, 224, 216, 0.1) 100%);">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="font-size: 2rem;">💳</div>
+                            <div>
+                                <h4 style="margin: 0 0 0.5rem 0; color: var(--accent);">信用支付</h4>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                                    不使用余额，全部使用信用额度 ¥{{ discounted_total|floatformat:2 }}
+                                    <br>
+                                    可用额度：¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}，
+                                    已使用：¥{{ customer.usedcredit|floatformat:2 }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </label>
+                {% endif %}
+
+                <!-- 隐藏的发货地址字段 -->
+                <input type="hidden" name="shipping_name" value="{{ customer.name }}">
+                <input type="hidden" name="shipping_contact" value="{{ customer.email }}">
+                <input type="hidden" name="shipping_address" value="{{ customer.address }}">
+            </form>
+        </div>
     </div>
-  </form>
+
+    <!-- 操作按钮 -->
+    <div class="card">
+        <div class="card-body">
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <button type="submit" form="order-form" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
+                    🚀 确认下单
+                </button>
+                <a href="{% url 'bookstore:cart_detail' %}" class="btn btn-secondary" style="padding: 1rem 3rem;">
+                    ← 返回购物车
+                </a>
+            </div>
+
+            <div style="margin-top: 2rem; padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
+                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem; text-align: center;">
+                    💡 提示：
+                    {% if customer.levelid.canusecredit %}
+                        您是{{ customer.levelid.levelid }}级会员，支持信用支付。未全额支付的订单需在30天内完成支付。
+                    {% else %}
+                        您当前是{{ customer.levelid.levelid }}级会员，暂不支持信用支付功能，只能使用余额支付。
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+function toggleAddressEdit() {
+    const display = document.getElementById('address-display');
+    const edit = document.getElementById('address-edit');
+
+    if (display.style.display !== 'none') {
+        display.style.display = 'none';
+        edit.style.display = 'block';
+    } else {
+        display.style.display = 'block';
+        edit.style.display = 'none';
+    }
+}
+
+function saveAddress() {
+    const form = document.getElementById('address-form');
+    const formData = new FormData(form);
+
+    // 更新表单中的隐藏字段
+    document.querySelector('input[name="shipping_name"]').value = formData.get('shipping_name');
+    document.querySelector('input[name="shipping_contact"]').value = formData.get('shipping_contact');
+    document.querySelector('input[name="shipping_address"]').value = formData.get('shipping_address');
+
+    // 更新显示区域
+    document.querySelector('#address-display .card-body').innerHTML = `
+        <div style="padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
+            <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">
+                ${formData.get('shipping_name')} (${document.querySelector('input[name="shipping_name"]').value})
+            </div>
+            <div style="color: var(--text-secondary);">
+                📞 ${formData.get('shipping_contact')}<br>
+                📍 ${formData.get('shipping_address')}
+            </div>
+        </div>
+    `;
+
+    toggleAddressEdit();
+
+    // 显示保存成功的提示
+    showMessage('地址信息已更新', 'success');
+}
+
+function showMessage(message, type) {
+    // 创建消息提示
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+    messageDiv.textContent = message;
+    messageDiv.style.position = 'fixed';
+    messageDiv.style.top = '20px';
+    messageDiv.style.right = '20px';
+    messageDiv.style.zIndex = '1000';
+
+    document.body.appendChild(messageDiv);
+
+    // 3秒后自动消失
+    setTimeout(() => {
+        messageDiv.remove();
+    }, 3000);
+}
+
+// 支付选项点击效果
+document.querySelectorAll('.payment-option').forEach(option => {
+    option.addEventListener('click', function() {
+        // 移除其他选项的选中状态
+        document.querySelectorAll('.payment-card').forEach(card => {
+            card.style.boxShadow = '0 4px 12px var(--shadow)';
+        });
+
+        // 为当前选项添加选中效果
+        const card = this.querySelector('.payment-card');
+        card.style.boxShadow = '0 8px 24px rgba(212, 197, 185, 0.3)';
+    });
+});
+
+// 页面加载时的初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 模拟图书封面图片处理
+    document.querySelectorAll('img').forEach(img => {
+        img.onerror = function() {
+            this.style.display = 'none';
+            this.nextElementSibling.style.display = 'flex';
+        };
+    });
+});
+</script>
+
+<style>
+.payment-card {
+    padding: 1.5rem;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.payment-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px var(--shadow);
+}
+
+.payment-option input[type="radio"] {
+    transform: scale(1.2);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    table {
+        font-size: 0.8rem;
+    }
+
+    table th, table td {
+        padding: 0.5rem;
+    }
+}
+</style>
 
 <p style="color: #7f8c8d; margin-top: 1rem; font-size: 0.9rem;">
   💡 提示：

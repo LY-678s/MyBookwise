@@ -1,0 +1,85 @@
+{% extends "bookstore/base.html" %}
+{% block content %}
+<h2>顾客注册</h2>
+
+<form method="post" style="max-width: 400px; margin: 0 auto;">
+  {% csrf_token %}
+
+  <div style="margin-bottom: 1rem;">
+    <label for="username" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">用户名：</label>
+    <input type="text" id="username" name="username" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请输入用户名">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="name" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">真实姓名：</label>
+    <input type="text" id="name" name="name" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请输入真实姓名">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="email" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">邮箱：</label>
+    <input type="email" id="email" name="email" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请输入邮箱地址">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="address" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">地址：</label>
+    <input type="text" id="address" name="address" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请输入收货地址">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label for="password" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">密码：</label>
+    <input type="password" id="password" name="password" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请输入密码（至少6位）">
+  </div>
+
+  <div style="margin-bottom: 1.5rem;">
+    <label for="confirm_password" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">确认密码：</label>
+    <input type="password" id="confirm_password" name="confirm_password" required
+           style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;"
+           placeholder="请再次输入密码">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <small style="color: #666;">
+      注册后您将成为1级会员，享受90折优惠，无信用额度。<br>
+      消费越多等级越高，可享受更多优惠和信用额度。
+    </small>
+  </div>
+
+  <button type="submit" style="width: 100%; padding: 0.75rem; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer;">
+    注册
+  </button>
+</form>
+
+<div style="text-align: center; margin-top: 2rem;">
+  <p>已有账户？<a href="{% url 'bookstore:login' %}">立即登录</a></p>
+</div>
+
+<script>
+// 简单的客户端验证
+document.querySelector('form').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+
+    if (password !== confirmPassword) {
+        alert('两次输入的密码不一致');
+        e.preventDefault();
+        return false;
+    }
+
+    if (password.length < 6) {
+        alert('密码长度至少6位');
+        e.preventDefault();
+        return false;
+    }
+});
+</script>
+{% endblock %}

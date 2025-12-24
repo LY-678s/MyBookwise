@@ -30,9 +30,15 @@
   
   <p><strong>应付金额：</strong>¥{{ order.totalamount|floatformat:2 }}</p>
   <p><strong>实付金额：</strong>
-    <span style="font-weight: bold; {% if order.actualpaid > 0 %}color: #27ae60;{% endif %}">
+    {% if order.actualpaid > 0 %}
+    <span style="font-weight: bold; color: #27ae60;">
       ¥{{ order.actualpaid|floatformat:2 }}
     </span>
+    {% else %}
+    <span style="font-weight: bold;">
+      ¥{{ order.actualpaid|floatformat:2 }}
+    </span>
+    {% endif %}
   </p>
   
   <p><strong>下单时间：</strong>{{ order.orderdate }}</p>
@@ -89,19 +95,30 @@
   <h3 style="margin-top: 0;">操作</h3>
   
   <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <!-- 取消订单按钮（未发货且未取消的订单） -->
+    {% if order.status == 0 %}
+    <form method="post" action="{% url 'bookstore:cancel_order' order.orderid %}" style="display: inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger"
+              onclick="return confirm('确定要取消这个订单吗？\n\n取消后订单将无法恢复。')">
+        ❌ 取消订单
+      </button>
+    </form>
+    {% endif %}
+
     <!-- 补足支付按钮（未全额支付订单） -->
     {% if order.paymentstatus == 2 and order.status != 4 %}
     <form method="post" action="{% url 'bookstore:pay_order' order.orderid %}" style="display: inline;">
       {% csrf_token %}
       {% with unpaid=order.totalamount|add:"-"|add:order.actualpaid %}
-      <button type="submit" class="btn btn-warning" 
+      <button type="submit" class="btn btn-warning"
               onclick="return confirm('补足支付 ¥{{ unpaid }} 吗？\n\n需要从余额扣款，余额不足则无法支付。\n\n支付后您的累计消费将增加，可能会提升信用等级。')">
         💰 补足支付 ¥{{ unpaid|floatformat:2 }}（已付¥{{ order.actualpaid|floatformat:2 }}）
       </button>
       {% endwith %}
     </form>
     {% endif %}
-    
+
     <!-- 确认收货按钮（已发货订单） -->
     {% if order.status == 1 %}
     <form method="post" action="{% url 'bookstore:confirm_receipt' order.orderid %}" style="display: inline;">

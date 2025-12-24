@@ -1,9 +1,246 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>{{ book.title }}</h2>
-<p>ISBN：{{ book.isbn }}</p>
-<p>出版社：{{ book.publisher }}</p>
-<p>价格：{{ book.price }} 元</p>
-<p>库存：{{ book.stockqty }}</p>
-<a href="{% url 'bookstore:cart_add' book.isbn %}">加入购物车</a>
+<div class="container animate-fade-in">
+    <!-- 返回按钮 -->
+    <div style="margin-bottom: 2rem;">
+        <a href="{% url 'bookstore:index' %}" class="btn btn-secondary">
+            ← 返回图书列表
+        </a>
+    </div>
+
+    <div class="stacked" style="display:flex; flex-direction:column; gap:1.5rem;">
+        <!-- 左侧：图书封面和基本信息 -->
+        <div>
+            <!-- 图书封面 -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="position: relative;">
+                    {% if book.coverimage %}
+                        <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}"
+                             alt="{{ book.title }}"
+                             style="width: 100%; height: 400px; object-fit: cover; border-radius: 12px 12px 0 0;">
+                    {% else %}
+                        <div style="width: 100%; height: 400px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 5rem; border-radius: 12px 12px 0 0;">
+                            📖
+                        </div>
+                    {% endif %}
+
+                </div>
+
+                <div class="card-body">
+                    <!-- 价格和库存信息 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <div>
+                            <span style="font-size: 2rem; font-weight: 700; color: var(--error);">
+                                ¥{{ book.price }}
+                            </span>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="color: var(--text-secondary); font-size: 0.9rem;">库存</div>
+                            <div style="font-size: 1.2rem; font-weight: 600; color: {% if book.stockqty > 10 %}var(--success){% elif book.stockqty > 0 %}var(--warning){% else %}var(--error){% endif %}">
+                                {{ book.stockqty }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 加入购物车表单 -->
+                    {% if request.session.customer_id %}
+                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
+                        {% csrf_token %}
+                        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                            <div style="flex: 1;">
+                                <label for="quantity" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">数量</label>
+                                <input type="number" name="quantity" id="quantity" value="1" min="1" max="{{ book.stockqty }}"
+                                       class="form-control" style="text-align: center; font-size: 1.2rem; padding: 0.75rem;">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.1rem;">
+                            🛒 加入购物车
+                        </button>
+                    </form>
+                    {% else %}
+                    <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center; padding: 1rem; font-size: 1.1rem;">
+                        🔐 登录后购买
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 快速信息卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 style="margin: 0; color: var(--text-primary);">📋 快速信息</h4>
+                </div>
+                <div class="card-body">
+                    <div style="display: grid; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">ISBN</span>
+                            <span style="font-weight: 600;">{{ book.isbn }}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">出版社</span>
+                            <span style="font-weight: 600;">{{ book.publisher|default:"未知" }}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">库存位置</span>
+                            <span style="font-weight: 600;">{{ book.location|default:"未设置" }}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">最低库存</span>
+                            <span style="font-weight: 600;">{{ book.minstocklimit }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：详细信息 -->
+        <div>
+            <!-- 图书标题和关键词 -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div class="card-body">
+                    <h1 style="color: var(--text-primary); margin: 0 0 1rem 0; font-size: 2rem; font-weight: 300;">
+                        {{ book.title }}
+                    </h1>
+
+                    {% if book.keywords %}
+                    <div style="margin-bottom: 1rem;">
+                        <span style="background: var(--accent-light); color: var(--text-primary); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.9rem;">
+                            {{ book.keywords }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <!-- 交互按钮组 -->
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <button class="btn btn-secondary" onclick="toggleFavorite(this)"
+                                style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            ❤️ 收藏
+                        </button>
+                        <button class="btn btn-secondary" onclick="shareBook()"
+                                style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            📤 分享
+                        </button>
+                        <button class="btn btn-secondary" onclick="toggleDetails(this)"
+                                style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            ℹ️ 详情
+                        </button>
+                    </div>
+
+                    <!-- 详细信息（默认隐藏） -->
+                    <div id="book-details" style="display: none; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; margin-top: 1rem;">
+                        <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">📖 图书详情</h4>
+                        <div style="color: var(--text-secondary); line-height: 1.6;">
+                            <p><strong>ISBN:</strong> {{ book.isbn }}</p>
+                            <p><strong>出版社:</strong> {{ book.publisher|default:"未知" }}</p>
+                            <p><strong>价格:</strong> ¥{{ book.price }}</p>
+                            <p><strong>库存:</strong> {{ book.stockqty }} 本</p>
+                            <p><strong>库存位置:</strong> {{ book.location|default:"未设置" }}</p>
+                            <p><strong>最低库存预警:</strong> {{ book.minstocklimit }} 本</p>
+                            {% if book.keywords %}
+                            <p><strong>关键词:</strong> {{ book.keywords }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 推荐图书 -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 style="margin: 0; color: var(--text-primary);">📚 相关推荐</h4>
+                </div>
+                <div class="card-body">
+                    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔄</div>
+                        <p>正在加载相关推荐...</p>
+                        <small>基于当前图书的关键词和出版社</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 收藏功能
+function toggleFavorite(btn) {
+    const isFavorite = btn.innerHTML.includes('❤️');
+    btn.innerHTML = isFavorite ? '🤍 收藏' : '❤️ 收藏';
+    btn.style.background = isFavorite ? 'var(--secondary-bg)' : 'linear-gradient(135deg, #ff6b9d 0%, #c44569 100%)';
+    btn.style.color = isFavorite ? 'var(--text-primary)' : 'white';
+}
+
+// 分享功能
+function shareBook() {
+    const url = window.location.href;
+    const title = document.querySelector('h1').textContent.trim();
+
+    if (navigator.share) {
+        navigator.share({
+            title: title,
+            url: url
+        });
+    } else {
+        // 复制到剪贴板
+        navigator.clipboard.writeText(url).then(() => {
+            alert('链接已复制到剪贴板！');
+        });
+    }
+}
+
+// 详情切换
+function toggleDetails(btn) {
+    const details = document.getElementById('book-details');
+    const isVisible = details.style.display !== 'none';
+
+    details.style.display = isVisible ? 'none' : 'block';
+    btn.innerHTML = isVisible ? 'ℹ️ 详情' : '🔽 收起';
+}
+
+// 添加一些动态效果
+document.addEventListener('DOMContentLoaded', function() {
+    // 为按钮添加悬浮效果
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px) scale(1.02)';
+        });
+
+        btn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+
+    // 为卡片添加微动画
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 100}ms`;
+    });
+});
+</script>
+
+<style>
+/* 自定义图书详情页样式（已简化为单列） */
+.stacked { display:flex; flex-direction:column; gap:1rem; }
+
+/* 按钮悬浮效果（保留微交互） */
+.btn {
+    transition: all 0.2s ease !important;
+}
+
+.btn:hover {
+    transform: translateY(-2px) scale(1.02) !important;
+}
+
+/* 详情面板动画 */
+#book-details {
+    transition: all 0.25s ease;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .stacked { gap:0.8rem; }
+    .card-body { padding:1rem; }
+}
+</style>
 {% endblock %}

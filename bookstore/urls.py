@@ -8,8 +8,9 @@ urlpatterns = [
     path("book/<str:isbn>/", views.book_detail, name="book_detail"),
     path("search/", views.search, name="search"),
 
-    # 顾客登录 / 注销
+    # 顾客登录 / 注册 / 注销
     path("login/", views.customer_login, name="login"),
+    path("register/", views.customer_register, name="register"),
     path("logout/", views.customer_logout, name="logout"),
 
     # 购物车 & 下单
@@ -21,9 +22,11 @@ urlpatterns = [
     path("orders/", views.order_list, name="order_list"),
     path("orders/<int:order_id>/", views.order_detail, name="order_detail"),
     path("orders/<int:order_id>/pay/", views.pay_order, name="pay_order"),
+    path("orders/<int:order_id>/cancel/", views.cancel_order, name="cancel_order"),
     path("orders/<int:order_id>/confirm/", views.confirm_receipt, name="confirm_receipt"),
     
     # 账户管理
     path("account/", views.account_recharge, name="account"),
+    path("account/edit/", views.account_edit, name="account_edit"),
     path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
 ]
