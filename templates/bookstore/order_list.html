@@ -12,10 +12,10 @@
       <tr>
         <th>订单号</th>
         <th>下单时间</th>
-        <th>原始金额</th>
-        <th>折扣后金额</th>
-        <th>节省金额</th>
-        <th>状态</th>
+        <th>应付金额</th>
+        <th>实付金额</th>
+        <th>付款状态</th>
+        <th>订单状态</th>
         <th>操作</th>
       </tr>
     </thead>
@@ -23,20 +23,34 @@
       {% for item in orders_with_details %}
         <tr>
           <td>{{ item.order.orderno }}</td>
-          <td>{{ item.order.orderdate }}</td>
-          <td>¥{{ item.original_amount|floatformat:2 }}</td>
+          <td>{{ item.order.orderdate|date:"Y-m-d H:i" }}</td>
           <td><strong>¥{{ item.order.totalamount|floatformat:2 }}</strong></td>
-          <td style="color: green;">¥{{ item.discount_amount|floatformat:2 }}</td>
+          <td>¥{{ item.order.actualpaid|floatformat:2 }}</td>
           <td>
-            {% if item.order.status == 0 %}已下单
-            {% elif item.order.status == 1 %}已发货
-            {% elif item.order.status == 2 %}已完成
-            {% elif item.order.status == 4 %}已取消
-            {% else %}未知状态
+            {% if item.order.paymentstatus == 0 %}
+              <span style="color: #e74c3c;">未付款</span>
+            {% elif item.order.paymentstatus == 1 %}
+              <span style="color: #27ae60;">已付款</span>
+            {% elif item.order.paymentstatus == 2 %}
+              <span style="color: #7f8c8d;">已退款</span>
             {% endif %}
           </td>
           <td>
-            <a href="{% url 'bookstore:order_detail' item.order.orderid %}">查看详情</a>
+            {% if item.order.status == 0 %}
+              <span style="color: #f39c12;">已下单</span>
+            {% elif item.order.status == 1 %}
+              <span style="color: #3498db;">已发货</span>
+            {% elif item.order.status == 2 %}
+              <span style="color: #27ae60;">已完成</span>
+            {% elif item.order.status == 4 %}
+              <span style="color: #95a5a6;">已取消</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">查看详情</a>
+            {% if item.order.paymentstatus == 0 and item.order.status != 4 %}
+              <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-success" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">💳 去支付</a>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}

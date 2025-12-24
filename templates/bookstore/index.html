@@ -7,18 +7,40 @@
   <button type="submit">搜索</button>
 </form>
 
-<ul>
+<ul style="list-style: none; padding: 0;">
   {% for book in books %}
-    <li>
-      <a href="{% url 'bookstore:book_detail' book.isbn %}">
-        {{ book.title }}（{{ book.isbn }}）
-      </a>
-      - 价格：{{ book.price }} 元
-      - 库存：{{ book.stockqty }}
-      <a href="{% url 'bookstore:cart_add' book.isbn %}">加入购物车</a>
+    <li style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+      <div class="book-info" style="flex: 1;">
+        <a href="{% url 'bookstore:book_detail' book.isbn %}" style="font-size: 1.1rem; font-weight: 500;">
+          {{ book.title }}
+        </a>
+        <div style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.3rem;">
+          ISBN: {{ book.isbn }} | 出版社: {{ book.publisher }}
+        </div>
+        <div style="margin-top: 0.3rem;">
+          <span class="price" style="color: #e74c3c; font-weight: bold; font-size: 1.1rem;">¥{{ book.price }}</span>
+          <span class="stock" style="margin-left: 1rem; color: #7f8c8d;">库存: {{ book.stockqty }}</span>
+        </div>
+      </div>
+      
+      <div class="book-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+        {% if request.session.customer_id %}
+        <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}" style="display: flex; gap: 0.5rem; align-items: center;">
+          {% csrf_token %}
+          <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem;">数量:</label>
+          <input type="number" name="quantity" id="qty_{{ book.isbn }}" value="1" min="1" max="{{ book.stockqty }}"
+                 style="width: 60px; padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px;">
+          <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem; white-space: nowrap;">
+            🛒 加入购物车
+          </button>
+        </form>
+        {% else %}
+        <a href="{% url 'bookstore:login' %}" class="btn" style="padding: 0.5rem 1rem;">登录后购买</a>
+        {% endif %}
+      </div>
     </li>
   {% empty %}
-    <li>暂无图书</li>
+    <li style="padding: 2rem; text-align: center; color: #7f8c8d;">暂无图书</li>
   {% endfor %}
 </ul>
 {% endblock %}

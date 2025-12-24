@@ -3,8 +3,18 @@
 <h2>确认订单</h2>
 
 {% if customer %}
-  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong></p>
-  <p>折扣率：{{ discount_percent|floatformat:0 }}% 折扣（{{ discount_rate|floatformat:2 }}折）</p>
+<div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+  <p><strong>当前会员等级：{{ customer.levelid.levelid }}级</strong> | 折扣率：{{ discount_percent|floatformat:0 }}% 优惠</p>
+  <p><strong>账户余额：</strong>
+    <span style="{% if customer.balance < 0 %}color: #e74c3c;{% else %}color: #27ae60;{% endif %} font-weight: bold;">
+      ¥{{ customer.balance }}
+    </span>
+    {% if customer.levelid.canoverdraft %}
+      | <strong>可用透支额度：</strong>¥{{ customer.overdraftlimit|floatformat:2 }}
+      （当前已透支：¥{{ customer.currentoverdraft|floatformat:2 }}）
+    {% endif %}
+  </p>
+</div>
 {% endif %}
 
 <table border="1" cellpadding="10" style="width: 100%; border-collapse: collapse;">
@@ -41,8 +51,63 @@
   </tfoot>
 </table>
 
-<form method="post" style="margin-top: 20px;">
-  {% csrf_token %}
-  <button type="submit" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">确认下单</button>
-</form>
+<div style="background: white; border: 2px solid #3498db; border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;">
+  <h3 style="margin-top: 0; color: #2c3e50;">选择付款方式</h3>
+  
+  <form method="post">
+    {% csrf_token %}
+    
+    <div style="margin-bottom: 1.5rem;">
+      <!-- 立即付款（所有等级都支持） -->
+      <label style="display: block; padding: 1rem; border: 2px solid #27ae60; border-radius: 8px; margin-bottom: 1rem; cursor: pointer; background: #e8f5e9;">
+        <input type="radio" name="payment_method" value="immediate" checked style="margin-right: 0.5rem;">
+        <strong style="color: #27ae60;">💳 立即付款</strong>
+        <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
+          立即扣款 ¥{{ discounted_total|floatformat:2 }}
+          {% if customer.balance >= discounted_total %}
+            <span style="color: #27ae60;">✓ 余额充足</span>
+          {% else %}
+            {% if customer.levelid.canoverdraft %}
+              <span style="color: #f39c12;">⚠ 余额不足，将使用透支额度</span>
+            {% else %}
+              <span style="color: #e74c3c;">✗ 余额不足，请充值</span>
+            {% endif %}
+          {% endif %}
+        </p>
+      </label>
+      
+      <!-- 暂缓付款（仅3-5级） -->
+      {% if customer.levelid.canoverdraft %}
+      <label style="display: block; padding: 1rem; border: 2px solid #3498db; border-radius: 8px; cursor: pointer; background: #e3f2fd;">
+        <input type="radio" name="payment_method" value="defer" style="margin-right: 0.5rem;">
+        <strong style="color: #3498db;">⏳ 暂缓付款</strong>
+        <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
+          不立即扣款，订单金额 ¥{{ discounted_total|floatformat:2 }} 计入透支额度
+          <br>
+          可用透支额度：¥{{ customer.overdraftlimit|floatformat:2 }}，
+          当前已用：¥{{ customer.currentoverdraft|floatformat:2 }}
+        </p>
+      </label>
+      {% endif %}
+    </div>
+    
+    <div style="display: flex; gap: 1rem;">
+      <button type="submit" class="btn btn-success" style="padding: 0.75rem 2rem; font-size: 1.1rem;">
+        确认下单
+      </button>
+      <a href="{% url 'bookstore:cart_detail' %}" class="btn" style="padding: 0.75rem 2rem;">
+        返回购物车
+      </a>
+    </div>
+  </form>
+</div>
+
+<p style="color: #7f8c8d; margin-top: 1rem; font-size: 0.9rem;">
+  💡 提示：
+  {% if customer.levelid.canoverdraft %}
+    您的信用等级支持暂缓付款。暂缓付款的订单可以随时在"我的订单"中支付。
+  {% else %}
+    您当前是{{ customer.levelid.levelid }}级会员，暂不支持暂缓付款功能。
+  {% endif %}
+</p>
 {% endblock %}

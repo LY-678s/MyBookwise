@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q
+from django.db import transaction
 
 from .models import Book, Customer, Orders, Orderdetail, Creditlevel
 from decimal import Decimal
@@ -73,12 +74,52 @@ def _save_cart(request, cart):
 def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
     cart = _get_cart(request)
+    
+    # 支持POST方式传递数量
+    if request.method == "POST":
+        try:
+            quantity = int(request.POST.get("quantity", 1))
+            if quantity < 1:
+                quantity = 1
+        except (ValueError, TypeError):
+            quantity = 1
+    else:
+        quantity = 1
+    
     item = cart.get(isbn, {"quantity": 0})
-    item["quantity"] += 1
+    item["quantity"] += quantity
     cart[isbn] = item
     _save_cart(request, cart)
-    messages.success(request, f"已将《{book.title}》加入购物车")
+    
+    messages.success(request, f"已将《{book.title}》× {quantity} 加入购物车")
+    
+    # 获取来源页面，返回原页面而不是跳转到购物车
+    referer = request.META.get('HTTP_REFERER', '')
+    if '/cart/' in referer or not referer:
+        return redirect("bookstore:cart_detail")
+    else:
+        return redirect(referer)
+
+@customer_required
+def cart_update(request: HttpRequest, isbn: str) -> HttpResponse:
+    """更新购物车中商品的数量"""
+    if request.method == "POST":
+        cart = _get_cart(request)
+        try:
+            quantity = int(request.POST.get("quantity", 0))
+            if quantity > 0:
+                cart[isbn] = {"quantity": quantity}
+                messages.success(request, "购物车已更新")
+            elif quantity == 0:
+                # 数量为0则删除
+                if isbn in cart:
+                    del cart[isbn]
+                messages.info(request, "已从购物车移除")
+            _save_cart(request, cart)
+        except (ValueError, TypeError):
+            messages.error(request, "请输入有效的数量")
     return redirect("bookstore:cart_detail")
+
 
 @customer_required
 def cart_remove(request: HttpRequest, isbn: str) -> HttpResponse:
@@ -86,6 +127,7 @@ def cart_remove(request: HttpRequest, isbn: str) -> HttpResponse:
     if isbn in cart:
         del cart[isbn]
         _save_cart(request, cart)
+        messages.success(request, "已从购物车移除")
     return redirect("bookstore:cart_detail")
 
 @customer_required
@@ -137,42 +179,101 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
     discount_percent = (Decimal('1') - discount_rate) * 100
 
     if request.method == "POST":
-        # 1. 创建订单（totalamount设为0，让触发器自动计算折扣后的金额）
-        now = timezone.now()
-        order = Orders.objects.create(
-            orderno=f"OD{int(now.timestamp())}{customer.customerid}",
-            orderdate=now,
-            customerid=customer,
-            shipaddress=customer.address or "默认地址",
-            totalamount=0,  # 设为0，触发器会在订单明细插入后自动计算折扣后的金额
-            status=0,  # 0=已下单
-        )
-
-        # 2. 为购物车中每本书创建 Orderdetail
-        for isbn, data in cart.items():
-            book = get_object_or_404(Book, pk=isbn)
-            quantity = data["quantity"]
-
-            Orderdetail.objects.create(
-                orderid=order,
-                isbn=book,
-                quantity=quantity,
-                unitprice=book.price,
-                isshipped=0,
+        payment_method = request.POST.get("payment_method", "immediate")  # immediate或defer
+        
+        with transaction.atomic():
+            # 锁定客户记录
+            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
+            
+            # 1. 创建订单
+            now = timezone.now()
+            # 生成订单号：YYYYMMDDNN（年月日+两位序号）
+            date_prefix = now.strftime('%Y%m%d')
+            # 查找今天已有的订单数量
+            today_orders_count = Orders.objects.filter(
+                orderno__startswith=date_prefix
+            ).count()
+            order_number = f"{date_prefix}{today_orders_count + 1:02d}"
+            
+            order = Orders.objects.create(
+                orderno=order_number,
+                orderdate=now,
+                customerid=customer,
+                shipaddress=customer.address or "默认地址",
+                totalamount=Decimal('0'),
+                actualpaid=Decimal('0'),
+                paymentstatus=0,  # 默认未付款
+                status=0,
             )
 
-            # 3. 简单库存扣减（注意：这是直接操作，不考虑并发）
-            book.stockqty -= quantity
-            book.save()
+            # 2. 为购物车中每本书创建 Orderdetail
+            for isbn, data in cart.items():
+                book = get_object_or_404(Book, pk=isbn)
+                quantity = data["quantity"]
 
-        # 4. 触发器会自动计算订单总金额（应用折扣）并扣减余额
-        # 刷新订单对象以获取触发器计算后的总金额
-        order.refresh_from_db()
+                Orderdetail.objects.create(
+                    orderid=order,
+                    isbn=book,
+                    quantity=quantity,
+                    unitprice=book.price,
+                    isshipped=0,
+                )
 
-        # 5. 清空购物车
-        request.session["cart"] = {}
-        messages.success(request, f"下单成功，订单号：{order.orderno}，订单金额：¥{order.totalamount}")
-        return redirect("bookstore:order_list")
+            # 3. 刷新订单获取触发器计算的总金额
+            order.refresh_from_db()
+            total_amount = order.totalamount or Decimal('0')
+            
+            # 4. 处理付款
+            if payment_method == "immediate":
+                # 立即付款
+                from .signals import process_payment
+                success, msg = process_payment(order, customer)
+                
+                if success:
+                    order.actualpaid = total_amount
+                    order.paymentstatus = 1
+                    order.save(update_fields=['actualpaid', 'paymentstatus'])
+                    
+                    # 5. 清空购物车
+                    request.session["cart"] = {}
+                    messages.success(request, f"下单成功！订单号：{order.orderno}，已付款：¥{total_amount}")
+                    return redirect("bookstore:order_list")
+                else:
+                    # 付款失败，删除订单
+                    order.delete()
+                    messages.error(request, f"下单失败：{msg}")
+                    return redirect("bookstore:cart_detail")
+            
+            else:
+                # 暂缓付款（仅3-5级会员）
+                if customer.levelid.canoverdraft == 0:
+                    order.delete()
+                    messages.error(request, "您的信用等级不支持暂缓付款，请选择立即付款")
+                    return redirect("bookstore:order_confirm")
+                
+                # 检查是否超出透支额度
+                from .signals import calculate_current_overdraft
+                # 假设创建这个订单后的透支额度
+                projected_overdraft = calculate_current_overdraft(customer) + total_amount
+                
+                if projected_overdraft > customer.overdraftlimit:
+                    order.delete()
+                    available = customer.overdraftlimit - calculate_current_overdraft(customer)
+                    messages.error(request, f"暂缓付款金额(¥{total_amount})超出可用透支额度(¥{available})，请充值或选择立即付款")
+                    return redirect("bookstore:order_confirm")
+                
+                # 暂缓付款成功
+                order.paymentstatus = 0  # 未付款
+                order.save(update_fields=['paymentstatus'])
+                
+                # 更新客户的透支金额（增加未付款订单金额）
+                customer.currentoverdraft = calculate_current_overdraft(customer)
+                customer.save(update_fields=['currentoverdraft'])
+                
+                # 5. 清空购物车
+                request.session["cart"] = {}
+                messages.success(request, f"下单成功！订单号：{order.orderno}，应付金额：¥{total_amount}（暂未付款，已计入透支额度）")
+                return redirect("bookstore:order_list")
 
     # GET 请求：先展示确认页（显示折扣信息）
     items = []
@@ -261,3 +362,179 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
             "customer": customer,
         },
     )
+
+
+@customer_required
+def account_recharge(request: HttpRequest) -> HttpResponse:
+    """账户充值"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    
+    if request.method == "POST":
+        try:
+            amount = Decimal(request.POST.get("amount", "0"))
+            if amount <= 0:
+                messages.error(request, "充值金额必须大于0")
+            else:
+                with transaction.atomic():
+                    customer = Customer.objects.select_for_update().get(pk=customer.customerid)
+                    customer.balance += amount
+                    # 重新计算透支金额（充值后可能减少）
+                    from .signals import calculate_current_overdraft
+                    customer.currentoverdraft = calculate_current_overdraft(customer)
+                    customer.save(update_fields=['balance', 'currentoverdraft'])
+                messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
+                return redirect("bookstore:account")
+        except (ValueError, TypeError):
+            messages.error(request, "请输入有效的金额")
+        except Exception as e:
+            messages.error(request, f"充值失败：{e}")
+    
+    # 计算折扣百分比
+    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
+    
+    # 计算距离下一级还需多少
+    current_level = customer.levelid.levelid
+    current_spent = customer.totalspent
+    
+    level_thresholds = {
+        1: Decimal('1000'),    # 1级→2级需要1000
+        2: Decimal('2000'),    # 2级→3级需要2000
+        3: Decimal('5000'),    # 3级→4级需要5000
+        4: Decimal('10000'),   # 4级→5级需要10000
+        5: None,               # 5级是最高级
+    }
+    
+    next_threshold = level_thresholds.get(current_level)
+    if next_threshold:
+        next_level_amount = next_threshold - current_spent
+        if next_level_amount < 0:
+            next_level_amount = Decimal('0')
+    else:
+        next_level_amount = None  # 已是最高级
+    
+    return render(request, "bookstore/account.html", {
+        "customer": customer,
+        "discount_percent": discount_percent,
+        "next_level_amount": next_level_amount,
+    })
+
+
+@customer_required
+def repay_overdraft(request: HttpRequest) -> HttpResponse:
+    """偿还全部透支 = 支付所有未付款订单 + 补足负余额"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    
+    if request.method == "POST":
+        with transaction.atomic():
+            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
+            
+            if customer.currentoverdraft <= 0:
+                messages.info(request, "您当前没有透支")
+                return redirect("bookstore:account")
+            
+            # 1. 获取所有未付款订单
+            unpaid_orders = Orders.objects.filter(
+                customerid=customer,
+                paymentstatus=0,
+                status__in=[0, 1]  # 排除已取消
+            )
+            
+            total_paid = Decimal('0')
+            paid_count = 0
+            
+            # 2. 支付所有未付款订单
+            for order in unpaid_orders:
+                amount = order.totalamount or Decimal('0')
+                customer.balance -= amount
+                customer.totalspent += amount
+                total_paid += amount
+                
+                # 更新订单状态
+                order.actualpaid = amount
+                order.paymentstatus = 1
+                order.save(update_fields=['actualpaid', 'paymentstatus'])
+                paid_count += 1
+            
+            # 3. 补足负余额（如果还有负数）
+            if customer.balance < 0:
+                deficit = abs(customer.balance)
+                customer.balance = Decimal('0')
+                customer.totalspent += deficit
+                total_paid += deficit
+            
+            # 4. 重新计算透支金额（应该为0）
+            from .signals import calculate_current_overdraft
+            customer.currentoverdraft = calculate_current_overdraft(customer)
+            
+            # 5. 检查是否升级
+            from .signals import _calculate_credit_level
+            from .models import Creditlevel as CL
+            new_level_id = _calculate_credit_level(customer.totalspent)
+            old_level = customer.levelid.levelid
+            if new_level_id != old_level:
+                customer.levelid = CL.objects.get(levelid=new_level_id)
+                customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent', 'levelid'])
+                messages.success(request, 
+                    f"偿还成功！支付了{paid_count}个订单，共¥{total_paid}，"
+                    f"当前余额：¥{customer.balance}，"
+                    f"信用等级已升级至{new_level_id}级！")
+            else:
+                customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent'])
+                messages.success(request, 
+                    f"偿还成功！支付了{paid_count}个订单，共¥{total_paid}，"
+                    f"当前余额：¥{customer.balance}")
+        
+        return redirect("bookstore:account")
+    
+    return redirect("bookstore:account")
+
+
+@customer_required
+def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
+    """支付未付款订单"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    order = get_object_or_404(Orders, pk=order_id, customerid=customer)
+    
+    if order.paymentstatus == 1:
+        messages.info(request, "该订单已付款")
+        return redirect("bookstore:order_detail", order_id=order_id)
+    
+    if request.method == "POST":
+        with transaction.atomic():
+            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
+            order.refresh_from_db()
+            
+            from .signals import process_payment
+            success, msg = process_payment(order, customer)
+            
+            if success:
+                # 更新订单付款状态
+                order.actualpaid = order.totalamount
+                order.paymentstatus = 1
+                order.save(update_fields=['actualpaid', 'paymentstatus'])
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        
+        return redirect("bookstore:order_detail", order_id=order_id)
+    
+    return redirect("bookstore:order_detail", order_id=order_id)
+
+
+@customer_required
+def confirm_receipt(request: HttpRequest, order_id: int) -> HttpResponse:
+    """确认收货"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    order = get_object_or_404(Orders, pk=order_id, customerid=customer)
+    
+    if order.status != 1:
+        messages.error(request, "只有已发货的订单才能确认收货")
+        return redirect("bookstore:order_detail", order_id=order_id)
+    
+    if request.method == "POST":
+        order.status = 2  # 已完成
+        order.save(update_fields=['status'])
+        messages.success(request, "已确认收货，感谢您的购买！")
+        return redirect("bookstore:order_detail", order_id=order_id)
+    
+    return redirect("bookstore:order_detail", order_id=order_id)

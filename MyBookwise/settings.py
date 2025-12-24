@@ -113,13 +113,13 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "zh-hans"  # 改为中文
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Shanghai"  # 改为中国时区（东八区）
 
 USE_I18N = True
 
-USE_TZ = True
+USE_TZ = True  # 保持启用时区支持
 
 
 # Static files (CSS, JavaScript, Images)

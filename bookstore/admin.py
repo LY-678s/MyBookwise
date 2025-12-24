@@ -31,23 +31,44 @@ class BookAdmin(admin.ModelAdmin):
 class CustomerAdmin(admin.ModelAdmin):
     """顾客：方便管理员按用户名/姓名/等级管理顾客账户。"""
 
-    list_display = ("customerid", "username", "name", "email", "balance", "totalspent", "levelid")
+    list_display = ("customerid", "username", "name", "email", "balance", "currentoverdraft", "totalspent", "levelid")
     search_fields = ("username", "name", "email")
     list_filter = ("levelid",)
     # 按累计消费排序（可选）
     ordering = ("-totalspent",)
+    readonly_fields = ("currentoverdraft", "totalspent")  # 这些字段由系统自动计算，不允许手动修改
+
+
+class OrderdetailInline(admin.TabularInline):
+    """订单明细内联显示"""
+    model = Orderdetail
+    extra = 0  # 不显示空白行
+    fields = ('isbn', 'quantity', 'unitprice', 'isshipped')
+    readonly_fields = ('isbn', 'quantity', 'unitprice')  # 只允许修改发货状态
+    can_delete = False  # 禁止删除明细（由触发器保护）
+    
+    def has_add_permission(self, request, obj=None):
+        # 禁止在已存在的订单中添加明细（订单只能从客户端创建）
+        return False
 
 
 @admin.register(Orders)
 class OrdersAdmin(admin.ModelAdmin):
     """订单：查看订单号、顾客、金额和状态，并按日期与状态过滤。"""
 
-    list_display = ("orderid", "orderno", "customerid", "orderdate", "totalamount", "status")
+    list_display = ("orderid", "orderno", "customerid", "orderdate", "totalamount", "actualpaid", "paymentstatus", "status")
     search_fields = ("orderno", "customerid__username", "customerid__name")
-    list_filter = ("status", "orderdate")
+    list_filter = ("status", "paymentstatus", "orderdate")
     date_hierarchy = "orderdate"
+    readonly_fields = ("totalamount", "actualpaid", "paymentstatus")  # 这些由系统计算，不可手动修改
+    # 内嵌显示订单明细
+    inlines = [OrderdetailInline]
     # 自定义批量动作
-    actions = ["mark_as_placed", "mark_as_shipped", "mark_as_completed","mark_as_cancelled"]
+    actions = ["mark_as_shipped", "mark_as_completed", "mark_as_cancelled"]
+    
+    def has_add_permission(self, request):
+        # 禁止在Admin后台创建订单（必须从客户端下单）
+        return False
 
     def mark_as_placed(self, request, queryset):
         """将订单状态设为：0 = 已下单（未发货）"""
@@ -195,7 +216,8 @@ class OrdersAdmin(admin.ModelAdmin):
             self.message_user(request, str(e), level=messages.ERROR)
             return HttpResponseRedirect(request.get_full_path())
     
-@admin.register(Orderdetail)
+# 订单明细已通过OrderdetailInline嵌入到订单页面中显示，不再单独注册
+# @admin.register(Orderdetail)
 class OrderdetailAdmin(admin.ModelAdmin):
     """订单明细：查看每个订单中购买了哪些书。"""
 
@@ -335,6 +357,14 @@ class OrderdetailAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(request.get_full_path())
 
 
+class ProcurementdetailInline(admin.TabularInline):
+    """采购明细内联显示"""
+    model = Procurementdetail
+    extra = 0
+    fields = ('isbn', 'quantity', 'supplyprice', 'receivedqty')
+    readonly_fields = ('isbn', 'quantity', 'supplyprice')  # 只允许修改已到货数量
+
+
 @admin.register(Procurement)
 class ProcurementAdmin(admin.ModelAdmin):
     """采购单：用于记录补货采购，用日期和状态筛选。"""
@@ -343,6 +373,8 @@ class ProcurementAdmin(admin.ModelAdmin):
     search_fields = ("procno", "supplierid__suppliername")
     list_filter = ("status", "createdate", "supplierid")
     date_hierarchy = "createdate"
+    # 内嵌显示采购明细
+    inlines = [ProcurementdetailInline]
     # 批量修改采购单状态
     actions = ["mark_status_0", "mark_status_1", "mark_status_2", "mark_status_3"]
 
@@ -366,7 +398,8 @@ class ProcurementAdmin(admin.ModelAdmin):
     mark_status_1.short_description = "标记所选采购单为：已到货入库（status=1）"
     mark_status_2.short_description = "标记所选采购单为：已取消（status=2）"
 
-@admin.register(Procurementdetail)
+# 采购明细已通过ProcurementdetailInline嵌入到采购单页面中显示，不再单独注册
+# @admin.register(Procurementdetail)
 class ProcurementdetailAdmin(admin.ModelAdmin):
     """采购明细：展示每次采购了哪些书、多少数量。"""
 

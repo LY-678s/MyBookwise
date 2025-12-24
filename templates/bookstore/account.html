@@ -1,0 +1,141 @@
+{% extends "bookstore/base.html" %}
+
+{% block title %}我的账户 - MyBookwise{% endblock %}
+
+{% block content %}
+<h2>我的账户</h2>
+
+<div style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+    <h3 style="margin-top: 0;">账户信息</h3>
+    <table style="width: 100%; border: none;">
+        <tr>
+            <td style="border: none; padding: 0.5rem 0;"><strong>用户名：</strong></td>
+            <td style="border: none; padding: 0.5rem 0;">{{ customer.username }} ({{ customer.name }})</td>
+        </tr>
+        <tr>
+            <td style="border: none; padding: 0.5rem 0;"><strong>信用等级：</strong></td>
+            <td style="border: none; padding: 0.5rem 0;">
+                {{ customer.levelid.levelid }}级 
+                ({{ discount_percent|floatformat:0 }}% 优惠)
+            </td>
+        </tr>
+        <tr>
+            <td style="border: none; padding: 0.5rem 0;"><strong>账户余额：</strong></td>
+            <td style="border: none; padding: 0.5rem 0; {% if customer.balance < 0 %}color: #e74c3c;{% else %}color: #27ae60;{% endif %} font-size: 1.3rem; font-weight: bold;">
+                ¥{{ customer.balance }}
+            </td>
+        </tr>
+        <tr>
+            <td style="border: none; padding: 0.5rem 0;"><strong>当前透支：</strong></td>
+            <td style="border: none; padding: 0.5rem 0; {% if customer.currentoverdraft > 0 %}color: #e74c3c;{% endif %}">
+                ¥{{ customer.currentoverdraft }}
+                {% if customer.levelid.canoverdraft %}
+                    / ¥{{ customer.overdraftlimit }} (可用额度)
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td style="border: none; padding: 0.5rem 0;"><strong>累计消费：</strong></td>
+            <td style="border: none; padding: 0.5rem 0;">¥{{ customer.totalspent }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- 充值功能 -->
+<div style="background: white; padding: 1.5rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 1.5rem;">
+    <h3 style="margin-top: 0;">💰 账户充值</h3>
+    <form method="post" style="display: flex; gap: 1rem; align-items: center;">
+        {% csrf_token %}
+        <label for="amount">充值金额：</label>
+        <input type="number" name="amount" id="amount" step="0.01" min="0.01" 
+               placeholder="输入金额" 
+               style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; width: 200px;"
+               required>
+        <button type="submit" class="btn btn-success">确认充值</button>
+    </form>
+    <p style="color: #7f8c8d; font-size: 0.9rem; margin-top: 0.5rem;">
+        提示：充值后余额立即到账
+    </p>
+</div>
+
+<!-- 偿还透支 -->
+{% if customer.currentoverdraft > 0 %}
+<div style="background: #fff3cd; padding: 1.5rem; border: 1px solid #ffeaa7; border-radius: 8px; margin-bottom: 1.5rem;">
+    <h3 style="margin-top: 0; color: #856404;">💳 偿还透支</h3>
+    <p>当前透支金额：<strong style="color: #e74c3c; font-size: 1.2rem;">¥{{ customer.currentoverdraft }}</strong></p>
+    <p style="color: #856404; font-size: 0.9rem;">
+        包括：未付款订单占用的额度 + 负余额
+    </p>
+    <form method="post" action="{% url 'bookstore:repay_overdraft' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning" 
+                onclick="return confirm('⚠️ 此操作将支付所有未付款订单并补足负余额！\n\n偿还金额：¥{{ customer.currentoverdraft }}\n\n偿还后您的累计消费将增加，可能会提升信用等级。\n\n确定继续吗？')">
+            💰 偿还全部透支（支付所有未付款订单）
+        </button>
+    </form>
+    <p style="color: #856404; font-size: 0.9rem; margin-top: 0.5rem;">
+        ✨ 提示：偿还透支会支付所有未付款订单并补足负余额，累计消费也会相应增加，可能提升信用等级！
+    </p>
+</div>
+{% endif %}
+
+<!-- 信用等级说明 -->
+<div style="background: #e8f5e9; padding: 1.5rem; border: 1px solid #c8e6c9; border-radius: 8px;">
+    <h3 style="margin-top: 0; color: #2e7d32;">🎖️ 信用等级说明</h3>
+    <table style="width: 100%; font-size: 0.9rem;">
+        <thead>
+            <tr>
+                <th>等级</th>
+                <th>累计消费要求</th>
+                <th>折扣率</th>
+                <th>透支额度</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr {% if customer.levelid.levelid == 1 %}style="background: #fff9c4;"{% endif %}>
+                <td>1级</td>
+                <td>< ¥1000</td>
+                <td>0.9 (10%优惠)</td>
+                <td>不可透支</td>
+            </tr>
+            <tr {% if customer.levelid.levelid == 2 %}style="background: #fff9c4;"{% endif %}>
+                <td>2级</td>
+                <td>≥ ¥1000</td>
+                <td>0.85 (15%优惠)</td>
+                <td>不可透支</td>
+            </tr>
+            <tr {% if customer.levelid.levelid == 3 %}style="background: #fff9c4;"{% endif %}>
+                <td>3级</td>
+                <td>≥ ¥2000</td>
+                <td>0.85 (15%优惠)</td>
+                <td>¥500</td>
+            </tr>
+            <tr {% if customer.levelid.levelid == 4 %}style="background: #fff9c4;"{% endif %}>
+                <td>4级</td>
+                <td>≥ ¥5000</td>
+                <td>0.8 (20%优惠)</td>
+                <td>¥1000</td>
+            </tr>
+            <tr {% if customer.levelid.levelid == 5 %}style="background: #fff9c4;"{% endif %}>
+                <td>5级</td>
+                <td>≥ ¥10000</td>
+                <td>0.75 (25%优惠)</td>
+                <td>几乎无限</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="color: #2e7d32; margin-top: 1rem; margin-bottom: 0;">
+        您当前是 <strong>{{ customer.levelid.levelid }}级会员</strong>，
+        累计消费 <strong>¥{{ customer.totalspent }}</strong>
+        {% if customer.levelid.levelid < 5 %}
+            ，距离下一级还需 ¥{{ next_level_amount|default:"计算中..." }}
+        {% endif %}
+    </p>
+</div>
+
+<div style="margin-top: 2rem;">
+    <a href="{% url 'bookstore:order_list' %}" class="btn">返回订单列表</a>
+</div>
+
+{% endblock %}
+

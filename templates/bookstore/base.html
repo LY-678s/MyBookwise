@@ -261,6 +261,7 @@
                 {% if request.session.customer_id %}
                     <a href="{% url 'bookstore:cart_detail' %}">购物车</a>
                     <a href="{% url 'bookstore:order_list' %}">我的订单</a>
+                    <a href="{% url 'bookstore:account' %}">我的账户</a>
                     <span class="user-info">欢迎，{{ request.session.customer_name }}</span>
                     <a href="{% url 'bookstore:logout' %}">退出</a>
                 {% else %}

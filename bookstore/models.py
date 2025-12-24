@@ -62,6 +62,7 @@ class Customer(models.Model):
     balance = models.DecimalField(db_column='Balance', max_digits=10, decimal_places=2)  # Field name made lowercase.
     levelid = models.ForeignKey(Creditlevel, models.DO_NOTHING, db_column='LevelID')  # Field name made lowercase.
     overdraftlimit = models.DecimalField(db_column='OverdraftLimit', max_digits=10, decimal_places=2)  # Field name made lowercase.
+    currentoverdraft = models.DecimalField(db_column='CurrentOverdraft', max_digits=10, decimal_places=2, default=0)  # 当前已透支金额
     totalspent = models.DecimalField(db_column='TotalSpent', max_digits=12, decimal_places=2)  # Field name made lowercase.
     registerdate = models.DateTimeField(db_column='RegisterDate')  # Field name made lowercase.
 
@@ -93,8 +94,10 @@ class Orders(models.Model):
     orderdate = models.DateTimeField(db_column='OrderDate')  # Field name made lowercase.
     customerid = models.ForeignKey(Customer, models.DO_NOTHING, db_column='CustomerID')  # Field name made lowercase.
     shipaddress = models.CharField(db_column='ShipAddress', max_length=200)  # Field name made lowercase.
-    totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2, blank=True, null=True)  # Field name made lowercase.
-    status = models.IntegerField(db_column='Status')  # Field name made lowercase.
+    totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2, blank=True, null=True)  # 应付金额（折扣后）
+    actualpaid = models.DecimalField(db_column='ActualPaid', max_digits=10, decimal_places=2, default=0)  # 实际已付金额
+    paymentstatus = models.IntegerField(db_column='PaymentStatus', default=0)  # 付款状态: 0=未付款, 1=已付款, 2=已退款
+    status = models.IntegerField(db_column='Status')  # 订单状态
 
     class Meta:
         managed = False

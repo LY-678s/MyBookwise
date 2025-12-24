@@ -1,9 +1,9 @@
 from decimal import Decimal
 import logging
 
-from django.db import transaction
+from django.db import transaction, models
 from django.db.models.signals import post_save
-from django.db.models import F
+from django.db.models import F, Sum
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -98,6 +98,92 @@ from django.core.exceptions import ValidationError
 from .models import Orders, Customer, Creditlevel
 
 
+def process_payment(order, customer):
+    """
+    处理订单付款逻辑
+    - 扣除余额（可能透支）
+    - 更新ActualPaid, PaymentStatus
+    - 增加TotalSpent
+    - 可能升级信用等级
+    - 更新CurrentOverdraft
+    
+    Args:
+        order: Orders对象
+        customer: Customer对象（需要已select_for_update锁定）
+    
+    Returns:
+        (success, message): (True, "成功消息") 或 (False, "错误消息")
+    """
+    from decimal import Decimal
+    from .models import Creditlevel
+    
+    creditlevel = customer.levelid
+    amount = order.totalamount or Decimal('0')
+    
+    # 检查透支额度
+    new_balance = customer.balance - amount
+    overdraft_needed = max(-new_balance, Decimal('0'))  # 需要的透支金额
+    
+    # 1-2级不能透支
+    if creditlevel.canoverdraft == 0 and new_balance < 0:
+        return False, f"余额不足（{customer.balance}元），该信用等级不允许透支，请充值"
+    
+    # 3-5级检查透支限额
+    if creditlevel.canoverdraft == 1:
+        if overdraft_needed > customer.overdraftlimit:
+            return False, f"余额不足，需要透支{overdraft_needed}元，超出透支额度{customer.overdraftlimit}元，请充值"
+    
+    # 扣款
+    old_balance = customer.balance
+    old_totalspent = customer.totalspent
+    old_level = customer.levelid.levelid
+    
+    customer.balance = new_balance
+    customer.totalspent = (customer.totalspent or Decimal('0')) + amount
+    
+    # 重新计算透支金额（考虑其他未付款订单）
+    customer.currentoverdraft = calculate_current_overdraft(customer)
+    
+    # 检查信用等级升级
+    new_level_id = _calculate_credit_level(customer.totalspent)
+    if new_level_id != old_level:
+        customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
+    
+    customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent', 'levelid'])
+    
+    print(f"   💰 [PAYMENT] Paid {amount}")
+    print(f"   Balance: {old_balance} → {customer.balance}")
+    print(f"   CurrentOverdraft: 0 → {customer.currentoverdraft}")
+    print(f"   TotalSpent: {old_totalspent} → {customer.totalspent}")
+    if new_level_id != old_level:
+        print(f"   🎖️ Level upgraded: {old_level} → {new_level_id}")
+    
+    return True, f"付款成功！余额：{customer.balance}元"
+
+
+def calculate_current_overdraft(customer):
+    """
+    计算客户的当前透支金额
+    = 负余额的绝对值 + 未付款订单总额
+    """
+    from decimal import Decimal
+    from .models import Orders
+    
+    # 1. 负余额部分
+    negative_balance = abs(min(customer.balance, Decimal('0')))
+    
+    # 2. 未付款订单总额
+    unpaid_orders_total = Orders.objects.filter(
+        customerid=customer,
+        paymentstatus=0,  # 未付款
+        status__in=[0, 1]  # 排除已取消的订单
+    ).aggregate(
+        total=models.Sum('totalamount')
+    )['total'] or Decimal('0')
+    
+    return negative_balance + unpaid_orders_total
+
+
 def _calculate_credit_level(totalspent):
     """
     根据累计消费金额计算信用等级
@@ -136,11 +222,13 @@ def _get_old_order_values(instance):
 
 def _handle_deduct_or_refund(instance, old_status, old_totalamount):
     """
-    Perform customer balance deduction/refund and TotalSpent updates in application layer.
-    This mirrors previous trigger logic but runs in Django for correctness and to avoid MySQL 1442.
+    新的付款和退款逻辑：
+    - 只有实付金额（ActualPaid）才增加TotalSpent
+    - 订单取消时退款并设置PaymentStatus=2
     """
     print(f"🟢 [HANDLE] Starting _handle_deduct_or_refund")
-    print(f"   Order: {instance.orderid}, Status: {old_status}→{instance.status}, Amount: {instance.totalamount}")
+    print(f"   Order: {instance.orderid}, Status: {old_status}→{instance.status}")
+    print(f"   Amount: {instance.totalamount}, ActualPaid: {instance.actualpaid}, PaymentStatus: {instance.paymentstatus}")
     
     # Use atomic transaction and select_for_update on customer to ensure consistency
     with transaction.atomic():
@@ -148,75 +236,46 @@ def _handle_deduct_or_refund(instance, old_status, old_totalamount):
         creditlevel = customer.levelid
         
         print(f"   Customer: {customer.name} (ID={customer.customerid})")
-        print(f"   Before: Balance={customer.balance}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
+        print(f"   Before: Balance={customer.balance}, CurrentOverdraft={customer.currentoverdraft}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
 
-        # 1) Deduct difference when TotalAmount changes and status=0
-        if instance.totalamount is not None and (old_totalamount != instance.totalamount) and instance.status == 0:
-            print(f"   💰 [DEDUCT] Deducting balance...")
-            amount_diff = instance.totalamount - (old_totalamount or 0)
-            if amount_diff != 0:
-                # Determine overdraft policy: prefer customer's overdraftlimit if present
-                overdraft_limit = customer.overdraftlimit or creditlevel.overdraftlimit
-                can_overdraft = creditlevel.canoverdraft
-                new_balance = customer.balance - amount_diff
-                if can_overdraft == 0:
-                    if new_balance < 0:
-                        raise ValidationError("余额不足，该信用等级不允许透支")
-                else:
-                    if overdraft_limit < 999999:
-                        if new_balance < -overdraft_limit:
-                            raise ValidationError("余额不足，超出透支额度")
-                # All checks passed; update balance
-                customer.balance = new_balance
-                customer.save(update_fields=['balance'])
-                print(f"   ✅ Balance updated: {customer.balance}")
+        # 暂时保留原有扣款逻辑（用于订单金额变化时的差额调整）
+        # 实际付款逻辑将在前台视图中处理
+        pass  # 这部分逻辑将由新的payment函数处理
 
         # 2) Refund when order cancelled (status becomes 4)
-        if instance.status == 4 and old_status != 4 and instance.totalamount is not None:
+        if instance.status == 4 and old_status != 4:
             print(f"   💸 [REFUND] Processing refund...")
             old_level = customer.levelid.levelid
-            customer.balance = customer.balance + instance.totalamount
-            # If order was previously completed, reduce TotalSpent
-            if old_status == 2:
-                customer.totalspent = max(customer.totalspent - (instance.totalamount or 0), 0)
+            
+            # 只退还实际已付的金额
+            if instance.actualpaid > 0:
+                customer.balance = customer.balance + instance.actualpaid
+                # 减少TotalSpent（因为付款时已增加，现在退款要减回去）
+                customer.totalspent = max(customer.totalspent - instance.actualpaid, 0)
+                
+                # 更新CurrentOverdraft（退款后可能减少透支）
+                if customer.balance < 0:
+                    customer.currentoverdraft = abs(customer.balance)
+                else:
+                    customer.currentoverdraft = 0
                 
                 # 检查是否需要降级
                 new_level_id = _calculate_credit_level(customer.totalspent)
                 if new_level_id != old_level:
                     from .models import Creditlevel
                     customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
-                    customer.save(update_fields=['balance', 'totalspent', 'levelid'])
-                    print(f"   ✅ Refund completed: Balance={customer.balance}, TotalSpent={customer.totalspent}")
+                    customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent', 'levelid'])
+                    print(f"   ✅ Refund: Balance={customer.balance}, TotalSpent={customer.totalspent}")
                     print(f"   ⬇️ Level downgraded: {old_level} → {new_level_id}")
                 else:
-                    customer.save(update_fields=['balance', 'totalspent'])
-                    print(f"   ✅ Refund completed: Balance={customer.balance}, TotalSpent={customer.totalspent}")
+                    customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent'])
+                    print(f"   ✅ Refund: Balance={customer.balance}, TotalSpent={customer.totalspent}")
             else:
-                customer.save(update_fields=['balance'])
-                print(f"   ✅ Refund completed: Balance={customer.balance}")
+                print(f"   ℹ️ No refund needed (ActualPaid=0)")
 
-        # 3) When order becomes completed, add to TotalSpent
-        if instance.status == 2 and old_status != 2 and instance.totalamount is not None:
-            print(f"   📈 [COMPLETE] Adding to TotalSpent...")
-            print(f"      Condition check: status={instance.status}, old_status={old_status}, amount={instance.totalamount}")
-            old_totalspent = customer.totalspent
-            old_level = customer.levelid.levelid
-            customer.totalspent = (customer.totalspent or 0) + instance.totalamount
-            
-            # 根据新的TotalSpent计算应该的信用等级
-            new_level_id = _calculate_credit_level(customer.totalspent)
-            
-            # 如果等级需要变化，同时更新
-            if new_level_id != old_level:
-                from .models import Creditlevel
-                customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
-                customer.save(update_fields=['totalspent', 'levelid'])
-                print(f"   ✅ TotalSpent updated: {old_totalspent} + {instance.totalamount} = {customer.totalspent}")
-                print(f"   🎖️ Level upgraded: {old_level} → {new_level_id} ⭐")
-            else:
-                customer.save(update_fields=['totalspent'])
-                print(f"   ✅ TotalSpent updated: {old_totalspent} + {instance.totalamount} = {customer.totalspent}")
-                print(f"   ℹ️ Level unchanged: {customer.levelid.levelid}")
+        # 3) When order becomes completed - 不再更新TotalSpent（在付款时已更新）
+        if instance.status == 2 and old_status != 2:
+            print(f"   ✅ [COMPLETE] Order completed (TotalSpent already updated at payment time)")
 
 
 @receiver(pre_save, sender=Orders)

@@ -2,16 +2,40 @@
 {% block content %}
 <h2>订单详情：{{ order.orderno }}</h2>
 
-<p><strong>订单状态：</strong>
-  {% if order.status == 0 %}已下单
-  {% elif order.status == 1 %}已发货
-  {% elif order.status == 2 %}已完成
-  {% elif order.status == 4 %}已取消
-  {% else %}未知状态
-  {% endif %}
-</p>
-<p><strong>下单时间：</strong>{{ order.orderdate }}</p>
-<p><strong>收货地址：</strong>{{ order.shipaddress }}</p>
+<div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+  <p><strong>订单状态：</strong>
+    {% if order.status == 0 %}
+      <span style="color: #f39c12;">⏳ 已下单</span>
+    {% elif order.status == 1 %}
+      <span style="color: #3498db;">🚚 已发货</span>
+    {% elif order.status == 2 %}
+      <span style="color: #27ae60;">✓ 已完成</span>
+    {% elif order.status == 4 %}
+      <span style="color: #95a5a6;">✗ 已取消</span>
+    {% else %}未知状态
+    {% endif %}
+  </p>
+  
+  <p><strong>付款状态：</strong>
+    {% if order.paymentstatus == 0 %}
+      <span style="color: #e74c3c;">未付款</span>
+    {% elif order.paymentstatus == 1 %}
+      <span style="color: #27ae60;">✓ 已付款</span>
+    {% elif order.paymentstatus == 2 %}
+      <span style="color: #7f8c8d;">已退款</span>
+    {% endif %}
+  </p>
+  
+  <p><strong>应付金额：</strong>¥{{ order.totalamount|floatformat:2 }}</p>
+  <p><strong>实付金额：</strong>
+    <span style="font-weight: bold; {% if order.actualpaid > 0 %}color: #27ae60;{% endif %}">
+      ¥{{ order.actualpaid|floatformat:2 }}
+    </span>
+  </p>
+  
+  <p><strong>下单时间：</strong>{{ order.orderdate }}</p>
+  <p><strong>收货地址：</strong>{{ order.shipaddress }}</p>
+</div>
 
 {% if customer %}
   <p><strong>会员等级：</strong>{{ customer.levelid.levelid }}级（{{ discount_percent|floatformat:0 }}% 折扣）</p>
@@ -58,7 +82,40 @@
   </tfoot>
 </table>
 
-<p style="margin-top: 20px;">
-  <a href="{% url 'bookstore:order_list' %}">返回订单列表</a>
-</p>
+<!-- 操作按钮 -->
+<div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+  <h3 style="margin-top: 0;">操作</h3>
+  
+  <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <!-- 支付按钮（未付款订单） -->
+    {% if order.paymentstatus == 0 and order.status != 4 %}
+    <form method="post" action="{% url 'bookstore:pay_order' order.orderid %}" style="display: inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-success" 
+              onclick="return confirm('确认支付 ¥{{ order.totalamount }} 吗？\n\n支付后您的累计消费将增加，可能会提升信用等级。')">
+        💳 立即支付 ¥{{ order.totalamount|floatformat:2 }}
+      </button>
+    </form>
+    {% endif %}
+    
+    <!-- 确认收货按钮（已发货订单） -->
+    {% if order.status == 1 %}
+    <form method="post" action="{% url 'bookstore:confirm_receipt' order.orderid %}" style="display: inline;">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary"
+              onclick="return confirm('确认收货吗？\n\n确认后订单将标记为已完成。')">
+        📦 确认收货
+      </button>
+    </form>
+    {% endif %}
+    
+    <a href="{% url 'bookstore:order_list' %}" class="btn">返回订单列表</a>
+  </div>
+  
+  {% if order.paymentstatus == 0 %}
+  <p style="color: #e74c3c; margin-top: 1rem; margin-bottom: 0; font-size: 0.9rem;">
+    ⚠️ 提示：此订单尚未付款，请尽快支付以完成订单。
+  </p>
+  {% endif %}
+</div>
 {% endblock %}

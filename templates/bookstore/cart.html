@@ -22,11 +22,24 @@
     {% for item in items %}
       <tr>
         <td>{{ item.book.title }}</td>
-        <td>{{ item.quantity }}</td>
+        <td>
+          <form method="post" action="{% url 'bookstore:cart_update' item.book.isbn %}" style="display: flex; gap: 0.5rem; align-items: center;">
+            {% csrf_token %}
+            <input type="number" name="quantity" value="{{ item.quantity }}" min="0" max="{{ item.book.stockqty }}"
+                   style="width: 70px; padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px;">
+            <button type="submit" class="btn" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">更新</button>
+          </form>
+        </td>
         <td>¥{{ item.book.price }}</td>
         <td>¥{{ item.original_amount|floatformat:2 }}</td>
         <td><strong>¥{{ item.discounted_amount|floatformat:2 }}</strong></td>
-        <td><a href="{% url 'bookstore:cart_remove' item.book.isbn %}">移除</a></td>
+        <td>
+          <a href="{% url 'bookstore:cart_remove' item.book.isbn %}" 
+             onclick="return confirm('确定要移除《{{ item.book.title }}》吗？')"
+             style="color: #e74c3c; text-decoration: none;">
+            🗑️ 移除
+          </a>
+        </td>
       </tr>
     {% empty %}
       <tr>

@@ -15,8 +15,15 @@ urlpatterns = [
     # 购物车 & 下单
     path("cart/", views.cart_detail, name="cart_detail"),
     path("cart/add/<str:isbn>/", views.cart_add, name="cart_add"),
+    path("cart/update/<str:isbn>/", views.cart_update, name="cart_update"),
     path("cart/remove/<str:isbn>/", views.cart_remove, name="cart_remove"),
     path("order/confirm/", views.order_confirm, name="order_confirm"),
     path("orders/", views.order_list, name="order_list"),
     path("orders/<int:order_id>/", views.order_detail, name="order_detail"),
+    path("orders/<int:order_id>/pay/", views.pay_order, name="pay_order"),
+    path("orders/<int:order_id>/confirm/", views.confirm_receipt, name="confirm_receipt"),
+    
+    # 账户管理
+    path("account/", views.account_recharge, name="account"),
+    path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
 ]
