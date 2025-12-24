@@ -119,7 +119,7 @@ TIME_ZONE = "Asia/Shanghai"  # 改为中国时区（东八区）
 
 USE_I18N = True
 
-USE_TZ = True  # 保持启用时区支持
+USE_TZ = False  # 禁用时区支持（简化配置，适用于单一时区项目）
 
 
 # Static files (CSS, JavaScript, Images)
