@@ -18,10 +18,12 @@
   
   <p><strong>付款状态：</strong>
     {% if order.paymentstatus == 0 %}
-      <span style="color: #e74c3c;">未付款</span>
+      <span style="color: #e74c3c;">❌ 未支付</span>
     {% elif order.paymentstatus == 1 %}
-      <span style="color: #27ae60;">✓ 已付款</span>
+      <span style="color: #27ae60;">✓ 已全额支付</span>
     {% elif order.paymentstatus == 2 %}
+      <span style="color: #f39c12;">⏳ 未全额支付（使用了信用额度）</span>
+    {% elif order.paymentstatus == 3 %}
       <span style="color: #7f8c8d;">已退款</span>
     {% endif %}
   </p>
@@ -87,14 +89,16 @@
   <h3 style="margin-top: 0;">操作</h3>
   
   <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-    <!-- 支付按钮（未付款订单） -->
-    {% if order.paymentstatus == 0 and order.status != 4 %}
+    <!-- 补足支付按钮（未全额支付订单） -->
+    {% if order.paymentstatus == 2 and order.status != 4 %}
     <form method="post" action="{% url 'bookstore:pay_order' order.orderid %}" style="display: inline;">
       {% csrf_token %}
-      <button type="submit" class="btn btn-success" 
-              onclick="return confirm('确认支付 ¥{{ order.totalamount }} 吗？\n\n支付后您的累计消费将增加，可能会提升信用等级。')">
-        💳 立即支付 ¥{{ order.totalamount|floatformat:2 }}
+      {% with unpaid=order.totalamount|add:"-"|add:order.actualpaid %}
+      <button type="submit" class="btn btn-warning" 
+              onclick="return confirm('补足支付 ¥{{ unpaid }} 吗？\n\n需要从余额扣款，余额不足则无法支付。\n\n支付后您的累计消费将增加，可能会提升信用等级。')">
+        💰 补足支付 ¥{{ unpaid|floatformat:2 }}（已付¥{{ order.actualpaid|floatformat:2 }}）
       </button>
+      {% endwith %}
     </form>
     {% endif %}
     

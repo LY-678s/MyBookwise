@@ -26,11 +26,17 @@
             </td>
         </tr>
         <tr>
-            <td style="border: none; padding: 0.5rem 0;"><strong>当前透支：</strong></td>
-            <td style="border: none; padding: 0.5rem 0; {% if customer.currentoverdraft > 0 %}color: #e74c3c;{% endif %}">
-                ¥{{ customer.currentoverdraft }}
-                {% if customer.levelid.canoverdraft %}
-                    / ¥{{ customer.overdraftlimit }} (可用额度)
+            <td style="border: none; padding: 0.5rem 0;"><strong>信用额度：</strong></td>
+            <td style="border: none; padding: 0.5rem 0;">
+                {% if customer.levelid.canusecredit %}
+                    已使用 <span style="{% if customer.usedcredit > 0 %}color: #f39c12;{% endif %}">¥{{ customer.usedcredit }}</span>
+                    / ¥{{ customer.creditlimit }} (总额度)
+                    <br>
+                    <span style="font-size: 0.9rem; color: #7f8c8d;">
+                        可用：¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}
+                    </span>
+                {% else %}
+                    <span style="color: #7f8c8d;">您的等级暂不支持信用支付</span>
                 {% endif %}
             </td>
         </tr>
@@ -58,23 +64,23 @@
     </p>
 </div>
 
-<!-- 偿还透支 -->
-{% if customer.currentoverdraft > 0 %}
+<!-- 全部还款 -->
+{% if customer.usedcredit > 0 %}
 <div style="background: #fff3cd; padding: 1.5rem; border: 1px solid #ffeaa7; border-radius: 8px; margin-bottom: 1.5rem;">
-    <h3 style="margin-top: 0; color: #856404;">💳 偿还透支</h3>
-    <p>当前透支金额：<strong style="color: #e74c3c; font-size: 1.2rem;">¥{{ customer.currentoverdraft }}</strong></p>
+    <h3 style="margin-top: 0; color: #856404;">💳 全部还款</h3>
+    <p>已使用信用额度：<strong style="color: #e74c3c; font-size: 1.2rem;">¥{{ customer.usedcredit }}</strong></p>
     <p style="color: #856404; font-size: 0.9rem;">
-        包括：未付款订单占用的额度 + 负余额
+        包括所有未全额支付订单的信用部分
     </p>
     <form method="post" action="{% url 'bookstore:repay_overdraft' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-warning" 
-                onclick="return confirm('⚠️ 此操作将支付所有未付款订单并补足负余额！\n\n偿还金额：¥{{ customer.currentoverdraft }}\n\n偿还后您的累计消费将增加，可能会提升信用等级。\n\n确定继续吗？')">
-            💰 偿还全部透支（支付所有未付款订单）
+                onclick="return confirm('⚠️ 此操作将还清所有未全额支付的订单！\n\n还款金额：¥{{ customer.usedcredit }}\n\n需要从余额扣款，余额不足则还款失败。\n\n还款后累计消费将增加，可能提升信用等级。\n\n确定继续吗？')">
+            💰 全部还款（需余额¥{{ customer.usedcredit }}）
         </button>
     </form>
     <p style="color: #856404; font-size: 0.9rem; margin-top: 0.5rem;">
-        ✨ 提示：偿还透支会支付所有未付款订单并补足负余额，累计消费也会相应增加，可能提升信用等级！
+        ✨ 提示：还款会从余额中扣款，还清所有未全额支付订单，累计消费也会相应增加，可能提升信用等级！
     </p>
 </div>
 {% endif %}

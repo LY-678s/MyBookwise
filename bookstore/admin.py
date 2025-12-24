@@ -31,12 +31,12 @@ class BookAdmin(admin.ModelAdmin):
 class CustomerAdmin(admin.ModelAdmin):
     """顾客：方便管理员按用户名/姓名/等级管理顾客账户。"""
 
-    list_display = ("customerid", "username", "name", "email", "balance", "currentoverdraft", "totalspent", "levelid")
+    list_display = ("customerid", "username", "name", "email", "balance", "usedcredit", "totalspent", "levelid")
     search_fields = ("username", "name", "email")
     list_filter = ("levelid",)
     # 按累计消费排序（可选）
     ordering = ("-totalspent",)
-    readonly_fields = ("currentoverdraft", "totalspent")  # 这些字段由系统自动计算，不允许手动修改
+    readonly_fields = ("usedcredit", "totalspent")  # 这些字段由系统自动计算，不允许手动修改
 
 
 class OrderdetailInline(admin.TabularInline):
@@ -478,7 +478,7 @@ class BookauthorAdmin(admin.ModelAdmin):
 class CreditlevelAdmin(admin.ModelAdmin):
     """会员等级与折扣。"""
 
-    list_display = ("levelid", "discountrate", "canoverdraft", "overdraftlimit")
+    list_display = ("levelid", "discountrate", "canusecredit", "creditlimit")
 
 
 @admin.register(Supplierbook)

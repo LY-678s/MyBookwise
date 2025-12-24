@@ -264,12 +264,12 @@ INSERT INTO `bookauthor` VALUES (10, '978-7-115-48935-5', 'Peter Harrington', 1)
 DROP TABLE IF EXISTS `creditlevel`;
 CREATE TABLE `creditlevel`  (
   `LevelID` int NOT NULL,
-  `DiscountRate` decimal(3, 2) NOT NULL,
-  `CanOverdraft` tinyint(1) NOT NULL DEFAULT 0,
-  `OverdraftLimit` decimal(10, 2) NOT NULL DEFAULT 0.00,
+  `DiscountRate` decimal(3, 2) NOT NULL COMMENT '折扣率（0.75-0.90）',
+  `CanUseCredit` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否可使用信用支付: 0=否, 1=是',
+  `CreditLimit` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '信用额度上限',
   PRIMARY KEY (`LevelID`) USING BTREE,
   CONSTRAINT `creditlevel_chk_1` CHECK ((`DiscountRate` > 0) and (`DiscountRate` <= 1)),
-  CONSTRAINT `creditlevel_chk_2` CHECK (`OverdraftLimit` >= 0)
+  CONSTRAINT `creditlevel_chk_2` CHECK (`CreditLimit` >= 0)
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -292,40 +292,42 @@ CREATE TABLE `customer`  (
   `Name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `Address` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `Email` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
-  `Balance` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '账户余额',
+  `Balance` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '账户余额（最低为0，不会为负）',
   `LevelID` int NOT NULL DEFAULT 1 COMMENT '信用等级',
-  `OverdraftLimit` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '透支额度上限',
-  `CurrentOverdraft` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '当前已透支金额',
-  `TotalSpent` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT '累计消费',
+  `CreditLimit` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '信用额度上限',
+  `UsedCredit` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '已使用信用额度',
+  `TotalSpent` decimal(12, 2) NOT NULL DEFAULT 0.00 COMMENT '累计消费（从余额支付的总金额）',
   `RegisterDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`CustomerID`) USING BTREE,
   UNIQUE INDEX `Username`(`Username` ASC) USING BTREE,
   UNIQUE INDEX `Email`(`Email` ASC) USING BTREE,
   INDEX `FK_Customer_CreditLevel`(`LevelID` ASC) USING BTREE,
   CONSTRAINT `FK_Customer_CreditLevel` FOREIGN KEY (`LevelID`) REFERENCES `creditlevel` (`LevelID`) ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT `CK_Customer_Balance` CHECK (`Balance` >= -(`OverdraftLimit`)),
+  CONSTRAINT `CK_Customer_Balance` CHECK (`Balance` >= 0),
   CONSTRAINT `CK_Customer_Email` CHECK (`Email` like _utf8mb4'%@%.%'),
   CONSTRAINT `customer_chk_1` CHECK (`TotalSpent` >= 0),
-  CONSTRAINT `customer_chk_2` CHECK (`CurrentOverdraft` >= 0),
-  CONSTRAINT `customer_chk_3` CHECK (`CurrentOverdraft` <= `OverdraftLimit`)
+  CONSTRAINT `customer_chk_2` CHECK (`UsedCredit` >= 0),
+  CONSTRAINT `customer_chk_3` CHECK (`UsedCredit` <= `CreditLimit`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of customer
 -- ----------------------------
--- 字段顺序: CustomerID, Username, Password, Name, Address, Email, Balance, LevelID, OverdraftLimit, CurrentOverdraft, TotalSpent, RegisterDate
--- 张三: 1级会员，不能透支
+-- 字段顺序: CustomerID, Username, Password, Name, Address, Email, Balance, LevelID, CreditLimit, UsedCredit, TotalSpent, RegisterDate
+-- 张三: 1级会员，无信用额度
 -- - 余额: 1000 - 160.20(订单4) - 125.10(订单6) = 714.70
--- - TotalSpent: 0 + 160.20(订单4) + 125.10(订单6) = 285.30（订单1已退款不计）
+-- - TotalSpent: 0 + 160.20 + 125.10 = 285.30（从余额支付的总额）
+-- - UsedCredit: 0（未使用信用）
 INSERT INTO `customer` VALUES (1, 'zhangsan', 'pass123', '张三', '湖北省武汉市洪山区', 'zhangsan@email.com', 714.70, 1, 0.00, 0.00, 285.30, '2025-12-19 16:45:13');
--- 李四: 4级会员（应自动升级），可透支1000
+-- 李四: 4级会员，信用额度1000
 -- - 余额: 5000 - 2577.20(订单3) = 2422.80
--- - TotalSpent: 2500 + 2577.20(订单3) = 5077.20（≥5000，升为4级）
--- - 订单7未付款，不计入
-INSERT INTO `customer` VALUES (2, 'lisi', 'pass456', '李四', '湖北省武汉市武昌区', 'lisi@email.com', 2422.80, 4, 1000.00, 0.00, 5077.20, '2025-12-19 16:45:13');
--- 王五: 5级会员（应自动升级），可透支无限
+-- - TotalSpent: 2500 + 2577.20 = 5077.20（从余额支付）
+-- - UsedCredit: 83.30（订单7未全额支付，ActualPaid=0，全用信用）
+INSERT INTO `customer` VALUES (2, 'lisi', 'pass456', '李四', '湖北省武汉市武昌区', 'lisi@email.com', 2422.80, 4, 1000.00, 83.30, 5077.20, '2025-12-19 16:45:13');
+-- 王五: 4级会员，信用额度1000
 -- - 余额: 10000 - 307.20(订单5) - 126.40(订单8) = 9566.40
--- - TotalSpent: 6000 + 307.20(订单5) + 126.40(订单8) = 6433.60（未达10000，仍为4级）
+-- - TotalSpent: 6000 + 307.20 + 126.40 = 6433.60（从余额支付）
+-- - UsedCredit: 0（全部用余额支付）
 INSERT INTO `customer` VALUES (3, 'wangwu', 'pass789', '王五', '湖北省武汉市江汉区', 'wangwu@email.com', 9566.40, 4, 1000.00, 0.00, 6433.60, '2025-12-19 16:45:13');
 
 -- ----------------------------
@@ -580,8 +582,8 @@ INSERT INTO `orders` VALUES (4, '2025122401', '2025-12-24 10:00:00', 1, '湖北�
 INSERT INTO `orders` VALUES (5, '2025122402', '2025-12-24 11:30:00', 3, '湖北省武汉市江汉区', 307.20, 307.20, 1, 1);
 -- 订单6: 已下单已付款 - 张三买1本深入理解计算机 ⭐
 INSERT INTO `orders` VALUES (6, '2025122403', '2025-12-24 09:00:00', 1, '湖北省武汉市洪山区', 125.10, 125.10, 1, 0);
--- 订单7: 已下单未付款（测试暂缓付款）- 李四买数据库书
-INSERT INTO `orders` VALUES (7, '2025122404', '2025-12-24 14:00:00', 2, '湖北省武汉市武昌区', 83.30, 0.00, 0, 0);
+-- 订单7: 已下单未全额支付（测试信用支付）- 李四买数据库书，全部使用信用额度
+INSERT INTO `orders` VALUES (7, '2025122404', '2025-12-24 14:00:00', 2, '湖北省武汉市武昌区', 83.30, 0.00, 2, 0);
 -- 订单8: 已发货已付款 - 王五买2本机器学习
 INSERT INTO `orders` VALUES (8, '2025122405', '2025-12-24 15:00:00', 3, '湖北省武汉市江汉区', 126.40, 126.40, 1, 1);
 

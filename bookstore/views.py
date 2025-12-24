@@ -226,61 +226,54 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
             total_amount = order.totalamount or Decimal('0')
             
             # 4. 处理付款
-            if payment_method == "immediate":
-                # 立即付款
+            payment_choice = request.POST.get("payment_choice", "balance")  # balance或credit
+            
+            if payment_choice == "credit":
+                # 纯信用支付
                 from .signals import process_payment
-                success, msg = process_payment(order, customer)
+                success, result = process_payment(order, customer, use_credit_only=True)
                 
                 if success:
-                    order.actualpaid = total_amount
-                    order.paymentstatus = 1
+                    msg, actual_paid, payment_status = result
+                    order.actualpaid = actual_paid
+                    order.paymentstatus = payment_status
                     order.save(update_fields=['actualpaid', 'paymentstatus'])
                     
-                    # 5. 清空购物车
+                    # 清空购物车
                     request.session["cart"] = {}
-                    request.session.modified = True  # 确保session保存
-                    messages.success(request, f"下单成功！订单号：{order.orderno}，已付款：¥{total_amount}")
+                    request.session.modified = True
+                    messages.success(request, f"下单成功！{msg}")
                     return redirect("bookstore:order_list")
                 else:
-                    # 付款失败，取消订单（触发器会自动回补库存）
-                    order.status = 4  # 标记为已取消
+                    # 失败，取消订单
+                    order.status = 4
                     order.save(update_fields=['status'])
-                    messages.error(request, f"下单失败：{msg}。订单已自动取消。")
+                    messages.error(request, f"下单失败：{result}。订单已取消。")
                     return redirect("bookstore:cart_detail")
             
             else:
-                # 暂缓付款（仅3-5级会员）
-                if customer.levelid.canoverdraft == 0:
-                    # 不支持暂缓付款，取消订单（触发器回补库存）
+                # 立即支付（余额优先）
+                from .signals import process_payment
+                success, result = process_payment(order, customer, use_credit_only=False)
+                
+                if success:
+                    msg, actual_paid, payment_status = result
+                    order.actualpaid = actual_paid
+                    order.paymentstatus = payment_status
+                    order.save(update_fields=['actualpaid', 'paymentstatus'])
+                    
+                    # 清空购物车
+                    request.session["cart"] = {}
+                    request.session.modified = True
+                    messages.success(request, f"下单成功！{msg}")
+                    return redirect("bookstore:order_list")
+                else:
+                    # 失败，取消订单
                     order.status = 4
                     order.save(update_fields=['status'])
-                    messages.error(request, "您的信用等级不支持暂缓付款，请选择立即付款。订单已取消。")
-                    return redirect("bookstore:order_confirm")
-                
-                # 检查是否超出透支额度
-                from .signals import get_available_overdraft
-                available = get_available_overdraft(customer)
-                
-                if total_amount > available:
-                    # 超出额度，取消订单（触发器回补库存）
-                    order.status = 4
-                    order.save(update_fields=['status'])
-                    messages.error(request, f"暂缓付款金额(¥{total_amount})超出可用透支额度(¥{available:.2f})，请充值或选择立即付款。订单已取消。")
-                    return redirect("bookstore:order_confirm")
-                
-                # 暂缓付款成功
-                order.paymentstatus = 0  # 未付款
-                order.save(update_fields=['paymentstatus'])
-                
-                # 更新客户的透支金额（增加未付款订单金额）
-                customer.currentoverdraft = calculate_current_overdraft(customer)
-                customer.save(update_fields=['currentoverdraft'])
-                
-                # 5. 清空购物车
-                request.session["cart"] = {}
-                request.session.modified = True  # 确保session保存
-                messages.success(request, f"下单成功！订单号：{order.orderno}，应付金额：¥{total_amount}（暂未付款，已计入透支额度）")
-                return redirect("bookstore:order_list")
+                    messages.error(request, f"下单失败：{result}。订单已取消。")
+                    return redirect("bookstore:cart_detail")
+            
 
     # GET 请求：先展示确认页（显示折扣信息）
     items = []
@@ -428,67 +421,66 @@ def account_recharge(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def repay_overdraft(request: HttpRequest) -> HttpResponse:
-    """偿还全部透支 = 支付所有未付款订单 + 补足负余额"""
+    """全部还款 - 还清所有未全额支付的订单"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     
     if request.method == "POST":
         with transaction.atomic():
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
             
-            if customer.currentoverdraft <= 0:
-                messages.info(request, "您当前没有透支")
+            if customer.usedcredit <= 0:
+                messages.info(request, "您当前没有未还款的订单")
                 return redirect("bookstore:account")
             
-            # 1. 获取所有未付款订单
+            # 检查余额是否足够
+            if customer.balance < customer.usedcredit:
+                messages.error(request, f"余额不足！需要¥{customer.usedcredit}，当前余额¥{customer.balance}，请先充值")
+                return redirect("bookstore:account")
+            
+            # 1. 获取所有未全额支付的订单
             unpaid_orders = Orders.objects.filter(
                 customerid=customer,
-                paymentstatus=0,
-                status__in=[0, 1]  # 排除已取消
+                paymentstatus=2,  # 未全额支付
+                status__in=[0, 1]  # 排除已取消和已完成
             )
             
-            total_paid = Decimal('0')
-            paid_count = 0
+            total_repay = Decimal('0')
+            repay_count = 0
             
-            # 2. 支付所有未付款订单
+            # 2. 还款所有订单
             for order in unpaid_orders:
-                amount = order.totalamount or Decimal('0')
-                customer.balance -= amount
-                customer.totalspent += amount
-                total_paid += amount
+                unpaid_amount = order.totalamount - order.actualpaid
                 
-                # 更新订单状态
-                order.actualpaid = amount
-                order.paymentstatus = 1
+                # 从余额扣款
+                customer.balance -= unpaid_amount
+                customer.totalspent += unpaid_amount  # 还款计入累计消费
+                total_repay += unpaid_amount
+                
+                # 更新订单
+                order.actualpaid = order.totalamount
+                order.paymentstatus = 1  # 已全额支付
                 order.save(update_fields=['actualpaid', 'paymentstatus'])
-                paid_count += 1
+                repay_count += 1
             
-            # 3. 补足负余额（如果还有负数）
-            if customer.balance < 0:
-                deficit = abs(customer.balance)
-                customer.balance = Decimal('0')
-                customer.totalspent += deficit
-                total_paid += deficit
+            # 3. 清空已使用信用额度
+            customer.usedcredit = Decimal('0')
             
-            # 4. 重新计算透支金额（应该为0）
-            from .signals import calculate_current_overdraft
-            customer.currentoverdraft = calculate_current_overdraft(customer)
-            
-            # 5. 检查是否升级
+            # 4. 检查是否升级
             from .signals import _calculate_credit_level
             from .models import Creditlevel as CL
             new_level_id = _calculate_credit_level(customer.totalspent)
             old_level = customer.levelid.levelid
             if new_level_id != old_level:
                 customer.levelid = CL.objects.get(levelid=new_level_id)
-                customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent', 'levelid'])
+                customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
                 messages.success(request, 
-                    f"偿还成功！支付了{paid_count}个订单，共¥{total_paid}，"
+                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
                     f"当前余额：¥{customer.balance}，"
                     f"信用等级已升级至{new_level_id}级！")
             else:
-                customer.save(update_fields=['balance', 'currentoverdraft', 'totalspent'])
+                customer.save(update_fields=['balance', 'usedcredit', 'totalspent'])
                 messages.success(request, 
-                    f"偿还成功！支付了{paid_count}个订单，共¥{total_paid}，"
+                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
                     f"当前余额：¥{customer.balance}")
         
         return redirect("bookstore:account")
@@ -498,12 +490,16 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
-    """支付未付款订单"""
+    """补足支付未全额支付的订单（只能用余额）"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
     
     if order.paymentstatus == 1:
-        messages.info(request, "该订单已付款")
+        messages.info(request, "该订单已全额支付")
+        return redirect("bookstore:order_detail", order_id=order_id)
+    
+    if order.paymentstatus != 2:
+        messages.error(request, "该订单不需要补足支付")
         return redirect("bookstore:order_detail", order_id=order_id)
     
     if request.method == "POST":
@@ -511,17 +507,38 @@ def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
             order.refresh_from_db()
             
-            from .signals import process_payment
-            success, msg = process_payment(order, customer)
+            # 计算未付金额
+            unpaid_amount = order.totalamount - order.actualpaid
             
-            if success:
-                # 更新订单付款状态
-                order.actualpaid = order.totalamount
-                order.paymentstatus = 1
-                order.save(update_fields=['actualpaid', 'paymentstatus'])
-                messages.success(request, msg)
+            # 检查余额（只能用余额，不能用信用）
+            if customer.balance < unpaid_amount:
+                messages.error(request, f"余额不足！需要¥{unpaid_amount}，当前余额¥{customer.balance}，请先充值")
+                return redirect("bookstore:order_detail", order_id=order_id)
+            
+            # 从余额扣款
+            customer.balance -= unpaid_amount
+            customer.totalspent += unpaid_amount  # 补足部分计入累计消费
+            customer.usedcredit -= unpaid_amount  # 释放信用额度
+            
+            # 检查是否升级
+            from .signals import _calculate_credit_level
+            from .models import Creditlevel as CL
+            new_level_id = _calculate_credit_level(customer.totalspent)
+            old_level = customer.levelid.levelid
+            if new_level_id != old_level:
+                customer.levelid = CL.objects.get(levelid=new_level_id)
+            
+            customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
+            
+            # 更新订单
+            order.actualpaid = order.totalamount
+            order.paymentstatus = 1  # 已全额支付
+            order.save(update_fields=['actualpaid', 'paymentstatus'])
+            
+            if new_level_id != old_level:
+                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}，信用等级已升级至{new_level_id}级！")
             else:
-                messages.error(request, msg)
+                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}")
         
         return redirect("bookstore:order_detail", order_id=order_id)
     

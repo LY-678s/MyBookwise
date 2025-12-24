@@ -52,40 +52,41 @@
 </table>
 
 <div style="background: white; border: 2px solid #3498db; border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;">
-  <h3 style="margin-top: 0; color: #2c3e50;">选择付款方式</h3>
+  <h3 style="margin-top: 0; color: #2c3e50;">选择支付方式</h3>
   
   <form method="post">
     {% csrf_token %}
     
     <div style="margin-bottom: 1.5rem;">
-      <!-- 立即付款（所有等级都支持） -->
+      <!-- 余额支付（余额优先，不足时用信用） -->
       <label style="display: block; padding: 1rem; border: 2px solid #27ae60; border-radius: 8px; margin-bottom: 1rem; cursor: pointer; background: #e8f5e9;">
-        <input type="radio" name="payment_method" value="immediate" checked style="margin-right: 0.5rem;">
-        <strong style="color: #27ae60;">💳 立即付款</strong>
+        <input type="radio" name="payment_choice" value="balance" checked style="margin-right: 0.5rem;">
+        <strong style="color: #27ae60;">💰 余额支付</strong>
         <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
-          立即扣款 ¥{{ discounted_total|floatformat:2 }}
+          支付 ¥{{ discounted_total|floatformat:2 }}
           {% if customer.balance >= discounted_total %}
-            <span style="color: #27ae60;">✓ 余额充足</span>
+            <br><span style="color: #27ae60;">✓ 余额充足，全部从余额扣款</span>
           {% else %}
-            {% if customer.levelid.canoverdraft %}
-              <span style="color: #f39c12;">⚠ 余额不足，将使用透支额度</span>
+            <br><span style="color: #f39c12;">⚠ 余额不足，</span>
+            {% if customer.levelid.canusecredit %}
+              <span style="color: #3498db;">先用完余额(¥{{ customer.balance }})，剩余使用信用额度</span>
             {% else %}
-              <span style="color: #e74c3c;">✗ 余额不足，请充值</span>
+              <span style="color: #e74c3c;">该等级不支持信用，请充值</span>
             {% endif %}
           {% endif %}
         </p>
       </label>
       
-      <!-- 暂缓付款（仅3-5级） -->
-      {% if customer.levelid.canoverdraft %}
+      <!-- 信用支付（仅3-5级，全部用信用） -->
+      {% if customer.levelid.canusecredit %}
       <label style="display: block; padding: 1rem; border: 2px solid #3498db; border-radius: 8px; cursor: pointer; background: #e3f2fd;">
-        <input type="radio" name="payment_method" value="defer" style="margin-right: 0.5rem;">
-        <strong style="color: #3498db;">⏳ 暂缓付款</strong>
+        <input type="radio" name="payment_choice" value="credit" style="margin-right: 0.5rem;">
+        <strong style="color: #3498db;">💳 信用支付</strong>
         <p style="margin: 0.5rem 0 0 1.5rem; color: #555; font-size: 0.9rem;">
-          不立即扣款，订单金额 ¥{{ discounted_total|floatformat:2 }} 计入透支额度
+          不使用余额，全部使用信用额度 ¥{{ discounted_total|floatformat:2 }}
           <br>
-          可用透支额度：¥{{ customer.overdraftlimit|floatformat:2 }}，
-          当前已用：¥{{ customer.currentoverdraft|floatformat:2 }}
+          信用额度：¥{{ customer.creditlimit|floatformat:2 }}，
+          已使用：¥{{ customer.usedcredit|floatformat:2 }}
         </p>
       </label>
       {% endif %}
@@ -104,10 +105,10 @@
 
 <p style="color: #7f8c8d; margin-top: 1rem; font-size: 0.9rem;">
   💡 提示：
-  {% if customer.levelid.canoverdraft %}
-    您的信用等级支持暂缓付款。暂缓付款的订单可以随时在"我的订单"中支付。
+  {% if customer.levelid.canusecredit %}
+    您是{{ customer.levelid.levelid }}级会员，支持信用支付。未全额支付的订单需在30天内完成支付。
   {% else %}
-    您当前是{{ customer.levelid.levelid }}级会员，暂不支持暂缓付款功能。
+    您当前是{{ customer.levelid.levelid }}级会员，暂不支持信用支付功能，只能使用余额支付。
   {% endif %}
 </p>
 {% endblock %}
