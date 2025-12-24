@@ -1,6 +1,4 @@
 *.md
-*.sql
-*.sqlite3
 # 你还可以添加常见忽略项：
 __pycache__/
 *.pyc
