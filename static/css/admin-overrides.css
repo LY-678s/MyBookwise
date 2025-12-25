@@ -1,0 +1,78 @@
+/* Admin overrides to match site visual style (white buttons, softer sidebar) */
+:root {
+  --admin-text-primary: #6B7280;
+  --admin-accent: #3b82c4; /* lighter blue */
+  --admin-card-bg: #ffffff;
+}
+
+/* Brand / header */
+.jazzmin-brand, .site-brand, .nav-container h1 {
+  font-weight: 700;
+  font-family: "Microsoft YaHei", Arial, sans-serif;
+  color: var(--admin-accent);
+}
+
+/* Sidebar */
+.jazzmin-sidebar, .sidebar, #sidebar {
+  background: var(--admin-card-bg);
+  border-right: 1px solid rgba(45,45,45,0.04);
+}
+
+.sidebar .nav-link,
+.jazzmin-sidebar .nav-link,
+.sidebar .nav-item {
+  color: var(--admin-text-primary);
+  font-weight: 600;
+  padding: 0.5rem 0.9rem;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.sidebar .nav-link:hover,
+.jazzmin-sidebar .nav-link:hover {
+  background: rgba(77,163,255,0.06);
+  color: #2563a9;
+  border-radius: 8px;
+}
+
+.sidebar .nav-link.active,
+.jazzmin-sidebar .nav-link.active {
+  background: rgba(77,163,255,0.12);
+  color: #1e40af;
+  border-radius: 8px;
+}
+
+.sidebar .nav-link .material-symbols-outlined,
+.jazzmin-sidebar .nav-link .material-symbols-outlined {
+  color: #6b7280;
+  margin-right: 0.6rem;
+  font-size: 1.05rem;
+}
+
+/* Tables: normal weight */
+table, th, td {
+  font-weight: 400 !important;
+}
+
+/* Submit row buttons: white background, black text */
+.submit-row .default,
+.submit-row .default a,
+.submit-row .deletelink,
+.submit-row .historylink,
+.submit-row .button {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: none !important;
+  padding: 0.6rem 1rem !important;
+  border-radius: 8px !important;
+}
+.submit-row .default:hover,
+.submit-row .deletelink:hover,
+.submit-row .historylink:hover,
+.submit-row .button:hover {
+  background: #f8f9fa !important;
+  color: #0f172a !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+
+

@@ -110,7 +110,10 @@
                 </form>
                 {% else %}
                 <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center;">
-                    🔐 登录后购买
+                    <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                        lock
+                    </span>
+                    登录后购买
                 </a>
                 {% endif %}
             </div>

@@ -365,14 +365,15 @@ class ProcurementdetailInline(admin.TabularInline):
     """采购明细内联显示"""
     model = Procurementdetail
     extra = 0
-    fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice', 'isreceived')
-    readonly_fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
+    # 'shortagerecordid' column may be missing in current DB schema; exclude it from inline to avoid errors.
+    fields = ('isbn', 'quantity', 'supplyprice', 'totalprice', 'isreceived')
+    readonly_fields = ('isbn', 'quantity', 'supplyprice', 'totalprice')
     
     # 自定义isreceived显示为勾选框（boolean字段会自动显示为checkbox）
     
     def get_readonly_fields(self, request, obj=None):
         # 只有这些字段是只读的，isreceived可以修改
-        return ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
+        return ('isbn', 'quantity', 'supplyprice', 'totalprice')
 
 
 @admin.register(Procurement)

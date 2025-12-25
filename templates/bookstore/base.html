@@ -70,6 +70,110 @@
         .admin-ui h2 { font-size: 1.6rem; }
         .admin-ui h3 { font-size: 1.05rem; }
 
+        /* Admin sidebar tweaks: bolder brand, MS YaHei, lighter blue accents */
+        .admin-ui .jazzmin-brand, .admin-ui .site-brand, .admin-ui .nav-container h1 {
+            font-weight: 700;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+            color: #3b82c4; /* 更浅的蓝色 */
+        }
+
+        .admin-ui .jazzmin-sidebar, .admin-ui .sidebar, .admin-ui #sidebar {
+            background: var(--card-bg);
+            border-right: 1px solid rgba(45, 45, 45, 0.04);
+        }
+
+        .admin-ui .sidebar .nav-link,
+        .admin-ui .jazzmin-sidebar .nav-link,
+        .admin-ui .sidebar .nav-item {
+            color: var(--text-primary);
+            font-weight: 600;
+            padding: 0.5rem 0.9rem;
+            transition: background-color 0.18s ease, color 0.18s ease;
+        }
+
+        .admin-ui .sidebar .nav-link:hover,
+        .admin-ui .jazzmin-sidebar .nav-link:hover {
+            background: rgba(77,163,255,0.08);
+            color: #2563a9;
+            border-radius: 8px;
+        }
+
+        /* Active item: lighter blue background, subtle rounded */
+        .admin-ui .sidebar .nav-link.active,
+        .admin-ui .jazzmin-sidebar .nav-link.active {
+            background: rgba(77,163,255,0.14);
+            color: #1e40af;
+            border-radius: 8px;
+            box-shadow: none;
+        }
+
+        .admin-ui .sidebar .nav-link .material-symbols-outlined,
+        .admin-ui .jazzmin-sidebar .nav-link .material-symbols-outlined {
+            color: #6b7280;
+            margin-right: 0.6rem;
+            font-size: 1.05rem;
+        }
+
+        /* 表格内文本不使用加粗（更易阅读） */
+        .admin-ui table, .admin-ui table th, .admin-ui table td,
+        .card-body table, .card-body table th, .card-body table td,
+        table, th, td {
+            font-weight: 400 !important;
+        }
+
+        /* Book detail: soften button colors for gentler contrast */
+        .book-detail .btn-primary {
+            background: linear-gradient(135deg, #BFD8CC 0%, #9FC4B2 100%);
+            color: #ffffff;
+            border: none;
+            box-shadow: none;
+        }
+        .book-detail .btn-primary:hover {
+            background: linear-gradient(135deg, #A7CDBF 0%, #8BC0A8 100%);
+        }
+
+        .book-detail .btn-secondary {
+            background: linear-gradient(135deg, #EFEFEF 0%, #E6E6E6 100%);
+            color: #6B7280;
+            border: 1px solid rgba(0,0,0,0.04);
+            box-shadow: none;
+        }
+        .book-detail .btn-secondary:hover {
+            background: linear-gradient(135deg, #F6F6F6 0%, #EEEEEE 100%);
+        }
+
+        .book-detail .btn-warning {
+            background: linear-gradient(135deg, #A7D7DD 0%, #63B7C8 100%);
+            color: #fff;
+            border: none;
+        }
+        .book-detail .btn-warning:hover {
+            background: linear-gradient(135deg, #8ECFD6 0%, #4AA9B6 100%);
+        }
+
+        /* Admin change form submit buttons: white background, black text */
+        .admin-ui .submit-row .default,
+        .admin-ui .submit-row .default a,
+        .admin-ui .submit-row .deletelink,
+        .admin-ui .submit-row .historylink,
+        .admin-ui .submit-row .button {
+            background: #ffffff !important;
+            color: #111827 !important;
+            border: 1px solid rgba(0,0,0,0.08) !important;
+            box-shadow: none !important;
+            padding: 0.6rem 1rem !important;
+            border-radius: 8px !important;
+        }
+
+        .admin-ui .submit-row .default:hover,
+        .admin-ui .submit-row .deletelink:hover,
+        .admin-ui .submit-row .historylink:hover,
+        .admin-ui .submit-row .button:hover {
+            background: #f8f9fa !important;
+            color: #0f172a !important;
+            border-color: rgba(0,0,0,0.12) !important;
+        }
+
         body {
             background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
             font-family: 'Inter', 'Segoe UI', 'Microsoft YaHei', sans-serif;

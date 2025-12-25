@@ -4,7 +4,7 @@
     <!-- Use a single generic Material Symbols link (do not restrict icon names) -->
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
 </head>
-<div class="container animate-fade-in">
+<div class="container animate-fade-in book-detail">
     <!-- 返回按钮 -->
     <div style="margin-bottom: 2rem;">
         <a href="{% url 'bookstore:index' %}" class="btn btn-secondary">
@@ -47,7 +47,7 @@
                         </div>
                         <div style="text-align: right;">
                             <div style="color: var(--text-secondary); font-size: 0.9rem;">库存</div>
-                            <div style="font-size: 1.2rem; font-weight: 600; color: {% if book.stockqty > 10 %}var(--success){% elif book.stockqty > 0 %}var(--warning){% else %}var(--error){% endif %}">
+                            <div style="font-size: 1.2rem; font-weight: 600; color: {% if book.stockqty > 10 %}var(--success){% elif book.stockqty > 0 %}var(--warning){% else %}var(--error){% endif %};">
                                 {{ book.stockqty }}
                             </div>
                         </div>

@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/admin-overrides.css' %}">
+    <style>
+    /* Inline forceful overrides for admin submit buttons - higher priority for testing */
+    .submit-row .default,
+    .submit-row .default a,
+    .submit-row .deletelink,
+    .submit-row .historylink,
+    .submit-row .button,
+    .submit-row input[type="submit"] {
+        background: #ffffff !important;
+        color: #111827 !important;
+        border: 1px solid rgba(0,0,0,0.08) !important;
+        box-shadow: none !important;
+        padding: 0.6rem 1rem !important;
+        border-radius: 8px !important;
+    }
+    .submit-row .default:hover,
+    .submit-row .deletelink:hover,
+    .submit-row .historylink:hover,
+    .submit-row .button:hover,
+    .submit-row input[type="submit"]:hover {
+        background: #f8f9fa !important;
+        color: #0f172a !important;
+        border-color: rgba(0,0,0,0.12) !important;
+    }
+    </style>
+{% endblock %}
+
+
