@@ -225,10 +225,10 @@ CREATE TABLE `book`  (
 -- ----------------------------
 -- 字段顺序: ISBN, Title, Publisher, Price, Keywords, CoverImage, StockQty, Location, MinStockLimit
 INSERT INTO `book` VALUES ('978-7-111-54425-7', '深入理解计算机系统', '机械工业出版社', 139.00, '计算机,操作系统,底层原理', NULL, 50, 'A区-01架', 10);
-INSERT INTO `book` VALUES ('978-7-115-42832-5', 'Python编程：从入门到实践', '人民邮电出版社', 89.00, 'Python,编程,入门', '', 77, 'A区-02架', 15);
+INSERT INTO `book` VALUES ('978-7-115-42832-5', 'Python编程：从入门到实践', '人民邮电出版社', 89.00, 'Python,编程,入门', '', 77, 'A区-02架', 10);
 INSERT INTO `book` VALUES ('978-7-115-48935-5', '机器学习实战', '人民邮电出版社', 79.00, '机器学习,人工智能,Python', '', 5, 'B区-02架', 10);
 INSERT INTO `book` VALUES ('978-7-121-35170-9', '算法导论', '电子工业出版社', 128.00, '算法,数据结构,计算机', '', 30, 'A区-03架', 10);
-INSERT INTO `book` VALUES ('978-7-302-51123-4', '数据库系统概念', '清华大学出版社', 98.00, '数据库,SQL,关系型数据库', 0x622727, 15, 'B区-01架', 12);
+INSERT INTO `book` VALUES ('978-7-302-51123-4', '数据库系统概念', '清华大学出版社', 98.00, '数据库,SQL,关系型数据库', 0x622727, 15, 'B区-01架', 10);
 
 -- ----------------------------
 -- Table structure for bookauthor
@@ -506,7 +506,7 @@ CREATE TABLE `orderdetail`  (
   CONSTRAINT `FK_OrderDetail_Orders` FOREIGN KEY (`OrderID`) REFERENCES `orders` (`OrderID`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `orderdetail_chk_1` CHECK (`Quantity` > 0),
   CONSTRAINT `orderdetail_chk_2` CHECK (`UnitPrice` > 0)
-) ENGINE = InnoDB AUTO_INCREMENT = 13 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 14 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of orderdetail
@@ -540,8 +540,8 @@ INSERT INTO `orderdetail` VALUES (11, 7, '978-7-302-51123-4', 1, 98.00, 0);
 -- 订单8的明细 (全部已发货) - 王五买2本机器学习
 INSERT INTO `orderdetail` VALUES (12, 8, '978-7-115-48935-5', 2, 79.00, 1);
 
--- 订单9的明细 (全部已发货) - 李四买2本机器学习
-INSERT INTO `orderdetail` VALUES (12, 8, '978-7-115-48935-5', 2, 79.00, 1);
+-- 订单9的明细 (已发货) - 李四买2本机器学习
+INSERT INTO `orderdetail` VALUES (13, 9, '978-7-115-48935-5', 2, 79.00, 1);
 
 -- ----------------------------
 -- Table structure for orders
@@ -563,10 +563,10 @@ CREATE TABLE `orders`  (
   CONSTRAINT `FK_Orders_Customer` FOREIGN KEY (`CustomerID`) REFERENCES `customer` (`CustomerID`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `orders_chk_1` CHECK (`TotalAmount` >= 0),
   CONSTRAINT `orders_chk_2` CHECK (`Status` in (0,1,2,3,4)),
-  CONSTRAINT `orders_chk_3` CHECK (`PaymentStatus` in (0,1,2)),
+  CONSTRAINT `orders_chk_3` CHECK (`PaymentStatus` in (0,1,2,3)),
   CONSTRAINT `orders_chk_4` CHECK (`ActualPaid` >= 0),
   CONSTRAINT `orders_chk_5` CHECK (`ActualPaid` <= `TotalAmount`)
-) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 10 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of orders
@@ -588,8 +588,8 @@ INSERT INTO `orders` VALUES (6, '2025122403', '2025-12-24 09:00:00', 1, '湖北�
 INSERT INTO `orders` VALUES (7, '2025122404', '2025-12-24 14:00:00', 2, '湖北省武汉市武昌区', 83.30, 0.00, 2, 0);
 -- 订单8: 已发货已付款 - 王五买2本机器学习
 INSERT INTO `orders` VALUES (8, '2025122405', '2025-12-24 15:00:00', 3, '湖北省武汉市江汉区', 126.40, 126.40, 1, 1);
--- 订单9: 已发货 - 李四
-INSERT INTO `orders` VALUES (8, '2025122501', '2025-12-25 15:00:00', 3, '湖北省武汉市武昌区', 126.40, 0.00, 2, 1);
+-- 订单9: 已发货待补款 - 李四买2本机器学习（测试信用支付）
+INSERT INTO `orders` VALUES (9, '2025122501', '2025-12-25 15:00:00', 2, '湖北省武汉市武昌区', 126.40, 0.00, 2, 1);
 
 -- ----------------------------
 -- Table structure for procurement
