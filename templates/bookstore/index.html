@@ -31,12 +31,17 @@
     {% if books %}
     <div class="grid grid-3">
         {% for book in books %}
-        <div class="card book-card animate-fade-in" style="animation-delay: {{ forloop.counter0 }}00ms;">
+        <div class="card book-card animate-fade-in">
             <!-- 图书封面 -->
             <div style="position: relative; overflow: hidden;">
-                {% if book.coverimage %}
-                    <!-- 如果有封面图片，显示图片 -->
-                    <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;">
+                {% if book.cover_image_url %}
+                    <!-- 如果有静态图片文件，显示静态图片；添加 onerror 以回退到默认静态图 -->
+                    <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
+                         onerror="this.onerror=null;this.src='/static/images/Python编程从入门到实践.jpg'">
+                {% elif book.coverimage %}
+                    <!-- 如果有base64图片，显示base64图片；添加 onerror 回退 -->
+                    <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
+                         onerror="this.onerror=null;this.src='/static/images/Python编程从入门到实践.jpg'">
                 {% else %}
                     <!-- 默认封面图片 -->
                     <div style="width: 100%; height: 250px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">

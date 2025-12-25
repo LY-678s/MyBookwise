@@ -109,6 +109,40 @@ def customer_required(view_func):
     return _wrapped_view
 
 
+def get_book_cover_image(book_title: str) -> str:
+    """
+    根据书名返回对应的封面图片路径
+    """
+    title_lower = book_title.lower()
+
+    # 图片映射规则：根据书名关键词匹配图片（仅保留文件名，由此生成静态 URL 并对文件名进行 URL encode）
+    image_mappings = {
+        'python': 'Python编程从入门到实践.jpg',
+        '编程': 'Python编程从入门到实践.jpg',
+        '入门': 'Python编程从入门到实践.jpg',
+        '数据库': '数据库系统概念.png',
+        '系统概念': '数据库系统概念.png',
+        '机器学习': '机器学习实战.jpg',
+        '实战': '机器学习实战.jpg',
+        '深入理解': '深入理解计算机系统.jpg',
+        '计算机系统': '深入理解计算机系统.jpg',
+        '算法': '算法导论.png',
+        '导论': '算法导论.png',
+    }
+
+    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
+    from django.conf import settings
+    from urllib.parse import quote
+    for keyword, image_filename in image_mappings.items():
+        if keyword in title_lower:
+            static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+            # 确保结果类似 '/static/images/encoded-name.jpg'
+            return f"{static_prefix}images/{quote(image_filename)}"
+
+    # 如果没有匹配的图片，返回None
+    return None
+
+
 def index(request: HttpRequest) -> HttpResponse:
     books = Book.objects.all().order_by("title")
 
@@ -125,14 +159,34 @@ def index(request: HttpRequest) -> HttpResponse:
             'stockqty': book.stockqty,
             'location': book.location,
             'minstocklimit': book.minstocklimit,
-            'coverimage': None
+            'coverimage': None,
+            'cover_image_url': None  # 新增：静态图片URL
         }
 
-        # 如果有封面图片，转换为base64
-        if book.coverimage:
+        # 优先使用静态图片文件
+        static_image = get_book_cover_image(book.title)
+        if static_image:
+            book_data['cover_image_url'] = static_image
+        # 如果没有静态图片，则尝试使用数据库中的base64图片
+        elif book.coverimage:
             try:
-                book_data['coverimage'] = base64.b64encode(book.coverimage).decode('utf-8')
-            except:
+                # 有些情况下数据库中存储的可能已经是 base64 字符串，也可能是文本或二进制数据。
+                # 先检测是否看起来像 base64 字符串（仅包含 base64 字符），若是则直接使用；否则按文本/二进制编码后再 base64 编码。
+                import re
+                raw = book.coverimage
+                if isinstance(raw, str):
+                    s = raw.strip()
+                    # 简单判断是否为 base64 字符串（较长且只包含 base64 字符）
+                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
+                        # 移除换行并直接使用
+                        book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
+                    else:
+                        # 将文本按 utf-8 编码后再 base64 编码
+                        book_data['coverimage'] = base64.b64encode(s.encode('utf-8')).decode('utf-8')
+                else:
+                    # 假设为 bytes-like，直接 base64 编码
+                    book_data['coverimage'] = base64.b64encode(raw).decode('utf-8')
+            except Exception:
                 book_data['coverimage'] = None
 
         books_with_covers.append(book_data)
@@ -153,14 +207,28 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
         'stockqty': book.stockqty,
         'location': book.location,
         'minstocklimit': book.minstocklimit,
-        'coverimage': None
+        'coverimage': None,
+        'cover_image_url': None
     }
 
     # 如果有封面图片，转换为base64
-    if book.coverimage:
+    # 优先使用静态图片映射
+    static_image = get_book_cover_image(book.title)
+    if static_image:
+        book_data['cover_image_url'] = static_image
+    elif book.coverimage:
         try:
-            book_data['coverimage'] = base64.b64encode(book.coverimage).decode('utf-8')
-        except:
+            import re
+            raw = book.coverimage
+            if isinstance(raw, str):
+                s = raw.strip()
+                if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
+                    book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
+                else:
+                    book_data['coverimage'] = base64.b64encode(s.encode('utf-8')).decode('utf-8')
+            else:
+                book_data['coverimage'] = base64.b64encode(raw).decode('utf-8')
+        except Exception:
             book_data['coverimage'] = None
 
     return render(request, "bookstore/book_detail.html", {"book": book_data})
