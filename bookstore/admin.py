@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction, DatabaseError
 from django.http import HttpResponseRedirect
+from django.contrib.auth.models import Group
 from .models import (
     Book,
     Bookauthor,
@@ -16,6 +17,9 @@ from .models import (
     Supplier,
     Supplierbook,
 )
+
+# 隐藏不需要的Django默认模型
+admin.site.unregister(Group)
 
 
 @admin.register(Book)
