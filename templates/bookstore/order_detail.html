@@ -5,24 +5,24 @@
 <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
   <p><strong>订单状态：</strong>
     {% if order.status == 0 %}
-      <span style="color: #f39c12;">⏳ 已下单</span>
+      <span style="color: #f39c12;">已下单</span>
     {% elif order.status == 1 %}
-      <span style="color: #3498db;">🚚 已发货</span>
+      <span style="color: #3498db;">已发货</span>
     {% elif order.status == 2 %}
-      <span style="color: #27ae60;">✓ 已完成</span>
+      <span style="color: #27ae60;">已完成</span>
     {% elif order.status == 4 %}
-      <span style="color: #95a5a6;">✗ 已取消</span>
+      <span style="color: #95a5a6;">已取消</span>
     {% else %}未知状态
     {% endif %}
   </p>
   
   <p><strong>付款状态：</strong>
     {% if order.paymentstatus == 0 %}
-      <span style="color: #e74c3c;">❌ 未支付</span>
+      <span style="color: #e74c3c;">未支付</span>
     {% elif order.paymentstatus == 1 %}
-      <span style="color: #27ae60;">✓ 已全额支付</span>
+      <span style="color: #27ae60;">已全额支付</span>
     {% elif order.paymentstatus == 2 %}
-      <span style="color: #f39c12;">⏳ 待补款</span>
+      <span style="color: #f39c12;">待补款</span>
     {% elif order.paymentstatus == 3 %}
       <span style="color: #7f8c8d;">已退款</span>
     {% endif %}
@@ -101,7 +101,7 @@
       {% csrf_token %}
       <button type="submit" class="btn btn-danger"
               onclick="return confirm('确定要取消这个订单吗？\n\n取消后订单将无法恢复。')">
-        ❌ 取消订单
+        取消订单
       </button>
     </form>
     {% endif %}
@@ -113,7 +113,7 @@
       {% with unpaid=order.totalamount|add:"-"|add:order.actualpaid %}
       <button type="submit" class="btn btn-warning"
               onclick="return confirm('补足支付 ¥{{ unpaid }} 吗？\n\n需要从余额扣款，余额不足则无法支付。\n\n支付后您的累计消费将增加，可能会提升信用等级。')">
-        💰 补足支付 ¥{{ unpaid|floatformat:2 }}（已付¥{{ order.actualpaid|floatformat:2 }}）
+              补足支付 ¥{{ unpaid|floatformat:2 }}（已付¥{{ order.actualpaid|floatformat:2 }}）
       </button>
       {% endwith %}
     </form>
@@ -125,7 +125,7 @@
       {% csrf_token %}
       <button type="submit" class="btn btn-primary"
               onclick="return confirm('确认收货吗？\n\n确认后订单将标记为已完成。')">
-        📦 确认收货
+        确认收货
       </button>
     </form>
     {% endif %}

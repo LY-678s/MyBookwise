@@ -1,8 +1,16 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
+<head>
+    <!-- Use a single generic Material Symbols link (do not restrict icon names) -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+</head>
 <div class="container animate-fade-in">
     <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="font-weight: 400; color: var(--text-primary);">🛒 购物车</h1>
+        <h1 style="font-weight: 400; color: var(--text-primary);">
+            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                shopping_cart
+                </span>
+            购物车</h1>
         <p style="color: var(--text-secondary);">确认商品并前往结算</p>
     </div>
 
@@ -26,10 +34,16 @@
                             <td style="padding: 1rem;">
                                 <div style="display:flex; gap:1rem; align-items:center;">
                                     <div style="width:60px; height:90px; background:var(--accent-light); border-radius:6px; overflow:hidden; flex-shrink:0;">
-                                        {% if item.book.coverimage %}
-                                        <img src="data:image/jpeg;base64,{{ item.book.coverimage|safe }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;">
+                                        {% if item.book.cover_image_url %}
+                                        <img src="{{ item.book.cover_image_url }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
+                                        {% elif item.book.coverimage_b64 %}
+                                        <img src="data:image/jpeg;base64,{{ item.book.coverimage_b64|safe }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
                                         {% else %}
-                                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">📖</div>
+                                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                                            <span class="material-symbols-outlined">
+                                                book_2
+                                                </span>
+                                        </div>
                                         {% endif %}
                                     </div>
                                     <div>
@@ -71,7 +85,10 @@
             </div>
             {% else %}
             <div style="text-align:center; padding:3rem; color:var(--text-secondary);">
-                <div style="font-size:3rem; margin-bottom:1rem;">🛍️</div>
+                <div style="font-size:3rem; margin-bottom:1rem;"><span class="material-symbols-outlined">
+                    shopping_bag
+                    </span>
+                </div>
                 <div>购物车为空，快去选购喜欢的书吧！</div>
                 <p style="margin-top:1rem;"><a href="{% url 'bookstore:index' %}" class="btn btn-primary">去逛逛</a></p>
             </div>
@@ -81,7 +98,7 @@
 
     {% if items %}
     <div style="display:flex; gap:1rem; justify-content:flex-end;">
-        <a href="{% url 'bookstore:order_confirm' %}" class="btn btn-primary" style="padding:0.8rem 1.6rem;">🚀 去结算</a>
+        <a href="{% url 'bookstore:order_confirm' %}" class="btn btn-primary" style="padding:0.8rem 1.6rem;">去结算</a>
     </div>
     {% endif %}
 </div>

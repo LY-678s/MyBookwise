@@ -1,26 +1,39 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    
+
+</head>
 <div class="container animate-fade-in">
     <!-- 页面标题 -->
     <div style="text-align: center; margin-bottom: 3rem;">
         <h1 style="color: var(--text-primary); font-size: 2.5rem; font-weight: 300; margin-bottom: 0.5rem;">
-            📚 精选图书
+            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                auto_stories
+                </span>
+            精选图书
         </h1>
         <p style="color: var(--text-secondary); font-size: 1.1rem;">
             发现您心仪的图书，开启阅读之旅
         </p>
     </div>
 
-    <!-- 搜索栏 -->
+   <!-- 搜索栏 -->
     <div class="card" style="margin-bottom: 3rem;">
         <div class="card-body">
             <form action="{% url 'bookstore:search' %}" method="get" style="display: flex; gap: 1rem; align-items: center;">
-                <div style="flex: 1;">
-                    <input type="text" name="q" placeholder="🔍 搜索书名 / 关键词 / ISBN"
+                <div style="flex: 1; position: relative;">
+                    <!-- 搜索图标（使用 Material Symbols） -->
+                    <span class="material-symbols-outlined" aria-hidden="true"
+                          style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.25rem; pointer-events: none;">
+                        search
+                    </span>
+                    <input type="text" name="q" placeholder="搜索书名 / 关键词 / ISBN"
                            class="form-control"
-                           style="font-size: 1.1rem; padding: 1rem;">
+                           style="font-size: 1rem; padding: 0.5rem 1rem 0.5rem 2.8rem; height: 44px; border-radius: 8px;">
                 </div>
-                <button type="submit" class="btn btn-primary" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1.2rem; font-size: 1rem; height: 44px;">
                     搜索
                 </button>
             </form>

@@ -325,6 +325,29 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
 
     for isbn, data in cart.items():
         book = get_object_or_404(Book, pk=isbn)
+        # 准备封面显示数据：优先静态图片，其次尝试将数据库中的 coverimage 转为 base64 字符串
+        try:
+            static_image = get_book_cover_image(book.title)
+        except Exception:
+            static_image = None
+        # 挂载到 book 对象以供模板使用（临时属性，无持久化）
+        setattr(book, "cover_image_url", static_image)
+        cover_b64 = None
+        if not static_image and getattr(book, "coverimage", None):
+            try:
+                import base64, re
+                raw = book.coverimage
+                if isinstance(raw, str):
+                    s = raw.strip()
+                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
+                        cover_b64 = s.replace('\\n', '').replace('\\r', '')
+                    else:
+                        cover_b64 = base64.b64encode(s.encode('utf-8')).decode('utf-8')
+                else:
+                    cover_b64 = base64.b64encode(raw).decode('utf-8')
+            except Exception:
+                cover_b64 = None
+        setattr(book, "coverimage_b64", cover_b64)
         quantity = data["quantity"]
         original_amount = book.price * quantity
         discounted_amount = original_amount * discount_rate

@@ -1,5 +1,9 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
+<head>
+    <!-- Use a single generic Material Symbols link (do not restrict icon names) -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+</head>
 <div class="container animate-fade-in">
     <!-- 返回按钮 -->
     <div style="margin-bottom: 2rem;">
@@ -66,7 +70,10 @@
                     </form>
                     {% else %}
                     <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center; padding: 1rem; font-size: 1.1rem;">
-                        🔐 登录后购买
+                        <span class="material-symbols-outlined">
+                            lock
+                        </span>
+                        登录后购买
                     </a>
                     {% endif %}
                 </div>
@@ -75,7 +82,11 @@
             <!-- 快速信息卡片 -->
             <div class="card">
                 <div class="card-header">
-                    <h4 style="margin: 0; color: var(--text-primary);">📋 快速信息</h4>
+                    <h4 style="margin: 0; color: var(--text-primary);">
+                        <span class="material-symbols-outlined">
+                            bar_chart
+                        </span>
+                        快速信息</h4>
                 </div>
                 <div class="card-body">
                     <div style="display: grid; gap: 1rem;">
@@ -119,19 +130,37 @@
 
                     <!-- 交互按钮组 -->
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <button class="btn btn-secondary" onclick="toggleFavorite(this)"
+                                style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                                favorite
+                                </span>
+                            收藏
+                        </button>
                         <button class="btn btn-secondary" onclick="shareBook()"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                            📤 分享
+                            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                                share
+                            </span> 
+                            分享
                         </button>
                         <button class="btn btn-secondary" onclick="toggleDetails(this)"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                            ℹ️ 详情
+                            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                                expand_circle_right
+                            </span>
+                            详情
                         </button>
                     </div>
 
                     <!-- 详细信息（默认隐藏） -->
                     <div id="book-details" style="display: none; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; margin-top: 1rem;">
-                        <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">📖 图书详情</h4>
+                        <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">
+                            <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                                book
+                            </span>
+                            图书详情
+                        </h4>
                         <div style="color: var(--text-secondary); line-height: 1.6;">
                             <p><strong>ISBN:</strong> {{ book.isbn }}</p>
                             <p><strong>出版社:</strong> {{ book.publisher|default:"未知" }}</p>
@@ -146,7 +175,6 @@
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 </div>

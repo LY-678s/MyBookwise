@@ -1,8 +1,15 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
+<head> 
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+</head>
 <div class="container animate-fade-in">
     <div style="text-align:center; margin-bottom:2rem;">
-        <h1 style="font-weight:400; color:var(--text-primary);">📦 我的订单</h1>
+        <h1 style="font-weight:400; color:var(--text-primary);">
+          <span class="material-symbols-outlined icon-md" role="img" aria-label="快递盒" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+            box
+          </span>
+          我的订单</h1>
         <p style="color:var(--text-secondary);">查看历史订单与支付状态</p>
     </div>
 
@@ -33,11 +40,11 @@
                                 {% if item.order.status == 4 %}
                                   <span style="color: var(--text-secondary);">已退款</span>
                                 {% elif item.order.paymentstatus == 0 %}
-                                  <span style="color: var(--error);">❌ 未支付</span>
+                                  <span style="color: var(--error);">未支付</span>
                                 {% elif item.order.paymentstatus == 1 %}
-                                  <span style="color: var(--success);">✓ 已支付</span>
+                                  <span style="color: var(--success);">已支付</span>
                                 {% elif item.order.paymentstatus == 2 %}
-                                  <span style="color: var(--warning);">⏳ 待补款</span>
+                                  <span style="color: var(--warning);">待补款</span>
                                 {% elif item.order.paymentstatus == 3 %}
                                   <span style="color: var(--text-secondary);">已退款</span>
                                 {% endif %}
@@ -56,7 +63,7 @@
                             <td style="padding:1rem; text-align:center;">
                                 <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-secondary" style="padding:0.4rem 0.8rem;">查看详情</a>
                                 {% if item.order.paymentstatus == 0 and item.order.status != 4 %}
-                                  <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-primary" style="padding:0.4rem 0.8rem; margin-left:0.5rem;">💳 去支付</a>
+                                  <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-primary" style="padding:0.4rem 0.8rem; margin-left:0.5rem;">去支付</a>
                                 {% endif %}
                             </td>
                         </tr>
@@ -69,7 +76,11 @@
     {% else %}
     <div class="card">
         <div class="card-body" style="text-align:center; padding:3rem;">
-            <div style="font-size:3rem; margin-bottom:1rem;">📭</div>
+            <div style="font-size:3rem; margin-bottom:1rem;">
+              <span class="material-symbols-outlined icon-md" role="img" aria-label="快递盒">
+                mail
+              </span>
+            </div>
             <div style="color:var(--text-secondary);">暂无订单记录</div>
             <p style="margin-top:1rem;"><a href="{% url 'bookstore:index' %}" class="btn btn-primary">去购物</a></p>
         </div>
