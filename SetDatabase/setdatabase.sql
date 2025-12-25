@@ -1740,8 +1740,9 @@ CREATE TRIGGER `trg_shortagerecord_auto_generate_procurement` AFTER INSERT ON `s
     
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
     
-    -- 只有未处理的缺货记录才生成采购单
-    IF NEW.Status = 0 THEN
+    -- 只对自动生成的缺货记录(SourceType=2,3)生成采购单
+    -- SourceType=1（手动登记）不自动生成，需要通过Admin手动操作
+    IF NEW.Status = 0 AND (NEW.SourceType = 2 OR NEW.SourceType = 3) THEN
         OPEN supplier_cursor;
         
         FETCH supplier_cursor INTO v_SupplierID, v_SupplyPrice, v_LastSupplyDate;
