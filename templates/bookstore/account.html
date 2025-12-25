@@ -91,8 +91,12 @@
                     </div>
                     {% if customer.levelid.canusecredit %}
                     <div style="display:flex; justify-content:space-between;">
-                        <span style="color:var(--text-secondary);">可用信用额度</span>
-                        <span style="font-weight:600;">¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}</span>
+                        <span style="color:var(--text-secondary);">信用额度</span>
+                        <span style="font-weight:600;">
+                            <span style="{% if customer.usedcredit > 0 %}color:var(--warning);{% endif %}">¥{{ customer.usedcredit|floatformat:2 }}</span>
+                            <span style="color:var(--text-secondary);"> / </span>
+                            ¥{{ customer.creditlimit|floatformat:2 }}
+                        </span>
                     </div>
                         {% if customer.usedcredit > 0 %}
                         <div style="background: linear-gradient(135deg, var(--warning) 0%, #F4C2A1 100%); padding:1rem; border-radius:8px;">
