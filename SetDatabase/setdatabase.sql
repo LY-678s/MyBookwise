@@ -648,8 +648,8 @@ CREATE TABLE `procurementdetail`  (
 -- Records of procurementdetail
 -- ----------------------------
 -- 字段顺序: DetailID, ProcID, ISBN, ShortageRecordID, Quantity, SupplyPrice, TotalPrice, IsReceived
--- 采购明细1：机器学习实战，关联缺货记录1，10本，未到货
-INSERT INTO `procurementdetail` VALUES (1, 1, '978-7-115-48935-5', 1, 10, 58.00, 580.00, 0);
+-- 采购明细1：机器学习实战，关联缺货记录1，15本，未到货
+INSERT INTO `procurementdetail` VALUES (1, 1, '978-7-115-48935-5', 1, 15, 58.00, 870.00, 0);
 
 -- ----------------------------
 -- Table structure for shortagerecord
@@ -680,7 +680,7 @@ CREATE TABLE `shortagerecord`  (
 -- ----------------------------
 -- 字段顺序: RecordID, RecordNo, ISBN, Quantity, RegDate, SourceType, CustomerID, Status
 -- 缺货记录1：自动生成的机器学习缺货，已生成采购单
-INSERT INTO `shortagerecord` VALUES (1, 'SR-000001', '978-7-115-48935-5', 10, '2025-12-25 10:00:00', 2, NULL, 1);
+INSERT INTO `shortagerecord` VALUES (1, 'SR-000001', '978-7-115-48935-5', 15, '2025-12-25 10:00:00', 2, NULL, 1);
 -- 缺货记录2：手动登记的算法导论缺货，未生成采购单
 INSERT INTO `shortagerecord` VALUES (2, 'SR-000002', '978-7-121-35170-9', 15, '2025-12-25 14:00:00', 1, NULL, 0);
 
