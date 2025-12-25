@@ -23,14 +23,18 @@ print("="*60)
 @receiver(post_save, sender=Shortagerecord)
 def handle_shortagerecord_post_save(sender, instance, created, **kwargs):
     """
-    When a Shortagerecord is created or updated to Status=0 (unprocessed),
-    generate procurement and procurement detail in application layer,
-    then mark Shortagerecord.status = 2 (generated) using queryset.update()
-    to avoid retriggering signals.
+    自动生成采购单（仅SourceType=2,3）
+    - SourceType=2（系统自动）：自动生成采购单
+    - SourceType=3（客户订单）：自动生成采购单
+    - SourceType=1（手动登记）：不自动生成，需要手动操作
     """
-    # Only handle unprocessed shortage records
+    # 只处理未处理的缺货记录
     try:
         if instance.status != 0:
+            return
+        
+        # 手动登记的不自动生成采购单
+        if instance.sourcetype == 1:
             return
 
         with transaction.atomic():
@@ -47,10 +51,16 @@ def handle_shortagerecord_post_save(sender, instance, created, **kwargs):
             supplier = sb.supplierid
             supply_price = sb.supplyprice or Decimal('0.00')
 
-            # Reuse existing open procurement for supplier if exists
-            proc = Procurement.objects.filter(supplierid=supplier, status=0).first()
+            # 查找今天同一供应商的采购中的采购单（合并策略）
+            today = timezone.now().date()
+            proc = Procurement.objects.filter(
+                supplierid=supplier,
+                status=0,
+                createdate__date=today  # 同一天
+            ).first()
 
             if proc is None:
+                # 没有今天的采购单，创建新的
                 # Generate ProcNo of form PC-000001
                 max_num = 0
                 for procno in Procurement.objects.filter(procno__startswith='PC-').values_list('procno', flat=True):
@@ -66,26 +76,31 @@ def handle_shortagerecord_post_save(sender, instance, created, **kwargs):
                 proc = Procurement.objects.create(
                     procno=procno,
                     supplierid=supplier,
-                    recordid=instance,
+                    recordid=instance,  # 第一条缺货记录
                     createdate=timezone.now(),
                     status=0,
                 )
+            # else: 复用今天的采购单（自动更新UpdateDate）
 
             # Insert or update procurement detail
             pd_qs = Procurementdetail.objects.filter(procid=proc, isbn=instance.isbn)
             if not pd_qs.exists():
+                # 创建新的采购明细
                 Procurementdetail.objects.create(
                     procid=proc,
                     isbn=instance.isbn,
+                    shortagerecordid=instance,  # 关联缺货记录 ⭐
                     quantity=instance.quantity,
                     supplyprice=supply_price,
-                    receivedqty=0,
+                    totalprice=supply_price * instance.quantity,  # 总价（触发器会自动计算）
+                    isreceived=0,  # 未到货
                 )
             else:
+                # 如果同一ISBN已存在明细，累加数量（触发器会自动计算totalprice）
                 pd_qs.update(quantity=F('quantity') + instance.quantity)
 
-            # Update shortage record status to 'generated' (2) without calling save()
-            Shortagerecord.objects.filter(pk=instance.pk).update(status=2)
+            # Update shortage record status to 'generated' (1) without calling save()
+            Shortagerecord.objects.filter(pk=instance.pk).update(status=1)
 
     except Exception:
         logging.exception("Error processing Shortagerecord post_save")
@@ -247,7 +262,7 @@ def _handle_deduct_or_refund(instance, old_status, old_totalamount):
     with transaction.atomic():
         customer = Customer.objects.select_for_update().select_related('levelid').get(pk=instance.customerid_id)
         creditlevel = customer.levelid
-        
+
         print(f"   Customer: {customer.name} (ID={customer.customerid})")
         print(f"   Before: Balance={customer.balance}, UsedCredit={customer.usedcredit}, TotalSpent={customer.totalspent}, Level={customer.levelid.levelid}")
 

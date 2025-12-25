@@ -365,8 +365,14 @@ class ProcurementdetailInline(admin.TabularInline):
     """采购明细内联显示"""
     model = Procurementdetail
     extra = 0
-    fields = ('isbn', 'quantity', 'supplyprice', 'receivedqty')
-    readonly_fields = ('isbn', 'quantity', 'supplyprice')  # 只允许修改已到货数量
+    fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice', 'isreceived')
+    readonly_fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
+    
+    # 自定义isreceived显示为勾选框（boolean字段会自动显示为checkbox）
+    
+    def get_readonly_fields(self, request, obj=None):
+        # 只有这些字段是只读的，isreceived可以修改
+        return ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
 
 
 @admin.register(Procurement)
@@ -416,12 +422,52 @@ class ProcurementdetailAdmin(admin.ModelAdmin):
 class ShortagerecordAdmin(admin.ModelAdmin):
     """缺货记录：帮助管理员发现需要补货的书。"""
 
-    list_display = ("recordid", "recordno", "isbn", "quantity", "regdate", "status")
+    list_display = ("recordid", "recordno", "isbn", "quantity", "regdate", "sourcetype", "status")
     list_filter = ("status", "regdate", "sourcetype")
     search_fields = ("recordno", "isbn__title", "isbn__isbn")
     date_hierarchy = "regdate"
-    # 批量修改缺货记录状态：0=未处理，1=已处理，2=已生成采购单，3=已取消（建议语义）
-    actions = ["mark_unhandled", "mark_processed", "mark_generated", "mark_cancelled"]
+    
+    def get_readonly_fields(self, request, obj=None):
+        # SourceType始终只读，Status在编辑时只读
+        if obj:  # 编辑已有记录
+            return ("sourcetype", "status")
+        else:  # 创建新记录
+            return ("sourcetype",)  # Status不显示（会自动设为0）
+    
+    def get_exclude(self, request, obj=None):
+        # 创建时不显示Status字段
+        if not obj:
+            return ("status",)
+        return ()
+    
+    # 批量修改缺货记录状态：0=未处理，1=已生成采购单，2=已完成，3=已取消
+    actions = ["mark_unhandled", "mark_generated", "mark_completed", "mark_cancelled", "generate_procurement"]
+    
+    def save_model(self, request, obj, form, change):
+        # 新建时自动设置
+        if not change:
+            obj.sourcetype = 1  # 手动登记
+            obj.status = 0  # 未处理
+        super().save_model(request, obj, form, change)
+    
+    def generate_procurement(self, request, queryset):
+        """根据选中的缺货记录生成采购单"""
+        from .signals import handle_shortagerecord_post_save
+        count = 0
+        for record in queryset.filter(status=0):  # 只处理未处理的记录
+            try:
+                # 调用信号处理函数生成采购单
+                handle_shortagerecord_post_save(None, record, False)
+                count += 1
+            except Exception as e:
+                self.message_user(request, f"记录{record.recordno}生成采购单失败：{e}", level=messages.ERROR)
+        
+        if count > 0:
+            self.message_user(request, f"成功为{count}条缺货记录生成采购单")
+        else:
+            self.message_user(request, "没有可处理的缺货记录（需要status=0）", level=messages.WARNING)
+    
+    generate_procurement.short_description = "为所选缺货记录生成采购单"
 
     def _update_status(self, request, queryset, value, label):
         updated = queryset.update(status=value)
@@ -431,20 +477,21 @@ class ShortagerecordAdmin(admin.ModelAdmin):
         """标记为：未处理（status=0）"""
         self._update_status(request, queryset, 0, "未处理")
 
-    def mark_processed(self, request, queryset):
-        """标记为：已处理（status=1）"""
-        self._update_status(request, queryset, 1, "已处理")
-
     def mark_generated(self, request, queryset):
-        """标记为：已生成采购单（status=2）"""
-        self._update_status(request, queryset, 2, "已生成采购单")
+        """标记为：已生成采购单（status=1）"""
+        self._update_status(request, queryset, 1, "已生成采购单")
+
+    def mark_completed(self, request, queryset):
+        """标记为：已完成（status=2）"""
+        self._update_status(request, queryset, 2, "已完成")
 
     def mark_cancelled(self, request, queryset):
         """标记为：已取消（status=3）"""
         self._update_status(request, queryset, 3, "已取消")
+        
     mark_unhandled.short_description = "标记所选缺货记录为：未处理（status=0）"
-    mark_processed.short_description = "标记所选缺货记录为：已处理（status=1）"
-    mark_generated.short_description = "标记所选缺货记录为：已生成采购单（status=2）"
+    mark_generated.short_description = "标记所选缺货记录为：已生成采购单（status=1）"
+    mark_completed.short_description = "标记所选缺货记录为：已完成（status=2）"
     mark_cancelled.short_description = "标记所选缺货记录为：已取消（status=3）"
 
 @admin.register(Supplier)

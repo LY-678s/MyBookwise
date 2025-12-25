@@ -130,6 +130,7 @@ class Procurement(models.Model):
     supplierid = models.ForeignKey('Supplier', models.DO_NOTHING, db_column='SupplierID')  # Field name made lowercase.
     recordid = models.ForeignKey('Shortagerecord', models.DO_NOTHING, db_column='RecordID', blank=True, null=True)  # Field name made lowercase.
     createdate = models.DateTimeField(db_column='CreateDate')  # Field name made lowercase.
+    updatedate = models.DateTimeField(db_column='UpdateDate', auto_now=True)  # 最后更新时间
     status = models.IntegerField(db_column='Status')  # Field name made lowercase.
 
     class Meta:
@@ -146,9 +147,11 @@ class Procurementdetail(models.Model):
     detailid = models.AutoField(db_column='DetailID', primary_key=True)  # Field name made lowercase.
     procid = models.ForeignKey(Procurement, models.DO_NOTHING, db_column='ProcID')  # Field name made lowercase.
     isbn = models.ForeignKey(Book, models.DO_NOTHING, db_column='ISBN')  # Field name made lowercase.
-    quantity = models.IntegerField(db_column='Quantity')  # Field name made lowercase.
-    supplyprice = models.DecimalField(db_column='SupplyPrice', max_digits=10, decimal_places=2)  # Field name made lowercase.
-    receivedqty = models.IntegerField(db_column='ReceivedQty')  # Field name made lowercase.
+    shortagerecordid = models.ForeignKey('Shortagerecord', models.DO_NOTHING, db_column='ShortageRecordID', blank=True, null=True)  # 关联缺货记录
+    quantity = models.IntegerField(db_column='Quantity')  # 采购数量
+    supplyprice = models.DecimalField(db_column='SupplyPrice', max_digits=10, decimal_places=2)  # 供货单价
+    totalprice = models.DecimalField(db_column='TotalPrice', max_digits=10, decimal_places=2)  # 总价
+    isreceived = models.IntegerField(db_column='IsReceived', default=0)  # 是否已到货
 
     class Meta:
         managed = False

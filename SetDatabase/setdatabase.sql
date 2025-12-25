@@ -599,9 +599,10 @@ CREATE TABLE `procurement`  (
   `ProcID` int NOT NULL AUTO_INCREMENT,
   `ProcNo` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `SupplierID` int NOT NULL,
-  `RecordID` int NULL DEFAULT NULL,
-  `CreateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `Status` tinyint NOT NULL DEFAULT 0,
+  `RecordID` int NULL DEFAULT NULL COMMENT '关联的主缺货记录（可选）',
+  `CreateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建日期',
+  `UpdateDate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新日期',
+  `Status` tinyint NOT NULL DEFAULT 0 COMMENT '0=未到货, 1=部分到货, 2=全部到货',
   PRIMARY KEY (`ProcID`) USING BTREE,
   UNIQUE INDEX `ProcNo`(`ProcNo` ASC) USING BTREE,
   INDEX `FK_Procurement_Supplier`(`SupplierID` ASC) USING BTREE,
@@ -609,14 +610,14 @@ CREATE TABLE `procurement`  (
   CONSTRAINT `FK_Procurement_ShortageRecord` FOREIGN KEY (`RecordID`) REFERENCES `shortagerecord` (`RecordID`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `FK_Procurement_Supplier` FOREIGN KEY (`SupplierID`) REFERENCES `supplier` (`SupplierID`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `procurement_chk_1` CHECK (`Status` in (0,1,2))
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of procurement
 -- ----------------------------
--- 字段顺序: ProcID, ProcNo, SupplierID, RecordID, CreateDate, Status
-INSERT INTO `procurement` VALUES (2, 'PC-000001', 2, 5, '2025-12-23 03:16:25', 2);
-INSERT INTO `procurement` VALUES (3, 'PC-000002', 2, 6, '2025-12-23 13:14:38', 0);
+-- 字段顺序: ProcID, ProcNo, SupplierID, RecordID, CreateDate, UpdateDate, Status
+-- 采购单1：供应商2（上海文化），关联缺货记录1，未到货
+INSERT INTO `procurement` VALUES (1, 'PC-000001', 2, 1, '2025-12-25 10:00:00', '2025-12-25 10:00:00', 0);
 
 -- ----------------------------
 -- Table structure for procurementdetail
@@ -626,25 +627,29 @@ CREATE TABLE `procurementdetail`  (
   `DetailID` int NOT NULL AUTO_INCREMENT,
   `ProcID` int NOT NULL,
   `ISBN` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `Quantity` int NOT NULL,
-  `SupplyPrice` decimal(10, 2) NOT NULL,
-  `ReceivedQty` int NOT NULL DEFAULT 0,
+  `ShortageRecordID` int NULL DEFAULT NULL COMMENT '关联的缺货记录',
+  `Quantity` int NOT NULL COMMENT '采购数量',
+  `SupplyPrice` decimal(10, 2) NOT NULL COMMENT '供货单价',
+  `TotalPrice` decimal(10, 2) NOT NULL COMMENT '总价=数量×单价',
+  `IsReceived` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已到货: 0=未到货, 1=已到货',
   PRIMARY KEY (`DetailID`) USING BTREE,
   INDEX `FK_ProcurementDetail_Procurement`(`ProcID` ASC) USING BTREE,
   INDEX `FK_ProcurementDetail_Book`(`ISBN` ASC) USING BTREE,
+  INDEX `FK_ProcurementDetail_ShortageRecord`(`ShortageRecordID` ASC) USING BTREE,
   CONSTRAINT `FK_ProcurementDetail_Book` FOREIGN KEY (`ISBN`) REFERENCES `book` (`ISBN`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `FK_ProcurementDetail_Procurement` FOREIGN KEY (`ProcID`) REFERENCES `procurement` (`ProcID`) ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT `FK_ProcurementDetail_ShortageRecord` FOREIGN KEY (`ShortageRecordID`) REFERENCES `shortagerecord` (`RecordID`) ON DELETE SET NULL ON UPDATE RESTRICT,
   CONSTRAINT `procurementdetail_chk_1` CHECK (`Quantity` > 0),
   CONSTRAINT `procurementdetail_chk_2` CHECK (`SupplyPrice` > 0),
-  CONSTRAINT `procurementdetail_chk_3` CHECK (`ReceivedQty` >= 0)
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+  CONSTRAINT `procurementdetail_chk_3` CHECK (`TotalPrice` >= 0)
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of procurementdetail
 -- ----------------------------
--- 字段顺序: DetailID, ProcID, ISBN, Quantity, SupplyPrice, ReceivedQty
-INSERT INTO `procurementdetail` VALUES (2, 2, '978-7-115-48935-5', 5, 58.00, 0);
-INSERT INTO `procurementdetail` VALUES (3, 3, '978-7-115-48935-5', 5, 58.00, 0);
+-- 字段顺序: DetailID, ProcID, ISBN, ShortageRecordID, Quantity, SupplyPrice, TotalPrice, IsReceived
+-- 采购明细1：机器学习实战，关联缺货记录1，10本，未到货
+INSERT INTO `procurementdetail` VALUES (1, 1, '978-7-115-48935-5', 1, 10, 58.00, 580.00, 0);
 
 -- ----------------------------
 -- Table structure for shortagerecord
@@ -668,15 +673,16 @@ CREATE TABLE `shortagerecord`  (
   CONSTRAINT `shortagerecord_chk_1` CHECK (`Quantity` > 0),
   CONSTRAINT `shortagerecord_chk_2` CHECK (`SourceType` in (1,2,3)),
   CONSTRAINT `shortagerecord_chk_3` CHECK (`Status` in (0,1,2,3))
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of shortagerecord
 -- ----------------------------
 -- 字段顺序: RecordID, RecordNo, ISBN, Quantity, RegDate, SourceType, CustomerID, Status
-INSERT INTO `shortagerecord` VALUES (3, 'SR-000001', '978-7-302-51123-4', 7, '2025-12-22 22:44:02', 2, NULL, 3);
-INSERT INTO `shortagerecord` VALUES (5, 'SR-000002', '978-7-115-48935-5', 5, '2025-12-23 03:16:25', 2, NULL, 3);
-INSERT INTO `shortagerecord` VALUES (6, 'SR-000003', '978-7-115-48935-5', 5, '2025-12-23 13:14:38', 2, NULL, 0);
+-- 缺货记录1：自动生成的机器学习缺货，已生成采购单
+INSERT INTO `shortagerecord` VALUES (1, 'SR-000001', '978-7-115-48935-5', 10, '2025-12-25 10:00:00', 2, NULL, 1);
+-- 缺货记录2：手动登记的算法导论缺货，未生成采购单
+INSERT INTO `shortagerecord` VALUES (2, 'SR-000002', '978-7-121-35170-9', 15, '2025-12-25 14:00:00', 1, NULL, 0);
 
 -- ----------------------------
 -- Table structure for supplier
@@ -1106,8 +1112,9 @@ BEGIN
             SET v_NewProcID = LAST_INSERT_ID();
             
             -- 插入采购明细
-            INSERT INTO ProcurementDetail (ProcID, ISBN, Quantity, SupplyPrice)
-            SELECT v_NewProcID, sr.ISBN, sr.Quantity, sb.SupplyPrice
+            INSERT INTO ProcurementDetail (ProcID, ISBN, ShortageRecordID, Quantity, SupplyPrice, TotalPrice, IsReceived)
+            SELECT v_NewProcID, sr.ISBN, sr.RecordID, sr.Quantity, sb.SupplyPrice, 
+                   sr.Quantity * sb.SupplyPrice, 0
             FROM ShortageRecord sr
             INNER JOIN SupplierBook sb ON sr.ISBN = sb.ISBN
             WHERE sr.Status = 0 AND sb.SupplierID = v_CurrentSupplierID;
@@ -1214,62 +1221,63 @@ delimiter ;
 -- ----------------------------
 -- Procedure structure for usp_ReceiveProcurement
 -- ----------------------------
-DROP PROCEDURE IF EXISTS `usp_ReceiveProcurement`;
-delimiter ;;
-CREATE PROCEDURE `usp_ReceiveProcurement`(IN p_ProcID INT,
-    IN p_ISBN VARCHAR(20),
-    IN p_ReceivedQty INT)
-BEGIN
-    DECLARE v_OrderedQty INT;
-    DECLARE v_AllReceived TINYINT DEFAULT 0;
-    
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        RESIGNAL;
-    END;
-    
-    START TRANSACTION;
-    
-    -- 检查采购单是否存在且未完成
-    IF NOT EXISTS (SELECT 1 FROM Procurement WHERE ProcID = p_ProcID AND Status = 0) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '采购单不存在或已完成';
-    END IF;
-    
-    -- 检查采购明细是否存在
-    SELECT Quantity INTO v_OrderedQty
-    FROM ProcurementDetail
-    WHERE ProcID = p_ProcID AND ISBN = p_ISBN;
-    
-    IF v_OrderedQty IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '采购明细不存在';
-    END IF;
-    
-    -- 更新到货数量
-    UPDATE ProcurementDetail
-    SET ReceivedQty = ReceivedQty + p_ReceivedQty
-    WHERE ProcID = p_ProcID AND ISBN = p_ISBN;
-    
-    -- 检查是否全部到货
-    IF NOT EXISTS (
-        SELECT 1 FROM ProcurementDetail
-        WHERE ProcID = p_ProcID AND ReceivedQty < Quantity
-    ) THEN
-        SET v_AllReceived = 1;
-        -- 更新采购单状态（会触发库存更新的触发器）
-        UPDATE Procurement SET Status = 1 WHERE ProcID = p_ProcID;
-    END IF;
-    
-    COMMIT;
-    
-    IF v_AllReceived = 1 THEN
-        SELECT '采购单已全部到货，库存已更新' AS Message;
-    ELSE
-        SELECT '部分到货记录成功' AS Message;
-    END IF;
-END
-;;
-delimiter ;
+-- 注释：此存储过程已不再使用（到货确认改为在Admin中直接勾选IsReceived）
+-- DROP PROCEDURE IF EXISTS `usp_ReceiveProcurement`;
+-- delimiter ;;
+-- CREATE PROCEDURE `usp_ReceiveProcurement`(IN p_ProcID INT,
+--     IN p_ISBN VARCHAR(20),
+--     IN p_ReceivedQty INT)
+-- BEGIN
+--     DECLARE v_OrderedQty INT;
+--     DECLARE v_AllReceived TINYINT DEFAULT 0;
+--     
+--     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+--     BEGIN
+--         ROLLBACK;
+--         RESIGNAL;
+--     END;
+--     
+--     START TRANSACTION;
+--     
+--     -- 检查采购单是否存在且未完成
+--     IF NOT EXISTS (SELECT 1 FROM Procurement WHERE ProcID = p_ProcID AND Status = 0) THEN
+--         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '采购单不存在或已完成';
+--     END IF;
+--     
+--     -- 检查采购明细是否存在
+--     SELECT Quantity INTO v_OrderedQty
+--     FROM ProcurementDetail
+--     WHERE ProcID = p_ProcID AND ISBN = p_ISBN;
+--     
+--     IF v_OrderedQty IS NULL THEN
+--         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '采购明细不存在';
+--     END IF;
+--     
+--     -- 更新到货数量
+--     UPDATE ProcurementDetail
+--     SET ReceivedQty = ReceivedQty + p_ReceivedQty
+--     WHERE ProcID = p_ProcID AND ISBN = p_ISBN;
+--     
+--     -- 检查是否全部到货
+--     IF NOT EXISTS (
+--         SELECT 1 FROM ProcurementDetail
+--         WHERE ProcID = p_ProcID AND ReceivedQty < Quantity
+--     ) THEN
+--         SET v_AllReceived = 1;
+--         -- 更新采购单状态（会触发库存更新的触发器）
+--         UPDATE Procurement SET Status = 1 WHERE ProcID = p_ProcID;
+--     END IF;
+--     
+--     COMMIT;
+--     
+--     IF v_AllReceived = 1 THEN
+--         SELECT '采购单已全部到货，库存已更新' AS Message;
+--     ELSE
+--         SELECT '部分到货记录成功' AS Message;
+--     END IF;
+-- END
+-- ;;
+-- delimiter ;
 
 -- ----------------------------
 -- Event structure for ev_process_customer_queue
@@ -1308,9 +1316,9 @@ CREATE TRIGGER `tr_AutoShortage` AFTER UPDATE ON `book` FOR EACH ROW BEGIN
             
             SET v_RecordNo = CONCAT('SR-', LPAD(v_MaxRecordNo, 6, '0'));
             
-            -- 插入缺书记录
+            -- 插入缺书记录（补货到2倍最低限制）
             INSERT INTO ShortageRecord(RecordNo, ISBN, Quantity, RegDate, SourceType, Status)
-            VALUES (v_RecordNo, NEW.ISBN, NEW.MinStockLimit - NEW.StockQty, NOW(), 2, 0);
+            VALUES (v_RecordNo, NEW.ISBN, NEW.MinStockLimit * 2 - NEW.StockQty, NOW(), 2, 0);
         END IF;
     END IF;
 END
@@ -1611,23 +1619,93 @@ delimiter ;
 -- delimiter ;
 
 -- ----------------------------
+-- Triggers structure for table procurementdetail
+-- ----------------------------
+DROP TRIGGER IF EXISTS `trg_procurementdetail_calculate_totalprice`;
+delimiter ;;
+CREATE TRIGGER `trg_procurementdetail_calculate_totalprice` BEFORE INSERT ON `procurementdetail` FOR EACH ROW BEGIN
+    -- 自动计算总价
+    SET NEW.TotalPrice = NEW.Quantity * NEW.SupplyPrice;
+END
+;;
+delimiter ;
+
+-- ----------------------------
+-- Triggers structure for table procurementdetail
+-- ----------------------------
+DROP TRIGGER IF EXISTS `trg_procurementdetail_update_totalprice`;
+delimiter ;;
+CREATE TRIGGER `trg_procurementdetail_update_totalprice` BEFORE UPDATE ON `procurementdetail` FOR EACH ROW BEGIN
+    -- 如果数量或单价变化，重新计算总价
+    IF NEW.Quantity <> OLD.Quantity OR NEW.SupplyPrice <> OLD.SupplyPrice THEN
+        SET NEW.TotalPrice = NEW.Quantity * NEW.SupplyPrice;
+    END IF;
+END
+;;
+delimiter ;
+
+-- ----------------------------
+-- Triggers structure for table procurementdetail
+-- ----------------------------
+DROP TRIGGER IF EXISTS `trg_procurementdetail_check_all_received`;
+delimiter ;;
+CREATE TRIGGER `trg_procurementdetail_check_all_received` AFTER UPDATE ON `procurementdetail` FOR EACH ROW BEGIN
+    DECLARE all_received INT DEFAULT 0;
+    DECLARE total_details INT DEFAULT 0;
+    DECLARE received_details INT DEFAULT 0;
+    
+    -- 如果IsReceived状态发生变化
+    IF NEW.IsReceived <> OLD.IsReceived THEN
+        -- 统计该采购单的明细数量
+        SELECT COUNT(*) INTO total_details
+        FROM procurementdetail
+        WHERE ProcID = NEW.ProcID;
+        
+        -- 统计已到货的明细数量
+        SELECT COUNT(*) INTO received_details
+        FROM procurementdetail
+        WHERE ProcID = NEW.ProcID AND IsReceived = 1;
+        
+        -- 根据到货情况更新采购单状态
+        IF total_details > 0 THEN
+            IF received_details = total_details THEN
+                -- 全部到货
+                UPDATE procurement
+                SET Status = 2
+                WHERE ProcID = NEW.ProcID;
+            ELSEIF received_details > 0 THEN
+                -- 部分到货
+                UPDATE procurement
+                SET Status = 1
+                WHERE ProcID = NEW.ProcID AND Status = 0;
+            END IF;
+        END IF;
+    END IF;
+END
+;;
+delimiter ;
+
+-- ----------------------------
 -- Triggers structure for table procurement
 -- ----------------------------
 DROP TRIGGER IF EXISTS `tr_AfterUpdateProcurement`;
 delimiter ;;
 CREATE TRIGGER `tr_AfterUpdateProcurement` AFTER UPDATE ON `procurement` FOR EACH ROW BEGIN
-    -- 检查采购单状态是否变为"已到货入库"
-    IF NEW.Status = 1 AND OLD.Status != 1 THEN
-        -- 更新图书库存
+    -- 检查采购单状态是否变为"全部到货"
+    IF NEW.Status = 2 AND OLD.Status != 2 THEN
+        -- 更新图书库存（所有明细，因为全部已到货）
         UPDATE Book b
         INNER JOIN ProcurementDetail pd ON b.ISBN = pd.ISBN
-        SET b.StockQty = b.StockQty + pd.ReceivedQty
+        SET b.StockQty = b.StockQty + pd.Quantity
         WHERE pd.ProcID = NEW.ProcID;
 
-        -- 更新关联的缺书记录状态为已处理（1）
-        UPDATE ShortageRecord
-        SET Status = 1
-        WHERE RecordID = NEW.RecordID AND NEW.RecordID IS NOT NULL;
+        -- 删除已完成的缺货记录
+        DELETE FROM ShortageRecord
+        WHERE RecordID IN (
+            SELECT pd.ShortageRecordID 
+            FROM ProcurementDetail pd 
+            WHERE pd.ProcID = NEW.ProcID AND pd.ShortageRecordID IS NOT NULL
+        );
     END IF;
 END
 ;;
@@ -1671,11 +1749,12 @@ CREATE TRIGGER `trg_shortagerecord_auto_generate_procurement` AFTER INSERT ON `s
         -- 如果找到供应商，才生成采购单
         IF NOT done THEN
             
-            -- 检查该供应商是否已有未完成的采购单（status=0），如果有则复用
+            -- 检查该供应商今天是否已有未完成的采购单（status=0），如果有则复用
             SELECT ProcID INTO v_ProcID
             FROM procurement
             WHERE SupplierID = v_SupplierID
               AND Status = 0
+              AND DATE(CreateDate) = CURDATE()  -- 同一天
             LIMIT 1;
             
             -- 如果没有未完成的采购单，创建新的
@@ -1700,13 +1779,15 @@ CREATE TRIGGER `trg_shortagerecord_auto_generate_procurement` AFTER INSERT ON `s
                 SELECT 1 FROM ProcurementDetail
                 WHERE ProcID = v_ProcID AND ISBN = NEW.ISBN
             ) THEN
-                INSERT INTO ProcurementDetail(ProcID, ISBN, Quantity, SupplyPrice, ReceivedQty)
+                INSERT INTO ProcurementDetail(ProcID, ISBN, ShortageRecordID, Quantity, SupplyPrice, TotalPrice, IsReceived)
                 VALUES (
                     v_ProcID,
                     NEW.ISBN,
+                    NEW.RecordID,  -- 关联缺货记录 ⭐
                     NEW.Quantity,
                     COALESCE(v_SupplyPrice, 0),
-                    0
+                    NEW.Quantity * COALESCE(v_SupplyPrice, 0),  -- 总价（触发器也会计算）
+                    0  -- 未到货
                 );
             ELSE
                 -- 如果已存在，累加数量
