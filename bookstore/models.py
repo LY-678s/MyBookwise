@@ -151,7 +151,7 @@ class Procurementdetail(models.Model):
     quantity = models.IntegerField(db_column='Quantity')  # 采购数量
     supplyprice = models.DecimalField(db_column='SupplyPrice', max_digits=10, decimal_places=2)  # 供货单价
     totalprice = models.DecimalField(db_column='TotalPrice', max_digits=10, decimal_places=2)  # 总价
-    isreceived = models.IntegerField(db_column='IsReceived', default=0)  # 是否已到货
+    isreceived = models.BooleanField(db_column='IsReceived', default=False)  # 是否已到货（勾选框）
 
     class Meta:
         managed = False

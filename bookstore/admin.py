@@ -379,34 +379,15 @@ class ProcurementdetailInline(admin.TabularInline):
 class ProcurementAdmin(admin.ModelAdmin):
     """采购单：用于记录补货采购，用日期和状态筛选。"""
 
-    list_display = ("procid", "procno", "supplierid", "createdate", "status")
+    list_display = ("procid", "procno", "supplierid", "createdate", "updatedate", "status")
     search_fields = ("procno", "supplierid__suppliername")
     list_filter = ("status", "createdate", "supplierid")
     date_hierarchy = "createdate"
+    readonly_fields = ("status",)  # Status由明细的IsReceived自动计算，不可手动修改
     # 内嵌显示采购明细
     inlines = [ProcurementdetailInline]
-    # 批量修改采购单状态
-    actions = ["mark_status_0", "mark_status_1", "mark_status_2", "mark_status_3"]
-
-    def _update_status(self, request, queryset, value, label):
-        updated = queryset.update(status=value)
-        self.message_user(request, f"已将 {updated} 个采购单标记为【{label}】（status={value}）")
-
-    def mark_status_0(self, request, queryset):
-        """将采购单状态设为：0（根据设计文档的语义自行解释，例如：新建/待处理）"""
-        self._update_status(request, queryset, 0, "采购中")
-
-    def mark_status_1(self, request, queryset):
-        """将采购单状态设为：1"""
-        self._update_status(request, queryset, 1, "已到货入库")
-    
-    def mark_status_2(self, request, queryset):
-        """将采购单状态设为：1"""
-        self._update_status(request, queryset, 2, "已取消")
-
-    mark_status_0.short_description = "标记所选采购单为：采购中（status=0）"
-    mark_status_1.short_description = "标记所选采购单为：已到货入库（status=1）"
-    mark_status_2.short_description = "标记所选采购单为：已取消（status=2）"
+    # 批量修改采购单状态（一般不需要手动修改，由系统自动计算）
+    # actions = []  # 移除批量操作，因为status应该自动计算
 
 # 采购明细已通过ProcurementdetailInline嵌入到采购单页面中显示，不再单独注册
 # @admin.register(Procurementdetail)
