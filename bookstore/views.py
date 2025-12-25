@@ -115,29 +115,17 @@ def get_book_cover_image(book_title: str) -> str:
     """
     title_lower = book_title.lower()
 
-    # 图片映射规则：根据书名关键词匹配图片（仅保留文件名，由此生成静态 URL 并对文件名进行 URL encode）
-    image_mappings = {
-        'python': 'Python编程从入门到实践.jpg',
-        '编程': 'Python编程从入门到实践.jpg',
-        '入门': 'Python编程从入门到实践.jpg',
-        '数据库': '数据库系统概念.png',
-        '系统概念': '数据库系统概念.png',
-        '机器学习': '机器学习实战.jpg',
-        '实战': '机器学习实战.jpg',
-        '深入理解': '深入理解计算机系统.jpg',
-        '计算机系统': '深入理解计算机系统.jpg',
-        '算法': '算法导论.png',
-        '导论': '算法导论.png',
-    }
-
-    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
+    # 从 settings 中读取映射与目录，保持可配置性
     from django.conf import settings
     from urllib.parse import quote
+    image_mappings = getattr(settings, "COVER_IMAGE_MAPPINGS", {})
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    default_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+
+    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
     for keyword, image_filename in image_mappings.items():
         if keyword in title_lower:
-            static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
-            # 确保结果类似 '/static/images/encoded-name.jpg'
-            return f"{static_prefix}images/{quote(image_filename)}"
+            return f"{default_prefix}{images_subdir}/{quote(image_filename)}"
 
     # 如果没有匹配的图片，返回None
     return None
@@ -191,7 +179,15 @@ def index(request: HttpRequest) -> HttpResponse:
 
         books_with_covers.append(book_data)
 
-    return render(request, "bookstore/index.html", {"books": books_with_covers})
+    # 计算默认封面 URL（由 settings 控制）
+    from django.conf import settings
+    from urllib.parse import quote
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
+
+    return render(request, "bookstore/index.html", {"books": books_with_covers, "DEFAULT_COVER_IMAGE_URL": default_cover_url})
 
 def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
@@ -231,7 +227,14 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
         except Exception:
             book_data['coverimage'] = None
 
-    return render(request, "bookstore/book_detail.html", {"book": book_data})
+    from django.conf import settings
+    from urllib.parse import quote
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
+
+    return render(request, "bookstore/book_detail.html", {"book": book_data, "DEFAULT_COVER_IMAGE_URL": default_cover_url})
 
 def search(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "")
