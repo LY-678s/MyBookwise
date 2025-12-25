@@ -223,6 +223,7 @@ CREATE TABLE `book`  (
 -- ----------------------------
 -- Records of book
 -- ----------------------------
+-- 字段顺序: ISBN, Title, Publisher, Price, Keywords, CoverImage, StockQty, Location, MinStockLimit
 INSERT INTO `book` VALUES ('978-7-111-54425-7', '深入理解计算机系统', '机械工业出版社', 139.00, '计算机,操作系统,底层原理', NULL, 50, 'A区-01架', 10);
 INSERT INTO `book` VALUES ('978-7-115-42832-5', 'Python编程：从入门到实践', '人民邮电出版社', 89.00, 'Python,编程,入门', '', 77, 'A区-02架', 15);
 INSERT INTO `book` VALUES ('978-7-115-48935-5', '机器学习实战', '人民邮电出版社', 79.00, '机器学习,人工智能,Python', '', 5, 'B区-02架', 10);
@@ -247,6 +248,7 @@ CREATE TABLE `bookauthor`  (
 -- ----------------------------
 -- Records of bookauthor
 -- ----------------------------
+-- 字段顺序: ID, ISBN, AuthorName, AuthorOrder
 INSERT INTO `bookauthor` VALUES (1, '978-7-111-54425-7', 'Randal E. Bryant', 1);
 INSERT INTO `bookauthor` VALUES (2, '978-7-111-54425-7', 'David R. O\'Hallaron', 2);
 INSERT INTO `bookauthor` VALUES (3, '978-7-115-42832-5', 'Eric Matthes', 1);
@@ -275,6 +277,7 @@ CREATE TABLE `creditlevel`  (
 -- ----------------------------
 -- Records of creditlevel
 -- ----------------------------
+-- 字段顺序: LevelID, DiscountRate, CanUseCredit, CreditLimit
 INSERT INTO `creditlevel` VALUES (1, 0.90, 0, 0.00);
 INSERT INTO `creditlevel` VALUES (2, 0.85, 0, 0.00);
 INSERT INTO `creditlevel` VALUES (3, 0.85, 1, 500.00);
@@ -508,6 +511,7 @@ CREATE TABLE `orderdetail`  (
 -- ----------------------------
 -- Records of orderdetail
 -- ----------------------------
+-- 字段顺序: DetailID, OrderID, ISBN, Quantity, UnitPrice, IsShipped
 -- 订单1的明细 (已取消)
 INSERT INTO `orderdetail` VALUES (1, 1, '978-7-302-51123-4', 10, 98.00, 1);
 INSERT INTO `orderdetail` VALUES (2, 1, '978-7-121-35170-9', 10, 128.00, 1);
@@ -610,6 +614,7 @@ CREATE TABLE `procurement`  (
 -- ----------------------------
 -- Records of procurement
 -- ----------------------------
+-- 字段顺序: ProcID, ProcNo, SupplierID, RecordID, CreateDate, Status
 INSERT INTO `procurement` VALUES (2, 'PC-000001', 2, 5, '2025-12-23 03:16:25', 2);
 INSERT INTO `procurement` VALUES (3, 'PC-000002', 2, 6, '2025-12-23 13:14:38', 0);
 
@@ -637,6 +642,7 @@ CREATE TABLE `procurementdetail`  (
 -- ----------------------------
 -- Records of procurementdetail
 -- ----------------------------
+-- 字段顺序: DetailID, ProcID, ISBN, Quantity, SupplyPrice, ReceivedQty
 INSERT INTO `procurementdetail` VALUES (2, 2, '978-7-115-48935-5', 5, 58.00, 0);
 INSERT INTO `procurementdetail` VALUES (3, 3, '978-7-115-48935-5', 5, 58.00, 0);
 
@@ -667,6 +673,7 @@ CREATE TABLE `shortagerecord`  (
 -- ----------------------------
 -- Records of shortagerecord
 -- ----------------------------
+-- 字段顺序: RecordID, RecordNo, ISBN, Quantity, RegDate, SourceType, CustomerID, Status
 INSERT INTO `shortagerecord` VALUES (3, 'SR-000001', '978-7-302-51123-4', 7, '2025-12-22 22:44:02', 2, NULL, 3);
 INSERT INTO `shortagerecord` VALUES (5, 'SR-000002', '978-7-115-48935-5', 5, '2025-12-23 03:16:25', 2, NULL, 3);
 INSERT INTO `shortagerecord` VALUES (6, 'SR-000003', '978-7-115-48935-5', 5, '2025-12-23 13:14:38', 2, NULL, 0);
@@ -689,6 +696,7 @@ CREATE TABLE `supplier`  (
 -- ----------------------------
 -- Records of supplier
 -- ----------------------------
+-- 字段顺序: SupplierID, SupplierCode, SupplierName, SupplyLocation, ContactInfo, IsActive
 INSERT INTO `supplier` VALUES (1, 'SUP001', '北京图书出版社', '北京市朝阳区', '010-12345678', 1);
 INSERT INTO `supplier` VALUES (2, 'SUP002', '上海文化图书供应商', '上海市浦东新区', '021-87654321', 1);
 INSERT INTO `supplier` VALUES (3, 'SUP003', '广州教育图书公司', '广州市天河区', '020-11223344', 1);
@@ -712,6 +720,7 @@ CREATE TABLE `supplierbook`  (
 -- ----------------------------
 -- Records of supplierbook
 -- ----------------------------
+-- 字段顺序: SupplierID, ISBN, SupplyPrice, LastSupplyDate
 INSERT INTO `supplierbook` VALUES (1, '978-7-111-54425-7', 100.00, '2024-12-01 00:00:00');
 INSERT INTO `supplierbook` VALUES (1, '978-7-121-35170-9', 95.00, '2024-12-05 00:00:00');
 INSERT INTO `supplierbook` VALUES (2, '978-7-115-42832-5', 65.00, '2024-12-10 00:00:00');
