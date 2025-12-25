@@ -119,10 +119,6 @@
 
                     <!-- 交互按钮组 -->
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
-                        <button class="btn btn-secondary" onclick="toggleFavorite(this)"
-                                style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                            ❤️ 收藏
-                        </button>
                         <button class="btn btn-secondary" onclick="shareBook()"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                             📤 分享
@@ -151,32 +147,11 @@
                 </div>
             </div>
 
-            <!-- 推荐图书 -->
-            <div class="card">
-                <div class="card-header">
-                    <h4 style="margin: 0; color: var(--text-primary);">📚 相关推荐</h4>
-                </div>
-                <div class="card-body">
-                    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">🔄</div>
-                        <p>正在加载相关推荐...</p>
-                        <small>基于当前图书的关键词和出版社</small>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>
 
 <script>
-// 收藏功能
-function toggleFavorite(btn) {
-    const isFavorite = btn.innerHTML.includes('❤️');
-    btn.innerHTML = isFavorite ? '🤍 收藏' : '❤️ 收藏';
-    btn.style.background = isFavorite ? 'var(--secondary-bg)' : 'linear-gradient(135deg, #ff6b9d 0%, #c44569 100%)';
-    btn.style.color = isFavorite ? 'var(--text-primary)' : 'white';
-}
-
 // 分享功能
 function shareBook() {
     const url = window.location.href;
