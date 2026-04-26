@@ -1,8 +1,8 @@
 /**
- * 在 htmlcov/function_index.html 浏览器 DevTools Console 中粘贴运行。
+ * 在 htmlcov_order/function_index.html 浏览器 DevTools Console 中粘贴运行。
  * 作用：仅显示成员 B 订单模块的被测函数，并重算 footer / 顶部总覆盖率。
  * 用法：
- *   1. 浏览器打开 d:\Engineering\MyBookwise\htmlcov\function_index.html
+ *   1. 浏览器打开 d:\Engineering\MyBookwise\htmlcov_order\function_index.html
  *   2. F12 → Console 标签
  *   3. 全选本文件内容粘贴运行
  */
