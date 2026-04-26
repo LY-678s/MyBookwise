@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>订单模块（成员 B）覆盖率报告</title>
+<style>
+  body { font-family: -apple-system, "Microsoft YaHei", "Segoe UI", Helvetica, sans-serif;
+          margin: 24px; color: #222; background: #fafafa; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; color: #444; }
+  .meta { color: #666; font-size: 13px; margin-bottom: 18px; }
+  .summary { display: flex; gap: 24px; margin: 16px 0 24px; flex-wrap: wrap; }
+  .card { flex: 1; min-width: 220px; padding: 16px 20px; background: #fff;
+            border: 1px solid #e2e2e2; border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .card .label { font-size: 13px; color: #666; }
+  .card .value { font-size: 30px; font-weight: 700; margin: 4px 0; }
+  .card .target { font-size: 12px; color: #666; }
+  .pass { color: #2c8c2c; }
+  .fail { color: #c0392b; }
+  table { border-collapse: collapse; width: 100%; background: #fff;
+           border: 1px solid #e2e2e2; border-radius: 6px; overflow: hidden; }
+  thead { background: #eef2f5; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid #eee; text-align: left;
+            font-size: 13px; }
+  th { font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total { background: #f6f8fa; font-weight: 600; }
+  .high { color: #2c8c2c; }
+  .mid  { color: #b58a00; }
+  .low  { color: #c0392b; }
+  .miss { font-family: "Cascadia Code", Consolas, monospace; color: #b58a00;
+            font-size: 12px; }
+  footer { margin-top: 24px; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<h1>订单模块覆盖率报告（成员 B）</h1>
+<div class="meta">生成时间：2026-04-25 18:50:03　|　数据源：coverage.json　|　
+统计范围：仅成员 B 负责的订单模块 11 个被测单元</div>
+
+<div class="summary">
+  <div class="card">
+    <div class="label">行覆盖率（Line Coverage）</div>
+    <div class="value high">97.74%</div>
+    <div class="target">目标 ≥ 90%　<span class="pass">✓ 达标</span></div>
+  </div>
+  <div class="card">
+    <div class="label">分支覆盖率（Branch Coverage）</div>
+    <div class="value mid">93.33%</div>
+    <div class="target">目标 ≥ 85%　<span class="pass">✓ 达标</span></div>
+  </div>
+  <div class="card">
+    <div class="label">语句总数 / 未覆盖</div>
+    <div class="value">265 / 6</div>
+    <div class="target">分支总数 / 未覆盖：60 / 4</div>
+  </div>
+  <div class="card">
+    <div class="label">测试用例数</div>
+    <div class="value">59 / 59</div>
+    <div class="target">通过率 100%（含 13 模型 + 22 购物车 + 24 订单视图）</div>
+  </div>
+</div>
+
+<h2>逐函数明细</h2>
+<table>
+  <thead>
+    <tr>
+      <th>文件</th><th>被测单元</th><th>行范围</th>
+      <th class="num">语句</th><th class="num">未覆盖</th><th class="num">行覆盖率</th>
+      <th>未覆盖行号</th>
+    </tr>
+  </thead>
+  <tbody>
+<tr><td>models.py</td><td><code>Orderdetail 模型</code></td><td>88-103</td><td class="num">12</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>models.py</td><td><code>Orders 模型</code></td><td>106-124</td><td class="num">15</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>customer_required 装饰器</code></td><td>102-109</td><td class="num">8</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>_get_cart / _save_cart</code></td><td>248-253</td><td class="num">5</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>cart_add</code></td><td>255-283</td><td class="num">21</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>cart_update</code></td><td>285-303</td><td class="num">17</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>cart_remove</code></td><td>306-313</td><td class="num">8</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>cart_detail</code></td><td>315-373</td><td class="num">37</td><td class="num">6</td><td class="num mid">83.8%</td><td class="miss">331, 332, 345, 347, 348, 349</td></tr>
+<tr><td>views.py</td><td><code>order_confirm</code></td><td>375-537</td><td class="num">84</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>order_list</code></td><td>539-558</td><td class="num">10</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>order_detail</code></td><td>561-596</td><td class="num">15</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>cancel_order</code></td><td>832-860</td><td class="num">20</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+<tr><td>views.py</td><td><code>confirm_receipt</code></td><td>862-879</td><td class="num">13</td><td class="num">0</td><td class="num high">100.0%</td><td class="miss">—</td></tr>
+    <tr class="total">
+      <td colspan="3">合计（订单模块）</td>
+      <td class="num">265</td>
+      <td class="num">6</td>
+      <td class="num high">97.74%</td>
+      <td>—</td>
+    </tr>
+  </tbody>
+</table>
+
+<footer>
+此报告由 <code>tests/coverage_order_module.py</code> 基于 <code>coverage.json</code>
+按照源码行范围切片统计生成，专门用于"模块级"覆盖率验证；
+项目级 HTML 报告（<code>htmlcov/index.html</code>）覆盖整个 bookstore 包，会包含成员 A、C 的代码。
+</footer>
+</body>
+</html>
