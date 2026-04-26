@@ -195,3 +195,74 @@ def order(db, customer, book):
         isshipped=0,
     )
     return o
+
+
+# -------- 성원 A/C 공통 fixture (bookstore/tests/conftest.py 에서 통합) --------
+
+@pytest.fixture
+def mock_customer_data():
+    """모의 고객 데이터 (성원 A 용)"""
+    return {
+        'customerid': 1,
+        'username': 'testuser',
+        'password': 'testpass123',
+        'name': '测试用户',
+        'address': '测试地址',
+        'email': 'test@example.com',
+        'balance': Decimal('1000.00'),
+        'creditlimit': Decimal('5000.00'),
+        'usedcredit': Decimal('0.00'),
+        'totalspent': Decimal('500.00'),
+    }
+
+
+@pytest.fixture
+def mock_order_data():
+    """모의 주문 데이터"""
+    return {
+        'orderid': 1,
+        'orderno': 'ORD-20250101-0001',
+        'totalamount': Decimal('200.00'),
+        'actualpaid': Decimal('0.00'),
+        'paymentstatus': 0,
+        'status': 0,
+    }
+
+
+@pytest.fixture
+def mock_creditlevel_data():
+    """모의 신용 등급 데이터 (성원 C 용)"""
+    return {
+        1: {'discountrate': Decimal('1.00'), 'canusecredit': 0, 'creditlimit': Decimal('0.00')},
+        2: {'discountrate': Decimal('0.98'), 'canusecredit': 1, 'creditlimit': Decimal('1000.00')},
+        3: {'discountrate': Decimal('0.95'), 'canusecredit': 1, 'creditlimit': Decimal('3000.00')},
+        4: {'discountrate': Decimal('0.90'), 'canusecredit': 1, 'creditlimit': Decimal('5000.00')},
+        5: {'discountrate': Decimal('0.85'), 'canusecredit': 1, 'creditlimit': Decimal('10000.00')},
+    }
+
+
+@pytest.fixture
+def payment_amounts():
+    """결제 테스트 경계값 금액 (성원 C 용)"""
+    return {
+        'zero': Decimal('0.00'),
+        'min_positive': Decimal('0.01'),
+        'boundary_small': Decimal('99.99'),
+        'boundary_medium': Decimal('100.00'),
+        'boundary_large': Decimal('999.99'),
+        'boundary_xl': Decimal('1000.00'),
+        'max': Decimal('10000.00'),
+    }
+
+
+@pytest.fixture
+def balance_amounts():
+    """잔액 테스트 경계값 (성원 C 용)"""
+    return {
+        'zero': Decimal('0.00'),
+        'min_positive': Decimal('0.01'),
+        'exactly_equal': Decimal('100.00'),
+        'just_over': Decimal('100.01'),
+        'much_less': Decimal('50.00'),
+        'much_more': Decimal('5000.00'),
+    }
