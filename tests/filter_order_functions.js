@@ -95,17 +95,5 @@
         if (h) h.textContent = `${pct}%`;
     }
 
-    // 添加显眼绿色横幅
-    let banner = document.getElementById("order-filter-banner");
-    if (!banner) {
-        banner = document.createElement("div");
-        banner.id = "order-filter-banner";
-        banner.style.cssText =
-            "background:#2c8c2c;color:#fff;padding:10px 16px;font-weight:600;" +
-            "text-align:center;font-family:-apple-system,Segoe UI,sans-serif;font-size:14px";
-        document.body.insertBefore(banner, document.body.firstChild);
-    }
-    banner.textContent = `已过滤为成员 B 订单模块  |  共 ${visible} 个被测函数（订单模型 2 + 订单视图 9 + 辅助 3）`;
-
     console.log(`[订单模块过滤] 已显示 ${visible} 个函数，其余已隐藏。截图前请勿再动 filter / hide 100 控件。`);
 })();
