@@ -1,8 +1,35 @@
-*.md
-# 你还可以添加常见忽略项：
+# Python / Django
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
 .env
+.venv/
 venv/
+*.sqlite3
+db.sqlite3
 
+# Django local settings (machine-specific)
 settings.py
+
+# JetBrains / PyCharm / Android Studio (local IDE config)
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android — mobile/ (build output & local SDK paths)
+mobile/.gradle/
+mobile/**/build/
+mobile/local.properties
+mobile/.idea/
+mobile/*.iml
+mobile/captures/
+mobile/.externalNativeBuild/
+mobile/.cxx/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
