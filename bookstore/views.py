@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.db.models import Q, F, Sum
 from django.db import transaction
 
-from .models import Book, Customer, Orders, Orderdetail, Creditlevel
+from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel
 from decimal import Decimal
 from functools import wraps
 
@@ -141,6 +141,10 @@ def index(request: HttpRequest) -> HttpResponse:
     import base64
     books_with_covers = []
     for book in books:
+        # 查询该书的作者，按序位排序后用 / 拼接
+        authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
+        author_names = ' / '.join([a.authorname for a in authors])
+
         book_data = {
             'isbn': book.isbn,
             'title': book.title,
@@ -151,7 +155,8 @@ def index(request: HttpRequest) -> HttpResponse:
             'location': book.location,
             'minstocklimit': book.minstocklimit,
             'coverimage': None,
-            'cover_image_url': None  # 新增：静态图片URL
+            'cover_image_url': None,
+            'authors': author_names,
         }
 
         # 优先使用静态图片文件
