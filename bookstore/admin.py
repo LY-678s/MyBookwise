@@ -365,22 +365,21 @@ class ProcurementdetailInline(admin.TabularInline):
     """采购明细内联显示"""
     model = Procurementdetail
     extra = 0
-    # 'shortagerecordid' column may be missing in current DB schema; exclude it from inline to avoid errors.
-    fields = ('isbn', 'quantity', 'supplyprice', 'totalprice', 'isreceived')
-    readonly_fields = ('isbn', 'quantity', 'supplyprice', 'totalprice')
+    fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice', 'isreceived')
+    readonly_fields = ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
     
-    # 自定义isreceived显示为勾选框（boolean字段会自动显示为checkbox）
+    # isreceived字段（BooleanField）会自动显示为勾选框
     
     def get_readonly_fields(self, request, obj=None):
         # 只有这些字段是只读的，isreceived可以修改
-        return ('isbn', 'quantity', 'supplyprice', 'totalprice')
+        return ('isbn', 'shortagerecordid', 'quantity', 'supplyprice', 'totalprice')
 
 
 @admin.register(Procurement)
 class ProcurementAdmin(admin.ModelAdmin):
     """采购单：用于记录补货采购，用日期和状态筛选。"""
 
-    list_display = ("procid", "procno", "supplierid", "createdate", "updatedate", "status")
+    list_display = ("procid", "procno", "supplierid", "createdate", "status")
     search_fields = ("procno", "supplierid__suppliername")
     list_filter = ("status", "createdate", "supplierid")
     date_hierarchy = "createdate"
