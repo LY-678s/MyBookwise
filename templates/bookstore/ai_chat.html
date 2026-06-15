@@ -1,0 +1,357 @@
+{% extends "bookstore/base.html" %}
+
+{% block title %}AI 书小智 - MyBookwise{% endblock %}
+
+{% block content %}
+<div class="container animate-fade-in" style="max-width: 900px;">
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h1 style="color: var(--text-primary); font-size: 2rem; font-weight: 300; margin-bottom: 0.5rem; display: inline-flex; align-items: center; gap: 0.5rem;">
+            <span class="material-symbols-outlined icon-lg" aria-hidden="true">smart_toy</span>
+            AI 书小智
+        </h1>
+        <p style="color: var(--text-secondary);">
+            智能荐书、解答购物流程，随时为你服务
+        </p>
+    </div>
+
+    {% if not ai_configured %}
+    <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--warning);">
+        <div class="card-body">
+            <strong>尚未配置 AI 密钥</strong>
+            <p style="margin: 0.5rem 0 0; color: var(--text-secondary); font-size: 0.95rem;">
+                请在 <code>MyBookwise/settings.py</code> 中设置 <code>DEEPSEEK_API_KEY</code>。
+                免费申请：<a href="https://platform.deepseek.com/" target="_blank" rel="noopener">DeepSeek 开放平台</a>
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card ai-chat-card">
+        <div class="card-body" style="padding: 0;">
+            <div id="chat-messages" class="ai-chat-messages">
+                <div class="ai-msg ai-msg-bot">
+                    <div class="ai-msg-avatar ai-msg-avatar-bot" aria-hidden="true">
+                        <span class="material-symbols-outlined">smart_toy</span>
+                    </div>
+                    <div class="ai-msg-bubble">
+                        你好！我是书小智，MyBookwise 的 AI 助手。你可以点击下方问题快速提问：
+                        <div style="margin: 0.75rem 0 0; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <button type="button" class="quick-question-btn" data-question="有什么 Python 相关的书？">💬 有什么 Python 相关的书？</button>
+                            <button type="button" class="quick-question-btn" data-question="怎么下单和付款？">💬 怎么下单和付款？</button>
+                            <button type="button" class="quick-question-btn" data-question="信用等级是什么意思？">💬 信用等级是什么意思？</button>
+                        </div>
+                    </div>
+                </div>
+                {% for msg in chat_history %}
+                <div class="ai-msg {% if msg.role == 'user' %}ai-msg-user{% else %}ai-msg-bot{% endif %}">
+                    <div class="ai-msg-avatar {% if msg.role == 'user' %}ai-msg-avatar-user{% else %}ai-msg-avatar-bot{% endif %}" aria-hidden="true">
+                        <span class="material-symbols-outlined">{% if msg.role == 'user' %}person{% else %}smart_toy{% endif %}</span>
+                    </div>
+                    <div class="ai-msg-bubble">{{ msg.content }}</div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="ai-chat-input-area">
+                <form id="chat-form" class="ai-chat-form">
+                    {% csrf_token %}
+                    <textarea
+                        id="chat-input"
+                        class="form-control ai-chat-textarea"
+                        rows="2"
+                        placeholder="输入你的问题，按 Enter 发送（Shift+Enter 换行）..."
+                        maxlength="2000"
+                        {% if not ai_configured %}disabled{% endif %}
+                    ></textarea>
+                    <div class="ai-chat-actions">
+                        <button type="button" id="clear-btn" class="btn btn-secondary" {% if not ai_configured %}disabled{% endif %}>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">delete_sweep</span>
+                            清空对话
+                        </button>
+                        <button type="submit" id="send-btn" class="btn btn-primary" {% if not ai_configured %}disabled{% endif %}>
+                            <span class="material-symbols-outlined icon-sm" aria-hidden="true">send</span>
+                            发送
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <p style="text-align: center; margin-top: 1.5rem;">
+        <a href="{% url 'bookstore:index' %}" style="color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.25rem;">
+            <span class="material-symbols-outlined icon-sm" aria-hidden="true">arrow_back</span>
+            返回首页
+        </a>
+    </p>
+</div>
+
+<style>
+.ai-chat-card {
+    overflow: hidden;
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+}
+
+.ai-chat-messages {
+    flex: 1;
+    min-height: 380px;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: 1.5rem;
+    background: var(--secondary-bg);
+}
+
+.ai-msg {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    align-items: flex-start;
+}
+
+.ai-msg-user {
+    flex-direction: row-reverse;
+}
+
+.ai-msg-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.ai-msg-avatar .material-symbols-outlined {
+    font-size: 1.25rem;
+}
+
+.ai-msg-avatar-bot {
+    background: linear-gradient(135deg, #e8f0fe 0%, #d2e3fc 100%);
+    color: #1a73e8;
+}
+
+.ai-msg-avatar-user {
+    background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%);
+    color: var(--text-primary);
+}
+
+.ai-msg-bubble {
+    max-width: 75%;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.ai-msg-user .ai-msg-bubble {
+    background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%);
+}
+
+.ai-msg-loading .ai-msg-bubble {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.ai-chat-input-area {
+    border-top: 1px solid var(--border);
+    padding: 1rem 1.5rem 1.25rem;
+    background: var(--card-bg);
+}
+
+.ai-chat-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ai-chat-textarea {
+    resize: vertical;
+    min-height: 56px;
+    max-height: 140px;
+}
+
+.ai-chat-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.ai-chat-actions .btn {
+    min-width: 108px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+.ai-error-toast {
+    background: #fdecea;
+    color: #8b2d2d;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.quick-question-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    line-height: 1.4;
+}
+
+.quick-question-btn:hover {
+    background: var(--accent-light);
+    border-color: var(--accent);
+}
+</style>
+
+<script>
+(function () {
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+    const messagesEl = document.getElementById('chat-messages');
+    const sendBtn = document.getElementById('send-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const aiConfigured = {{ ai_configured|yesno:"true,false" }};
+
+    function scrollToBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function createAvatar(role) {
+        const avatar = document.createElement('div');
+        avatar.className = 'ai-msg-avatar ' + (role === 'user' ? 'ai-msg-avatar-user' : 'ai-msg-avatar-bot');
+        avatar.setAttribute('aria-hidden', 'true');
+
+        const icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined';
+        icon.textContent = role === 'user' ? 'person' : 'smart_toy';
+        avatar.appendChild(icon);
+        return avatar;
+    }
+
+    function appendMessage(role, content, isLoading) {
+        const wrap = document.createElement('div');
+        wrap.className = 'ai-msg ' + (role === 'user' ? 'ai-msg-user' : 'ai-msg-bot');
+        if (isLoading) wrap.classList.add('ai-msg-loading');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'ai-msg-bubble';
+        bubble.textContent = content;
+
+        wrap.appendChild(createAvatar(role));
+        wrap.appendChild(bubble);
+        messagesEl.appendChild(wrap);
+        scrollToBottom();
+        return wrap;
+    }
+
+    function showError(text) {
+        const existing = document.querySelector('.ai-error-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'ai-error-toast';
+        toast.textContent = text;
+        messagesEl.parentElement.insertBefore(toast, messagesEl);
+        setTimeout(function () { toast.remove(); }, 6000);
+    }
+
+    function setLoading(loading) {
+        sendBtn.disabled = loading || !aiConfigured;
+        clearBtn.disabled = loading || !aiConfigured;
+        input.disabled = loading || !aiConfigured;
+        sendBtn.querySelector('.material-symbols-outlined').textContent = loading ? 'hourglass_empty' : 'send';
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+
+        appendMessage('user', text);
+        input.value = '';
+        setLoading(true);
+        const loadingEl = appendMessage('assistant', '正在思考...', true);
+
+        try {
+            const resp = await fetch("{% url 'bookstore:ai_chat_api' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({ message: text }),
+            });
+            const data = await resp.json();
+            loadingEl.remove();
+
+            if (!resp.ok || data.error) {
+                showError(data.error || '请求失败，请稍后再试。');
+                return;
+            }
+            appendMessage('assistant', data.reply);
+        } catch (err) {
+            loadingEl.remove();
+            showError('网络错误，请检查连接后重试。');
+        } finally {
+            setLoading(false);
+            input.focus();
+        }
+    });
+
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+    });
+
+    clearBtn.addEventListener('click', async function () {
+        if (!confirm('确定清空当前对话记录吗？')) return;
+        setLoading(true);
+        try {
+            await fetch("{% url 'bookstore:ai_chat_clear' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            });
+            const keep = messagesEl.querySelector('.ai-msg-bot');
+            messagesEl.innerHTML = '';
+            if (keep) messagesEl.appendChild(keep);
+        } catch (err) {
+            showError('清空失败，请刷新页面重试。');
+        } finally {
+            setLoading(false);
+        }
+    });
+
+    scrollToBottom();
+
+    // 快捷问题按鈕点击事件
+    messagesEl.addEventListener('click', function (e) {
+        const btn = e.target.closest('.quick-question-btn');
+        if (!btn || !aiConfigured) return;
+        const question = btn.dataset.question;
+        if (!question) return;
+        input.value = question;
+        form.dispatchEvent(new Event('submit'));
+    });
+})();
+</script>
+{% endblock %}

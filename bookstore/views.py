@@ -1,6 +1,9 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
+from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q, F, Sum
@@ -877,3 +880,71 @@ def confirm_receipt(request: HttpRequest, order_id: int) -> HttpResponse:
         return redirect("bookstore:order_detail", order_id=order_id)
 
     return redirect("bookstore:order_detail", order_id=order_id)
+
+
+# ============================================================================
+# AI 聊天助手
+# ============================================================================
+
+def _get_ai_history(request: HttpRequest) -> list:
+    history = request.session.get("ai_chat_history", [])
+    if not isinstance(history, list):
+        history = []
+    return history[-20:]
+
+
+def _save_ai_history(request: HttpRequest, history: list) -> None:
+    request.session["ai_chat_history"] = history[-20:]
+    request.session.modified = True
+
+
+def ai_chat(request: HttpRequest) -> HttpResponse:
+    """AI 对话页面。"""
+    from .ai_service import is_ai_configured
+
+    return render(
+        request,
+        "bookstore/ai_chat.html",
+        {
+            "chat_history": _get_ai_history(request),
+            "ai_configured": is_ai_configured(),
+        },
+    )
+
+
+@require_http_methods(["POST"])
+def ai_chat_api(request: HttpRequest) -> JsonResponse:
+    """接收用户消息，调用 AI 并返回 JSON 回复。"""
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"error": "请求格式错误。"}, status=400)
+
+    user_message = (payload.get("message") or "").strip()
+    if not user_message:
+        return JsonResponse({"error": "请输入消息。"}, status=400)
+
+    history = _get_ai_history(request)
+
+    try:
+        from .ai_service import chat_with_ai, AIServiceError
+
+        reply = chat_with_ai(history, user_message)
+    except AIServiceError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception:
+        return JsonResponse({"error": "服务器内部错误，请稍后再试。"}, status=500)
+
+    history.append({"role": "user", "content": user_message})
+    history.append({"role": "assistant", "content": reply})
+    _save_ai_history(request, history)
+
+    return JsonResponse({"reply": reply})
+
+
+@require_http_methods(["POST"])
+def ai_chat_clear(request: HttpRequest) -> JsonResponse:
+    """清空当前会话的历史记录。"""
+    request.session["ai_chat_history"] = []
+    request.session.modified = True
+    return JsonResponse({"ok": True})

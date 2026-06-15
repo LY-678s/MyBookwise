@@ -10,6 +10,7 @@
     <link rel="shortcut icon" href="{% static 'favicon.ico' %}" />
     <!-- Fallback to root favicon (some browsers request /favicon.ico) -->
     <link rel="icon" href="/favicon.ico" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
     <style>
         * {
             margin: 0;
@@ -668,6 +669,7 @@
             <div class="nav-links">
                 <a href="{% url 'bookstore:index' %}">首页</a>
                 <a href="{% url 'bookstore:search' %}">搜索</a>
+                <a href="{% url 'bookstore:ai_chat' %}">AI 助手</a>
                 
                 {% if request.session.customer_id %}
                     <a href="{% url 'bookstore:cart_detail' %}">购物车</a>
