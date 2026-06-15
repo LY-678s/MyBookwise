@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 开发阶段允许对局域网服务器使用 HTTP 明文通信 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android 模拟器 -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- USB 网络共享 -->
+        <domain includeSubdomains="true">192.168.42.100</domain>
+        <!-- 校园网 Wi-Fi -->
+        <domain includeSubdomains="true">10.16.206.195</domain>
+        <!-- VirtualBox 虚拟网卡 -->
+        <domain includeSubdomains="true">192.168.56.1</domain>
+    </domain-config>
+</network-security-config>
