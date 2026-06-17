@@ -10,6 +10,7 @@ from django.db.models import Q, F, Sum
 from django.db import transaction
 
 from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel
+from .cart_store import get_cart, save_cart, clear_cart
 from decimal import Decimal
 from functools import wraps
 
@@ -21,13 +22,13 @@ def customer_login(request: HttpRequest) -> HttpResponse:
 
         try:
             customer = Customer.objects.get(username=username, password=password)
-            # 鐢?session 璁板綍鐧诲綍椤惧鐨?ID
+            # 用 session 记录登录顾客的 ID
             request.session["customer_id"] = customer.customerid
             request.session["customer_name"] = customer.name
-            messages.success(request, "鐧诲綍鎴愬姛")
+            messages.success(request, "登录成功")
             return redirect("bookstore:index")
         except Customer.DoesNotExist:
-            messages.error(request, "鐢ㄦ埛鍚嶆垨瀵嗙爜閿欒")
+            messages.error(request, "用户名或密码错误")
 
     return render(request, "bookstore/login.html")
     
@@ -41,51 +42,55 @@ def customer_register(request: HttpRequest) -> HttpResponse:
         email = request.POST.get("email", "").strip()
         address = request.POST.get("address", "").strip()
 
-        # 楠岃瘉杈撳叆
+        # 验证输入
         if not username or not password or not name or not email:
-            messages.error(request, "鎵€鏈夊瓧娈甸兘鏄繀濉殑")
+            messages.error(request, "所有字段都是必填的")
             return render(request, "bookstore/register.html")
 
         if password != confirm_password:
-            messages.error(request, "涓ゆ杈撳叆鐨勫瘑鐮佷笉涓€鑷?)
+            messages.error(request, "两次输入的密码不一致")
             return render(request, "bookstore/register.html")
 
         if len(password) < 6:
-            messages.error(request, "瀵嗙爜闀垮害鑷冲皯6浣?)
+            messages.error(request, "密码长度至少6位")
             return render(request, "bookstore/register.html")
 
-        # 妫€鏌ョ敤鎴峰悕鏄惁宸插瓨鍦?        if Customer.objects.filter(username=username).exists():
-            messages.error(request, "鐢ㄦ埛鍚嶅凡瀛樺湪")
+        # 检查用户名是否已存在
+        if Customer.objects.filter(username=username).exists():
+            messages.error(request, "用户名已存在")
             return render(request, "bookstore/register.html")
 
-        # 妫€鏌ラ偖绠辨槸鍚﹀凡瀛樺湪
+        # 检查邮箱是否已存在
         if Customer.objects.filter(email=email).exists():
-            messages.error(request, "閭宸茶娉ㄥ唽")
+            messages.error(request, "邮箱已被注册")
             return render(request, "bookstore/register.html")
 
         try:
             from django.utils import timezone
-            # 鍒涘缓鏂扮敤鎴?            customer = Customer.objects.create(
+            # 创建新用户
+            customer = Customer.objects.create(
                 username=username,
-                password=password,  # 娉ㄦ剰锛氱敓浜х幆澧冧腑搴旇鍔犲瘑瀵嗙爜
+                password=password,  # 注意：生产环境中应该加密密码
                 name=name,
                 email=email,
                 address=address,
                 balance=Decimal('0.00'),
-                levelid_id=1,  # 榛樿1绾т細鍛?                creditlimit=Decimal('0.00'),  # 1绾ф棤淇＄敤棰濆害
+                levelid_id=1,  # 默认1级会员
+                creditlimit=Decimal('0.00'),  # 1级无信用额度
                 usedcredit=Decimal('0.00'),
                 totalspent=Decimal('0.00'),
-                registerdate=timezone.now()  # 鏄惧紡璁剧疆娉ㄥ唽鏃堕棿
+                registerdate=timezone.now()  # 显式设置注册时间
             )
 
-            # 鑷姩鐧诲綍鏂扮敤鎴?            request.session["customer_id"] = customer.customerid
+            # 自动登录新用户
+            request.session["customer_id"] = customer.customerid
             request.session["customer_name"] = customer.name
 
-            messages.success(request, f"娉ㄥ唽鎴愬姛锛佹杩庡姞鍏ワ紝{customer.name}")
+            messages.success(request, f"注册成功！欢迎加入，{customer.name}")
             return redirect("bookstore:index")
 
         except Exception as e:
-            messages.error(request, f"娉ㄥ唽澶辫触锛歿e}")
+            messages.error(request, f"注册失败：{e}")
             return render(request, "bookstore/register.html")
 
     return render(request, "bookstore/register.html")
@@ -94,7 +99,7 @@ def customer_register(request: HttpRequest) -> HttpResponse:
 def customer_logout(request: HttpRequest) -> HttpResponse:
     request.session.pop("customer_id", None)
     request.session.pop("customer_name", None)
-    messages.info(request, "鎮ㄥ凡閫€鍑虹櫥褰?)
+    messages.info(request, "您已退出登录")
     return redirect("bookstore:index")
 
 
@@ -102,7 +107,7 @@ def customer_required(view_func):
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         if "customer_id" not in request.session:
-            messages.warning(request, "璇峰厛鐧诲綍椤惧璐︽埛")
+            messages.warning(request, "请先登录顾客账户")
             return redirect("bookstore:login")
         return view_func(request, *args, **kwargs)
     return _wrapped_view
@@ -110,32 +115,34 @@ def customer_required(view_func):
 
 def get_book_cover_image(book_title: str) -> str:
     """
-    鏍规嵁涔﹀悕杩斿洖瀵瑰簲鐨勫皝闈㈠浘鐗囪矾寰?    """
+    根据书名返回对应的封面图片路径
+    """
     title_lower = book_title.lower()
 
-    # 浠?settings 涓鍙栨槧灏勪笌鐩綍锛屼繚鎸佸彲閰嶇疆鎬?    from django.conf import settings
+    # 从 settings 中读取映射与目录，保持可配置性
+    from django.conf import settings
     from urllib.parse import quote
     image_mappings = getattr(settings, "COVER_IMAGE_MAPPINGS", {})
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     default_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
 
-    # 鏌ユ壘鍖归厤鐨勫叧閿瘝骞舵瀯寤洪潤鎬?URL锛堝鏂囦欢鍚嶈繘琛?URL 缂栫爜浠ユ敮鎸佷腑鏂囷級
+    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
     for keyword, image_filename in image_mappings.items():
         if keyword in title_lower:
             return f"{default_prefix}{images_subdir}/{quote(image_filename)}"
 
-    # 濡傛灉娌℃湁鍖归厤鐨勫浘鐗囷紝杩斿洖None
+    # 如果没有匹配的图片，返回None
     return None
 
 
 def index(request: HttpRequest) -> HttpResponse:
     books = Book.objects.all().order_by("title")
 
-    # 澶勭悊鍥句功灏侀潰鍥剧墖鐨刡ase64缂栫爜
+    # 处理图书封面图片的base64编码
     import base64
     books_with_covers = []
     for book in books:
-        # 鏌ヨ璇ヤ功鐨勪綔鑰咃紝鎸夊簭浣嶆帓搴忓悗鐢?/ 鎷兼帴
+        # 查询该书的作者，按序位排序后用 / 拼接
         authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
         author_names = ' / '.join([a.authorname for a in authors])
 
@@ -153,32 +160,38 @@ def index(request: HttpRequest) -> HttpResponse:
             'authors': author_names,
         }
 
-        # 浼樺厛浣跨敤闈欐€佸浘鐗囨枃浠?        static_image = get_book_cover_image(book.title)
+        # 优先使用静态图片文件
+        static_image = get_book_cover_image(book.title)
         if static_image:
             book_data['cover_image_url'] = static_image
-        # 濡傛灉娌℃湁闈欐€佸浘鐗囷紝鍒欏皾璇曚娇鐢ㄦ暟鎹簱涓殑base64鍥剧墖
+        # 如果没有静态图片，则尝试使用数据库中的base64图片
         elif book.coverimage:
             try:
-                # 鏈変簺鎯呭喌涓嬫暟鎹簱涓瓨鍌ㄧ殑鍙兘宸茬粡鏄?base64 瀛楃涓诧紝涔熷彲鑳芥槸鏂囨湰鎴栦簩杩涘埗鏁版嵁銆?                # 鍏堟娴嬫槸鍚︾湅璧锋潵鍍?base64 瀛楃涓诧紙浠呭寘鍚?base64 瀛楃锛夛紝鑻ユ槸鍒欑洿鎺ヤ娇鐢紱鍚﹀垯鎸夋枃鏈?浜岃繘鍒剁紪鐮佸悗鍐?base64 缂栫爜銆?                import re
+                # 有些情况下数据库中存储的可能已经是 base64 字符串，也可能是文本或二进制数据。
+                # 先检测是否看起来像 base64 字符串（仅包含 base64 字符），若是则直接使用；否则按文本/二进制编码后再 base64 编码。
+                import re
                 raw = book.coverimage
                 if isinstance(raw, str):
                     s = raw.strip()
-                    # 绠€鍗曞垽鏂槸鍚︿负 base64 瀛楃涓诧紙杈冮暱涓斿彧鍖呭惈 base64 瀛楃锛?                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
-                        # 绉婚櫎鎹㈣骞剁洿鎺ヤ娇鐢?                        book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
+                    # 简单判断是否为 base64 字符串（较长且只包含 base64 字符）
+                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
+                        # 移除换行并直接使用
+                        book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
                     else:
-                        # 灏嗘枃鏈寜 utf-8 缂栫爜鍚庡啀 base64 缂栫爜
+                        # 将文本按 utf-8 编码后再 base64 编码
                         book_data['coverimage'] = base64.b64encode(s.encode('utf-8')).decode('utf-8')
                 else:
-                    # 鍋囪涓?bytes-like锛岀洿鎺?base64 缂栫爜
+                    # 假设为 bytes-like，直接 base64 编码
                     book_data['coverimage'] = base64.b64encode(raw).decode('utf-8')
             except Exception:
                 book_data['coverimage'] = None
 
         books_with_covers.append(book_data)
 
-    # 璁＄畻榛樿灏侀潰 URL锛堢敱 settings 鎺у埗锛?    from django.conf import settings
+    # 计算默认封面 URL（由 settings 控制）
+    from django.conf import settings
     from urllib.parse import quote
-    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python缂栫▼浠庡叆闂ㄥ埌瀹炶返.jpg")
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
     default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
@@ -188,7 +201,7 @@ def index(request: HttpRequest) -> HttpResponse:
 def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
 
-    # 澶勭悊鍥句功灏侀潰鍥剧墖鐨刡ase64缂栫爜
+    # 处理图书封面图片的base64编码
     import base64
     book_data = {
         'isbn': book.isbn,
@@ -203,8 +216,9 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
         'cover_image_url': None
     }
 
-    # 濡傛灉鏈夊皝闈㈠浘鐗囷紝杞崲涓篵ase64
-    # 浼樺厛浣跨敤闈欐€佸浘鐗囨槧灏?    static_image = get_book_cover_image(book.title)
+    # 如果有封面图片，转换为base64
+    # 优先使用静态图片映射
+    static_image = get_book_cover_image(book.title)
     if static_image:
         book_data['cover_image_url'] = static_image
     elif book.coverimage:
@@ -224,7 +238,7 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
 
     from django.conf import settings
     from urllib.parse import quote
-    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python缂栫▼浠庡叆闂ㄥ埌瀹炶返.jpg")
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
     default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
@@ -241,18 +255,19 @@ def search(request: HttpRequest) -> HttpResponse:
     return render(request, "bookstore/search.html", {"books": books, "query": query})
 
 def _get_cart(request):
-    return request.session.setdefault("cart", {})
+    """读取购物车（与 APP 共用 cache，按 customer_id 存储）。"""
+    return get_cart(request.session["customer_id"])
 
 def _save_cart(request, cart):
-    request.session["cart"] = cart
-    request.session.modified = True
+    save_cart(request.session["customer_id"], cart)
 
 @customer_required
 def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
     cart = _get_cart(request)
     
-    # 鏀寔POST鏂瑰紡浼犻€掓暟閲?    if request.method == "POST":
+    # 支持POST方式传递数量
+    if request.method == "POST":
         try:
             quantity = int(request.POST.get("quantity", 1))
             if quantity < 1:
@@ -267,9 +282,10 @@ def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
     cart[isbn] = item
     _save_cart(request, cart)
     
-    messages.success(request, f"宸插皢銆妠book.title}銆嬅?{quantity} 鍔犲叆璐墿杞?)
+    messages.success(request, f"已将《{book.title}》× {quantity} 加入购物车")
     
-    # 鑾峰彇鏉ユ簮椤甸潰锛岃繑鍥炲師椤甸潰鑰屼笉鏄烦杞埌璐墿杞?    referer = request.META.get('HTTP_REFERER', '')
+    # 获取来源页面，返回原页面而不是跳转到购物车
+    referer = request.META.get('HTTP_REFERER', '')
     if '/cart/' in referer or not referer:
         return redirect("bookstore:cart_detail")
     else:
@@ -277,21 +293,22 @@ def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
 
 @customer_required
 def cart_update(request: HttpRequest, isbn: str) -> HttpResponse:
-    """鏇存柊璐墿杞︿腑鍟嗗搧鐨勬暟閲?""
+    """更新购物车中商品的数量"""
     if request.method == "POST":
         cart = _get_cart(request)
         try:
             quantity = int(request.POST.get("quantity", 0))
             if quantity > 0:
                 cart[isbn] = {"quantity": quantity}
-                messages.success(request, "璐墿杞﹀凡鏇存柊")
+                messages.success(request, "购物车已更新")
             elif quantity == 0:
-                # 鏁伴噺涓?鍒欏垹闄?                if isbn in cart:
+                # 数量为0则删除
+                if isbn in cart:
                     del cart[isbn]
-                messages.info(request, "宸蹭粠璐墿杞︾Щ闄?)
+                messages.info(request, "已从购物车移除")
             _save_cart(request, cart)
         except (ValueError, TypeError):
-            messages.error(request, "璇疯緭鍏ユ湁鏁堢殑鏁伴噺")
+            messages.error(request, "请输入有效的数量")
     return redirect("bookstore:cart_detail")
 
 
@@ -301,7 +318,7 @@ def cart_remove(request: HttpRequest, isbn: str) -> HttpResponse:
     if isbn in cart:
         del cart[isbn]
         _save_cart(request, cart)
-        messages.success(request, "宸蹭粠璐墿杞︾Щ闄?)
+        messages.success(request, "已从购物车移除")
     return redirect("bookstore:cart_detail")
 
 @customer_required
@@ -310,18 +327,20 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
     items = []
     original_total = Decimal('0')
     
-    # 鑾峰彇椤惧鐨勪俊鐢ㄧ瓑绾ф姌鎵ｇ巼
+    # 获取顾客的信用等级折扣率
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     discount_rate = customer.levelid.discountrate
-    discount_percent = (Decimal('1') - discount_rate) * 100  # 杞崲涓虹櫨鍒嗘瘮
+    discount_percent = (Decimal('1') - discount_rate) * 100  # 转换为百分比
 
     for isbn, data in cart.items():
         book = get_object_or_404(Book, pk=isbn)
-        # 鍑嗗灏侀潰鏄剧ず鏁版嵁锛氫紭鍏堥潤鎬佸浘鐗囷紝鍏舵灏濊瘯灏嗘暟鎹簱涓殑 coverimage 杞负 base64 瀛楃涓?        try:
+        # 准备封面显示数据：优先静态图片，其次尝试将数据库中的 coverimage 转为 base64 字符串
+        try:
             static_image = get_book_cover_image(book.title)
         except Exception:
             static_image = None
-        # 鎸傝浇鍒?book 瀵硅薄浠ヤ緵妯℃澘浣跨敤锛堜复鏃跺睘鎬э紝鏃犳寔涔呭寲锛?        setattr(book, "cover_image_url", static_image)
+        # 挂载到 book 对象以供模板使用（临时属性，无持久化）
+        setattr(book, "cover_image_url", static_image)
         cover_b64 = None
         if not static_image and getattr(book, "coverimage", None):
             try:
@@ -366,7 +385,7 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
 def order_confirm(request: HttpRequest) -> HttpResponse:
     cart = _get_cart(request)
     if not cart:
-        messages.warning(request, "璐墿杞︿负绌?)
+        messages.warning(request, "购物车为空")
         return redirect("bookstore:index")
 
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
@@ -376,29 +395,31 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         payment_choice = request.POST.get("payment_choice", "balance")
 
-        # 鑾峰彇鍙戣揣鍦板潃淇℃伅
+        # 获取发货地址信息
         shipping_name = request.POST.get("shipping_name", customer.name)
         shipping_contact = request.POST.get("shipping_contact", customer.email)
         shipping_address = request.POST.get("shipping_address", customer.address)
 
-        # 楠岃瘉鍙戣揣鍦板潃
+        # 验证发货地址
         if not shipping_address or not shipping_address.strip():
-            messages.error(request, "璇峰～鍐欏彂璐у湴鍧€")
+            messages.error(request, "请填写发货地址")
             return redirect("bookstore:order_confirm")
 
         with transaction.atomic():
-            # 閿佸畾瀹㈡埛璁板綍
+            # 锁定客户记录
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
 
-            # 1. 鍒涘缓璁㈠崟
+            # 1. 创建订单
             now = timezone.now()
-            # 鐢熸垚璁㈠崟鍙凤細YYYYMMDDNN锛堝勾鏈堟棩+涓や綅搴忓彿锛?            date_prefix = now.strftime('%Y%m%d')
-            # 鏌ユ壘浠婂ぉ宸叉湁鐨勮鍗曟暟閲?            today_orders_count = Orders.objects.filter(
+            # 生成订单号：YYYYMMDDNN（年月日+两位序号）
+            date_prefix = now.strftime('%Y%m%d')
+            # 查找今天已有的订单数量
+            today_orders_count = Orders.objects.filter(
                 orderno__startswith=date_prefix
             ).count()
             order_number = f"{date_prefix}{today_orders_count + 1:02d}"
 
-            # 缁勫悎鍙戣揣鍦板潃淇℃伅
+            # 组合发货地址信息
             full_shipping_address = f"{shipping_name} ({shipping_contact}) - {shipping_address}"
 
             order = Orders.objects.create(
@@ -408,10 +429,11 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 shipaddress=full_shipping_address,
                 totalamount=Decimal('0'),
                 actualpaid=Decimal('0'),
-                paymentstatus=0,  # 榛樿鏈粯娆?                status=0,
+                paymentstatus=0,  # 默认未付款
+                status=0,
             )
 
-            # 2. 涓鸿喘鐗╄溅涓瘡鏈功鍒涘缓 Orderdetail锛堣Е鍙戝櫒浼氳嚜鍔ㄦ墸鍑忓簱瀛橈級
+            # 2. 为购物车中每本书创建 Orderdetail（触发器会自动扣减库存）
             created_details = []
             for isbn, data in cart.items():
                 book = get_object_or_404(Book, pk=isbn)
@@ -426,26 +448,30 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                 )
                 created_details.append((book, quantity))
 
-            # 3. 鍒锋柊璁㈠崟鑾峰彇瑙﹀彂鍣ㄨ绠楃殑鎬婚噾棰?            order.refresh_from_db()
+            # 3. 刷新订单获取触发器计算的总金额
+            order.refresh_from_db()
             total_amount = order.totalamount or Decimal('0')
             
-            print(f"馃攳 [DEBUG] Order created: OrderID={order.orderid}, TotalAmount={total_amount}")
+            print(f"🔍 [DEBUG] Order created: OrderID={order.orderid}, TotalAmount={total_amount}")
             
             if total_amount == 0:
-                # TotalAmount涓?璇存槑瑙﹀彂鍣ㄦ病鏈夋纭绠楋紝鍙兘鏄簨鍔￠棶棰?                # 鎵嬪姩璁＄畻鎬婚噾棰?                from django.db.models import Sum
+                # TotalAmount为0说明触发器没有正确计算，可能是事务问题
+                # 手动计算总金额
+                from django.db.models import Sum
                 manual_total = Orderdetail.objects.filter(orderid=order).aggregate(
                     total=Sum(F('quantity') * F('unitprice'))
                 )['total'] or Decimal('0')
-                # 搴旂敤鎶樻墸
+                # 应用折扣
                 total_amount = manual_total * customer.levelid.discountrate
                 order.totalamount = total_amount
                 order.save(update_fields=['totalamount'])
-                print(f"馃攳 [DEBUG] Manual calculation: TotalAmount={total_amount}")
+                print(f"🔍 [DEBUG] Manual calculation: TotalAmount={total_amount}")
             
-            # 4. 澶勭悊浠樻 (payment_choice宸茬粡鍦ㄥ墠闈㈣幏鍙栦簡)
+            # 4. 处理付款 (payment_choice已经在前面获取了)
             
             if payment_choice == "credit":
-                # 绾俊鐢ㄦ敮浠?                from .signals import process_payment
+                # 纯信用支付
+                from .signals import process_payment
                 success, result = process_payment(order, customer, use_credit_only=True)
                 
                 if success:
@@ -454,18 +480,19 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                     order.paymentstatus = payment_status
                     order.save(update_fields=['actualpaid', 'paymentstatus'])
                     
-                    # 娓呯┖璐墿杞?                    request.session["cart"] = {}
-                    request.session.modified = True
-                    messages.success(request, f"涓嬪崟鎴愬姛锛亄msg}")
+                    # 清空购物车（Web / APP 共用 cache）
+                    clear_cart(customer.customerid)
+                    messages.success(request, f"下单成功！{msg}")
                     return redirect("bookstore:order_list")
                 else:
-                    # 澶辫触锛屽彇娑堣鍗?                    order.status = 4
+                    # 失败，取消订单
+                    order.status = 4
                     order.save(update_fields=['status'])
-                    messages.error(request, f"涓嬪崟澶辫触锛歿result}銆傝鍗曞凡鍙栨秷銆?)
+                    messages.error(request, f"下单失败：{result}。订单已取消。")
                     return redirect("bookstore:cart_detail")
             
             else:
-                # 绔嬪嵆鏀粯锛堜綑棰濅紭鍏堬級
+                # 立即支付（余额优先）
                 from .signals import process_payment
                 success, result = process_payment(order, customer, use_credit_only=False)
                 
@@ -475,18 +502,19 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                     order.paymentstatus = payment_status
                     order.save(update_fields=['actualpaid', 'paymentstatus'])
                     
-                    # 娓呯┖璐墿杞?                    request.session["cart"] = {}
-                    request.session.modified = True
-                    messages.success(request, f"涓嬪崟鎴愬姛锛亄msg}")
+                    clear_cart(customer.customerid)
+                    messages.success(request, f"下单成功！{msg}")
                     return redirect("bookstore:order_list")
                 else:
-                    # 澶辫触锛屽彇娑堣鍗?                    order.status = 4
+                    # 失败，取消订单
+                    order.status = 4
                     order.save(update_fields=['status'])
-                    messages.error(request, f"涓嬪崟澶辫触锛歿result}銆傝鍗曞凡鍙栨秷銆?)
+                    messages.error(request, f"下单失败：{result}。订单已取消。")
                     return redirect("bookstore:cart_detail")
             
 
-    # GET 璇锋眰锛氬厛灞曠ず纭椤碉紙鏄剧ず鎶樻墸淇℃伅锛?    items = []
+    # GET 请求：先展示确认页（显示折扣信息）
+    items = []
     original_total = Decimal('0')
     for isbn, data in cart.items():
         book = get_object_or_404(Book, pk=isbn)
@@ -519,7 +547,8 @@ def order_list(request: HttpRequest) -> HttpResponse:
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     orders = Orders.objects.filter(customerid=customer).order_by("-orderdate")
     
-    # 涓烘瘡涓鍗曡绠楀師濮嬮噾棰濓紙鐢ㄤ簬鏄剧ず鎶樻墸锛?    orders_with_details = []
+    # 为每个订单计算原始金额（用于显示折扣）
+    orders_with_details = []
     for order in orders:
         details = Orderdetail.objects.filter(orderid=order)
         original_amount = sum(detail.quantity * detail.unitprice for detail in details)
@@ -541,13 +570,13 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
     details = Orderdetail.objects.filter(orderid=order)
     
-    # 璁＄畻鍘熷鎬婚噾棰濆拰鎶樻墸淇℃伅
+    # 计算原始总金额和折扣信息
     original_amount = sum(detail.quantity * detail.unitprice for detail in details)
     discount_amount = original_amount - (order.totalamount or 0)
     discount_rate = customer.levelid.discountrate
     discount_percent = (Decimal('1') - discount_rate) * 100
     
-    # 涓烘瘡涓槑缁嗚绠楁姌鎵ｅ悗閲戦
+    # 为每个明细计算折扣后金额
     details_with_discount = []
     for detail in details:
         original_item_amount = detail.quantity * detail.unitprice
@@ -575,7 +604,7 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
 @customer_required
 def account_edit(request: HttpRequest) -> HttpResponse:
-    """缂栬緫璐︽埛淇℃伅"""
+    """编辑账户信息"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
 
     if request.method == "POST":
@@ -586,40 +615,42 @@ def account_edit(request: HttpRequest) -> HttpResponse:
         new_password = request.POST.get("new_password", "").strip()
         confirm_password = request.POST.get("confirm_password", "").strip()
 
-        # 楠岃瘉杈撳叆
+        # 验证输入
         if not name or not email:
-            messages.error(request, "濮撳悕鍜岄偖绠变笉鑳戒负绌?)
+            messages.error(request, "姓名和邮箱不能为空")
             return redirect("bookstore:account")
 
-        # 妫€鏌ラ偖绠辨槸鍚﹀凡琚叾浠栫敤鎴蜂娇鐢?        if Customer.objects.filter(email=email).exclude(customerid=customer.customerid).exists():
-            messages.error(request, "閭宸茶鍏朵粬鐢ㄦ埛浣跨敤")
+        # 检查邮箱是否已被其他用户使用
+        if Customer.objects.filter(email=email).exclude(customerid=customer.customerid).exists():
+            messages.error(request, "邮箱已被其他用户使用")
             return redirect("bookstore:account")
 
-        # 濡傛灉瑕佷慨鏀瑰瘑鐮?        if new_password:
+        # 如果要修改密码
+        if new_password:
             if customer.password != current_password:
-                messages.error(request, "褰撳墠瀵嗙爜涓嶆纭?)
+                messages.error(request, "当前密码不正确")
                 return redirect("bookstore:account")
 
             if new_password != confirm_password:
-                messages.error(request, "涓ゆ杈撳叆鐨勬柊瀵嗙爜涓嶄竴鑷?)
+                messages.error(request, "两次输入的新密码不一致")
                 return redirect("bookstore:account")
 
             if len(new_password) < 6:
-                messages.error(request, "鏂板瘑鐮侀暱搴﹁嚦灏?浣?)
+                messages.error(request, "新密码长度至少6位")
                 return redirect("bookstore:account")
 
             customer.password = new_password
 
-        # 鏇存柊鍩烘湰淇℃伅
+        # 更新基本信息
         customer.name = name
         customer.email = email
         customer.address = address
         customer.save()
 
-        # 鏇存柊session涓殑濮撳悕
+        # 更新session中的姓名
         request.session["customer_name"] = name
 
-        messages.success(request, "璐︽埛淇℃伅鏇存柊鎴愬姛")
+        messages.success(request, "账户信息更新成功")
         return redirect("bookstore:account")
 
     return redirect("bookstore:account")
@@ -627,39 +658,40 @@ def account_edit(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def account_recharge(request: HttpRequest) -> HttpResponse:
-    """璐︽埛鍏呭€?""
+    """账户充值"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     
     if request.method == "POST":
         try:
             amount = Decimal(request.POST.get("amount", "0"))
             if amount <= 0:
-                messages.error(request, "鍏呭€奸噾棰濆繀椤诲ぇ浜?")
+                messages.error(request, "充值金额必须大于0")
             else:
                 with transaction.atomic():
                     customer = Customer.objects.select_for_update().get(pk=customer.customerid)
                     customer.balance += amount
-                    # 鍏呭€间笉褰卞搷UsedCredit锛屽彧鏇存柊浣欓
+                    # 充值不影响UsedCredit，只更新余额
                     customer.save(update_fields=['balance'])
-                messages.success(request, f"鍏呭€兼垚鍔燂紒鍏呭€奸噾棰濓細楼{amount}锛屽綋鍓嶄綑棰濓細楼{customer.balance}")
+                messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
                 return redirect("bookstore:account")
         except (ValueError, TypeError):
-            messages.error(request, "璇疯緭鍏ユ湁鏁堢殑閲戦")
+            messages.error(request, "请输入有效的金额")
         except Exception as e:
-            messages.error(request, f"鍏呭€煎け璐ワ細{e}")
+            messages.error(request, f"充值失败：{e}")
     
-    # 璁＄畻鎶樻墸鐧惧垎姣?    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
+    # 计算折扣百分比
+    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
     
-    # 璁＄畻璺濈涓嬩竴绾ц繕闇€澶氬皯
+    # 计算距离下一级还需多少
     current_level = customer.levelid.levelid
     current_spent = customer.totalspent
     
     level_thresholds = {
-        1: Decimal('1000'),    # 1绾р啋2绾ч渶瑕?000
-        2: Decimal('2000'),    # 2绾р啋3绾ч渶瑕?000
-        3: Decimal('5000'),    # 3绾р啋4绾ч渶瑕?000
-        4: Decimal('10000'),   # 4绾р啋5绾ч渶瑕?0000
-        5: None,               # 5绾ф槸鏈€楂樼骇
+        1: Decimal('1000'),    # 1级→2级需要1000
+        2: Decimal('2000'),    # 2级→3级需要2000
+        3: Decimal('5000'),    # 3级→4级需要5000
+        4: Decimal('10000'),   # 4级→5级需要10000
+        5: None,               # 5级是最高级
     }
     
     next_threshold = level_thresholds.get(current_level)
@@ -668,7 +700,7 @@ def account_recharge(request: HttpRequest) -> HttpResponse:
         if next_level_amount < 0:
             next_level_amount = Decimal('0')
     else:
-        next_level_amount = None  # 宸叉槸鏈€楂樼骇
+        next_level_amount = None  # 已是最高级
     
     return render(request, "bookstore/account.html", {
         "customer": customer,
@@ -679,7 +711,7 @@ def account_recharge(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def repay_overdraft(request: HttpRequest) -> HttpResponse:
-    """鍏ㄩ儴杩樻 - 杩樻竻鎵€鏈夋湭鍏ㄩ鏀粯鐨勮鍗?""
+    """全部还款 - 还清所有未全额支付的订单"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     
     if request.method == "POST":
@@ -687,35 +719,44 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
             
             if customer.usedcredit <= 0:
-                messages.info(request, "鎮ㄥ綋鍓嶆病鏈夋湭杩樻鐨勮鍗?)
+                messages.info(request, "您当前没有未还款的订单")
                 return redirect("bookstore:account")
             
-            # 妫€鏌ヤ綑棰濇槸鍚﹁冻澶?            if customer.balance < customer.usedcredit:
-                messages.error(request, f"浣欓涓嶈冻锛侀渶瑕伮customer.usedcredit}锛屽綋鍓嶄綑棰澛customer.balance}锛岃鍏堝厖鍊?)
+            # 检查余额是否足够
+            if customer.balance < customer.usedcredit:
+                messages.error(request, f"余额不足！需要¥{customer.usedcredit}，当前余额¥{customer.balance}，请先充值")
                 return redirect("bookstore:account")
             
-            # 1. 鑾峰彇鎵€鏈夋湭鍏ㄩ鏀粯鐨勮鍗?            unpaid_orders = Orders.objects.filter(
+            # 1. 获取所有未全额支付的订单
+            unpaid_orders = Orders.objects.filter(
                 customerid=customer,
-                paymentstatus=2,  # 鏈叏棰濇敮浠?                status__in=[0, 1]  # 鎺掗櫎宸插彇娑堝拰宸插畬鎴?            )
+                paymentstatus=2,  # 未全额支付
+                status__in=[0, 1]  # 排除已取消和已完成
+            )
             
             total_repay = Decimal('0')
             repay_count = 0
             
-            # 2. 杩樻鎵€鏈夎鍗?            for order in unpaid_orders:
+            # 2. 还款所有订单
+            for order in unpaid_orders:
                 unpaid_amount = order.totalamount - order.actualpaid
                 
-                # 浠庝綑棰濇墸娆?                customer.balance -= unpaid_amount
-                customer.totalspent += unpaid_amount  # 杩樻璁″叆绱娑堣垂
+                # 从余额扣款
+                customer.balance -= unpaid_amount
+                customer.totalspent += unpaid_amount  # 还款计入累计消费
                 total_repay += unpaid_amount
                 
-                # 鏇存柊璁㈠崟
+                # 更新订单
                 order.actualpaid = order.totalamount
-                order.paymentstatus = 1  # 宸插叏棰濇敮浠?                order.save(update_fields=['actualpaid', 'paymentstatus'])
+                order.paymentstatus = 1  # 已全额支付
+                order.save(update_fields=['actualpaid', 'paymentstatus'])
                 repay_count += 1
             
-            # 3. 娓呯┖宸蹭娇鐢ㄤ俊鐢ㄩ搴?            customer.usedcredit = Decimal('0')
+            # 3. 清空已使用信用额度
+            customer.usedcredit = Decimal('0')
             
-            # 4. 妫€鏌ユ槸鍚﹀崌绾?            from .signals import _calculate_credit_level
+            # 4. 检查是否升级
+            from .signals import _calculate_credit_level
             from .models import Creditlevel as CL
             new_level_id = _calculate_credit_level(customer.totalspent)
             old_level = customer.levelid.levelid
@@ -723,14 +764,14 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
                 customer.levelid = CL.objects.get(levelid=new_level_id)
                 customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
                 messages.success(request, 
-                    f"杩樻鎴愬姛锛佽繕娓呬簡{repay_count}涓鍗曪紝鍏甭total_repay}锛?
-                    f"褰撳墠浣欓锛毬customer.balance}锛?
-                    f"淇＄敤绛夌骇宸插崌绾ц嚦{new_level_id}绾э紒")
+                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
+                    f"当前余额：¥{customer.balance}，"
+                    f"信用等级已升级至{new_level_id}级！")
             else:
                 customer.save(update_fields=['balance', 'usedcredit', 'totalspent'])
                 messages.success(request, 
-                    f"杩樻鎴愬姛锛佽繕娓呬簡{repay_count}涓鍗曪紝鍏甭total_repay}锛?
-                    f"褰撳墠浣欓锛毬customer.balance}")
+                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
+                    f"当前余额：¥{customer.balance}")
         
         return redirect("bookstore:account")
     
@@ -739,16 +780,16 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
-    """琛ヨ冻鏀粯鏈叏棰濇敮浠樼殑璁㈠崟锛堝彧鑳界敤浣欓锛?""
+    """补足支付未全额支付的订单（只能用余额）"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
     
     if order.paymentstatus == 1:
-        messages.info(request, "璇ヨ鍗曞凡鍏ㄩ鏀粯")
+        messages.info(request, "该订单已全额支付")
         return redirect("bookstore:order_detail", order_id=order_id)
     
     if order.paymentstatus != 2:
-        messages.error(request, "璇ヨ鍗曚笉闇€瑕佽ˉ瓒虫敮浠?)
+        messages.error(request, "该订单不需要补足支付")
         return redirect("bookstore:order_detail", order_id=order_id)
     
     if request.method == "POST":
@@ -756,19 +797,21 @@ def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
             customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
             order.refresh_from_db()
             
-            # 璁＄畻鏈粯閲戦
+            # 计算未付金额
             unpaid_amount = order.totalamount - order.actualpaid
             
-            # 妫€鏌ヤ綑棰濓紙鍙兘鐢ㄤ綑棰濓紝涓嶈兘鐢ㄤ俊鐢級
+            # 检查余额（只能用余额，不能用信用）
             if customer.balance < unpaid_amount:
-                messages.error(request, f"浣欓涓嶈冻锛侀渶瑕伮unpaid_amount}锛屽綋鍓嶄綑棰澛customer.balance}锛岃鍏堝厖鍊?)
+                messages.error(request, f"余额不足！需要¥{unpaid_amount}，当前余额¥{customer.balance}，请先充值")
                 return redirect("bookstore:order_detail", order_id=order_id)
             
-            # 浠庝綑棰濇墸娆?            customer.balance -= unpaid_amount
-            customer.totalspent += unpaid_amount  # 琛ヨ冻閮ㄥ垎璁″叆绱娑堣垂
-            customer.usedcredit -= unpaid_amount  # 閲婃斁淇＄敤棰濆害
+            # 从余额扣款
+            customer.balance -= unpaid_amount
+            customer.totalspent += unpaid_amount  # 补足部分计入累计消费
+            customer.usedcredit -= unpaid_amount  # 释放信用额度
             
-            # 妫€鏌ユ槸鍚﹀崌绾?            from .signals import _calculate_credit_level
+            # 检查是否升级
+            from .signals import _calculate_credit_level
             from .models import Creditlevel as CL
             new_level_id = _calculate_credit_level(customer.totalspent)
             old_level = customer.levelid.levelid
@@ -777,14 +820,15 @@ def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
             
             customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
             
-            # 鏇存柊璁㈠崟
+            # 更新订单
             order.actualpaid = order.totalamount
-            order.paymentstatus = 1  # 宸插叏棰濇敮浠?            order.save(update_fields=['actualpaid', 'paymentstatus'])
+            order.paymentstatus = 1  # 已全额支付
+            order.save(update_fields=['actualpaid', 'paymentstatus'])
             
             if new_level_id != old_level:
-                messages.success(request, f"琛ヨ冻鏀粯鎴愬姛锛佹敮浠樎unpaid_amount}锛屽綋鍓嶄綑棰澛customer.balance}锛屼俊鐢ㄧ瓑绾у凡鍗囩骇鑷硔new_level_id}绾э紒")
+                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}，信用等级已升级至{new_level_id}级！")
             else:
-                messages.success(request, f"琛ヨ冻鏀粯鎴愬姛锛佹敮浠樎unpaid_amount}锛屽綋鍓嶄綑棰澛customer.balance}")
+                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}")
         
         return redirect("bookstore:order_detail", order_id=order_id)
     
@@ -793,28 +837,30 @@ def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
 
 @customer_required
 def cancel_order(request: HttpRequest, order_id: int) -> HttpResponse:
-    """鍙栨秷璁㈠崟锛堝彧鑳藉彇娑堟湭鍙戣揣鐨勮鍗曪級"""
+    """取消订单（只能取消未发货的订单）"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
 
-    # 妫€鏌ヨ鍗曟槸鍚﹀彲浠ュ彇娑?    if order.status == 4:
-        messages.info(request, "璇ヨ鍗曞凡鍙栨秷")
+    # 检查订单是否可以取消
+    if order.status == 4:
+        messages.info(request, "该订单已取消")
         return redirect("bookstore:order_detail", order_id=order_id)
 
     if order.status == 1:
-        messages.error(request, "宸插彂璐х殑璁㈠崟涓嶈兘鍙栨秷锛岃鑱旂郴瀹㈡湇")
+        messages.error(request, "已发货的订单不能取消，请联系客服")
         return redirect("bookstore:order_detail", order_id=order_id)
 
     if order.status == 2:
-        messages.error(request, "宸插畬鎴愮殑璁㈠崟涓嶈兘鍙栨秷")
+        messages.error(request, "已完成的订单不能取消")
         return redirect("bookstore:order_detail", order_id=order_id)
 
     if request.method == "POST":
         with transaction.atomic():
-            # 鏇存柊璁㈠崟鐘舵€佷负宸插彇娑?            order.status = 4
+            # 更新订单状态为已取消
+            order.status = 4
             order.save(update_fields=['status'])
 
-            messages.success(request, "璁㈠崟宸插彇娑?)
+            messages.success(request, "订单已取消")
             return redirect("bookstore:order_detail", order_id=order_id)
 
     return redirect("bookstore:order_detail", order_id=order_id)
@@ -822,24 +868,25 @@ def cancel_order(request: HttpRequest, order_id: int) -> HttpResponse:
 
 @customer_required
 def confirm_receipt(request: HttpRequest, order_id: int) -> HttpResponse:
-    """纭鏀惰揣"""
+    """确认收货"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
 
     if order.status != 1:
-        messages.error(request, "鍙湁宸插彂璐х殑璁㈠崟鎵嶈兘纭鏀惰揣")
+        messages.error(request, "只有已发货的订单才能确认收货")
         return redirect("bookstore:order_detail", order_id=order_id)
 
     if request.method == "POST":
-        order.status = 2  # 宸插畬鎴?        order.save(update_fields=['status'])
-        messages.success(request, "宸茬‘璁ゆ敹璐э紝鎰熻阿鎮ㄧ殑璐拱锛?)
+        order.status = 2  # 已完成
+        order.save(update_fields=['status'])
+        messages.success(request, "已确认收货，感谢您的购买！")
         return redirect("bookstore:order_detail", order_id=order_id)
 
     return redirect("bookstore:order_detail", order_id=order_id)
 
 
 # ============================================================================
-# AI 鑱婂ぉ鍔╂墜
+# AI 聊天助手
 # ============================================================================
 
 def _get_ai_history(request: HttpRequest) -> list:
@@ -855,7 +902,7 @@ def _save_ai_history(request: HttpRequest, history: list) -> None:
 
 
 def ai_chat(request: HttpRequest) -> HttpResponse:
-    """AI 瀵硅瘽椤甸潰銆?""
+    """AI 对话页面。"""
     from .ai_service import is_ai_configured
 
     return render(
@@ -870,15 +917,15 @@ def ai_chat(request: HttpRequest) -> HttpResponse:
 
 @require_http_methods(["POST"])
 def ai_chat_api(request: HttpRequest) -> JsonResponse:
-    """鎺ユ敹鐢ㄦ埛娑堟伅锛岃皟鐢?AI 骞惰繑鍥?JSON 鍥炲銆?""
+    """接收用户消息，调用 AI 并返回 JSON 回复。"""
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse({"error": "璇锋眰鏍煎紡閿欒銆?}, status=400)
+        return JsonResponse({"error": "请求格式错误。"}, status=400)
 
     user_message = (payload.get("message") or "").strip()
     if not user_message:
-        return JsonResponse({"error": "璇疯緭鍏ユ秷鎭€?}, status=400)
+        return JsonResponse({"error": "请输入消息。"}, status=400)
 
     history = _get_ai_history(request)
 
@@ -889,7 +936,7 @@ def ai_chat_api(request: HttpRequest) -> JsonResponse:
     except AIServiceError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     except Exception:
-        return JsonResponse({"error": "鏈嶅姟鍣ㄥ唴閮ㄩ敊璇紝璇风◢鍚庡啀璇曘€?}, status=500)
+        return JsonResponse({"error": "服务器内部错误，请稍后再试。"}, status=500)
 
     history.append({"role": "user", "content": user_message})
     history.append({"role": "assistant", "content": reply})
@@ -900,7 +947,7 @@ def ai_chat_api(request: HttpRequest) -> JsonResponse:
 
 @require_http_methods(["POST"])
 def ai_chat_clear(request: HttpRequest) -> JsonResponse:
-    """娓呯┖褰撳墠浼氳瘽鐨勫巻鍙茶褰曘€?""
+    """清空当前会话的历史记录。"""
     request.session["ai_chat_history"] = []
     request.session.modified = True
     return JsonResponse({"ok": True})
