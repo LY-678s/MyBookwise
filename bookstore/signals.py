@@ -282,16 +282,16 @@ def _handle_deduct_or_refund(instance, old_status, _old_totalamount=None):
 # Django 信号处理函数（已被测试覆盖的部分）
 # ============================================================================
 
-@receiver(pre_save, sender=Orders)  # pragma: no cover
-def orders_capture_old(_sender, instance, **_kwargs):  # pragma: no cover
+@receiver(pre_save, sender=Orders)
+def orders_capture_old(sender, instance, **kwargs):
     """在实例上附加旧值，供 post_save 阶段使用"""
     old_status, old_total = _get_old_order_values(instance)
     instance._old_status = old_status  # pylint: disable=protected-access
     instance._old_totalamount = old_total  # pylint: disable=protected-access
 
 
-@receiver(post_save, sender=Orders)  # pragma: no cover
-def orders_post_save(_sender, instance, _created, **_kwargs):  # pragma: no cover
+@receiver(post_save, sender=Orders)
+def orders_post_save(sender, instance, created, **kwargs):
     """处理订单保存后的业务逻辑"""
     old_status = getattr(instance, '_old_status', None)
     old_totalamount = getattr(instance, '_old_totalamount', None)

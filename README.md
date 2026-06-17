@@ -1,3 +1,14 @@
+# 1. 启动后端（Web + API 同一个服务）
+python manage.py runserver 0.0.0.0:8000
+
+# 2. Web：浏览器打开 http://127.0.0.1:8000
+
+# 3. APP：mobile/ 里单独 build/run，baseUrl 指向后端
+Android 模拟器常用 http://10.0.2.2:8000
+真机演示用电脑局域网 IP，如 http://192.168.x.x:8000
+
+
+
 # 数据库课设——网上图书管理系统
 以下是主要功能模块测试流程示例
 ## 顾客端

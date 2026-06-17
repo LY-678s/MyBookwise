@@ -1,0 +1,19 @@
+[run]
+branch = True
+source = bookstore
+omit =
+    bookstore/migrations/*
+    bookstore/tests.py
+    bookstore/admin.py
+    bookstore/apps.py
+    bookstore/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    def __str__
+    def __repr__
+show_missing = True
+skip_covered = False

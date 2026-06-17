@@ -253,7 +253,7 @@ class TestAccountEdit:
         from bookstore.models import Customer
         from django.utils import timezone
         from decimal import Decimal
-        # 预先往数据库垫入“另一个用户”
+        # 预先往数据库垫入"另一个用户"
         Customer.objects.create(
             username='other_user', password='123', name='路人甲', email='already@example.com',
             balance=Decimal('0.00'), levelid=credit_level_1, creditlimit=Decimal('0'),
