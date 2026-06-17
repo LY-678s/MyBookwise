@@ -25,6 +25,11 @@ urlpatterns = [
     path("orders/<int:order_id>/cancel/", views.cancel_order, name="cancel_order"),
     path("orders/<int:order_id>/confirm/", views.confirm_receipt, name="confirm_receipt"),
     
+    # AI 聊天助手
+    path("ai/", views.ai_chat, name="ai_chat"),
+    path("ai/chat/", views.ai_chat_api, name="ai_chat_api"),
+    path("ai/clear/", views.ai_chat_clear, name="ai_chat_clear"),
+
     # 账户管理
     path("account/", views.account_recharge, name="account"),
     path("account/edit/", views.account_edit, name="account_edit"),

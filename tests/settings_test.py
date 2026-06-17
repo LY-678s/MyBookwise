@@ -31,3 +31,8 @@ TEMPLATE_DEBUG = False
 LOGGING_CONFIG = None
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+# AI 测试用占位配置
+AI_PROVIDER = "deepseek"
+DEEPSEEK_API_KEY = "test-key"
+GEMINI_API_KEY = "test-key"

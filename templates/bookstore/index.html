@@ -17,6 +17,11 @@
         <p style="color: var(--text-secondary); font-size: 1.1rem;">
             发现您心仪的图书，开启阅读之旅
         </p>
+        <a href="{% url 'bookstore:ai_chat' %}" class="btn btn-primary"
+           style="margin-top: 1.25rem; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; font-size: 1rem; text-decoration: none;">
+            <span class="material-symbols-outlined" style="font-size: 1.25rem;" aria-hidden="true">smart_toy</span>
+            与 AI 书小智对话
+        </a>
     </div>
 
    <!-- 搜索栏 -->
@@ -84,6 +89,9 @@
                 <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
                     <p style="margin: 0;">ISBN: {{ book.isbn }}</p>
                     <p style="margin: 0;">出版社: {{ book.publisher|default:"未知" }}</p>
+                    {% if book.authors %}
+                    <p style="margin: 0;">作者: {{ book.authors }}</p>
+                    {% endif %}
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
