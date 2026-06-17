@@ -17,15 +17,19 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", include("bookstore.urls")),  # 前台路由
+    path("api/", include("bookstore.api.urls")),  # 移动端 REST API
+    path("", include("bookstore.urls")),  # 前台 Web 路由
 ]
 
-# Development: serve favicon.ico from project root if present (helps when favicon is at project root)
+# Development: serve static files and favicon
 if settings.DEBUG:
     from django.views.static import serve
     urlpatterns += [
         path("favicon.ico", serve, {"path": "favicon.ico", "document_root": settings.BASE_DIR}),
     ]
+    # 添加static文件服务
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.BASE_DIR / "static")

@@ -1,26 +1,39 @@
-# ===== 敏感配置（绝对不能上传）=====
-MyBookwise/settings.py
-.env
-
-# ===== Python 缓存 =====
+# Python / Django
 __pycache__/
 *.py[cod]
 *.pyo
-
-# ===== 数据库文件 =====
+.env
+.venv/
+venv/
+env/
 *.sqlite3
 *.db
+db.sqlite3
 
-# ===== 虚拟环境 =====
-venv/
-.venv/
-env/
+# Django local settings (machine-specific)
+settings.py
+MyBookwise/settings.py
 
-# ===== IDE 配置 =====
+# JetBrains / PyCharm / Android Studio (local IDE config)
 .idea/
 .vscode/
 *.iml
 
-# ===== 系统文件 =====
+# OS
 .DS_Store
 Thumbs.db
+
+# Android — mobile/ (build output & local SDK paths)
+mobile/.gradle/
+mobile/**/build/
+mobile/local.properties
+mobile/.idea/
+mobile/*.iml
+mobile/captures/
+mobile/.externalNativeBuild/
+mobile/.cxx/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/

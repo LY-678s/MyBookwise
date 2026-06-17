@@ -10,6 +10,7 @@ from django.db.models import Q, F, Sum
 from django.db import transaction
 
 from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel
+from .cart_store import get_cart, save_cart, clear_cart
 from decimal import Decimal
 from functools import wraps
 
@@ -254,11 +255,11 @@ def search(request: HttpRequest) -> HttpResponse:
     return render(request, "bookstore/search.html", {"books": books, "query": query})
 
 def _get_cart(request):
-    return request.session.setdefault("cart", {})
+    """读取购物车（与 APP 共用 cache，按 customer_id 存储）。"""
+    return get_cart(request.session["customer_id"])
 
 def _save_cart(request, cart):
-    request.session["cart"] = cart
-    request.session.modified = True
+    save_cart(request.session["customer_id"], cart)
 
 @customer_required
 def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
@@ -479,9 +480,8 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                     order.paymentstatus = payment_status
                     order.save(update_fields=['actualpaid', 'paymentstatus'])
                     
-                    # 清空购物车
-                    request.session["cart"] = {}
-                    request.session.modified = True
+                    # 清空购物车（Web / APP 共用 cache）
+                    clear_cart(customer.customerid)
                     messages.success(request, f"下单成功！{msg}")
                     return redirect("bookstore:order_list")
                 else:
@@ -502,9 +502,7 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
                     order.paymentstatus = payment_status
                     order.save(update_fields=['actualpaid', 'paymentstatus'])
                     
-                    # 清空购物车
-                    request.session["cart"] = {}
-                    request.session.modified = True
+                    clear_cart(customer.customerid)
                     messages.success(request, f"下单成功！{msg}")
                     return redirect("bookstore:order_list")
                 else:
