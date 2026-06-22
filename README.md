@@ -1,99 +1,189 @@
-# 1. 启动后端（Web + API 同一个服务）
+# MyBookwise 网上书店系统
+
+双端课设项目：Web 端（Django）+ Android APP（Kotlin + Compose），共用同一套后端和 MySQL 数据库。
+
+---
+
+## 快速启动
+
+### 1. 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 配置数据库
+复制 `MyBookwise/settings.example.py` 为 `MyBookwise/settings.py`，修改数据库账号密码：
+```python
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "bookstoredb",
+        "USER": "root",
+        "PASSWORD": "你的密码",
+        "HOST": "localhost",
+        "PORT": "3306",
+    }
+}
+```
+
+### 3. 初始化数据库（首次）
+见下方「数据库导入指南」。
+
+### 4. 启动后端
+```bash
+# 仅本机访问（Web 开发）
+python manage.py runserver
+
+# 允许手机/APP 访问（真机联调）
 python manage.py runserver 0.0.0.0:8000
+```
 
-# 2. Web：浏览器打开 http://127.0.0.1:8000
+### 5. 访问
+- **Web**：http://127.0.0.1:8000
+- **Admin 后台**：http://127.0.0.1:8000/admin（账号 admin，密码见 setdatabase.sql）
+- **APP**：Android Studio 打开 `mobile/` 目录，配置 `ApiClient.kt` 中的服务器地址后运行
 
-# 3. APP：mobile/ 里单独 build/run，baseUrl 指向后端
-Android 模拟器常用 http://10.0.2.2:8000
-真机演示用电脑局域网 IP，如 http://192.168.x.x:8000
+---
 
+## 数据库导入指南
 
+### 首次建库（新成员/新环境）
 
-# 数据库课设——网上图书管理系统
-以下是主要功能模块测试流程示例
-## 顾客端
-### 1.注册
+**步骤 1：创建数据库**
+```sql
+-- 在 MySQL 中执行
+CREATE DATABASE bookstoredb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+**步骤 2：导入基础结构和初始数据**
+
+> ⚠️ **必须用 Python 脚本导入，不要用 PowerShell 管道**，否则中文会变成 `?`。
+
+```bash
+# 在项目根目录执行
+python SetDatabase/init_db.py
+```
+
+如果没有 `init_db.py`，也可以用 MySQL 命令行（注意加 `--default-character-set`）：
+```bash
+# Windows CMD（不是 PowerShell）
+mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase/setdatabase.sql
+
+# PowerShell 需要用管道方式，不支持 < 重定向
+Get-Content "SetDatabase\setdatabase.sql" -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
+```
+
+**步骤 3：导入豆瓣图书数据集（可选，约 1000 本中文书）**
+```bash
+# 需要先有 SetDatabase/book_douban.csv
+python SetDatabase/import_douban.py
+```
+
+---
+
+### 恢复初始数据库（测试后重置）
+
+测试过程中可能会产生大量订单、修改余额、触发缺货记录等。如需恢复到初始演示状态：
+
+**方式 A：只重置业务数据（保留图书，不重建表）**
+```bash
+python SetDatabase/reset_demo_data.py
+```
+
+**方式 B：完整重建（清空所有数据，重新导入）**
+```bash
+# 1. 重新导入完整 SQL（重建表结构和初始数据）
+Get-Content "SetDatabase\setdatabase.sql" -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
+
+# 2. 重新导入图书数据集
+python SetDatabase/import_douban.py
+```
+
+---
+
+### 重置演示数据说明（reset_demo_data.py）
+
+该脚本将以下数据恢复到初始状态，不影响图书表：
+
+| 表 | 操作 |
+|---|---|
+| `customer` | 恢复 5 个演示顾客的余额/信用/等级 |
+| `orders` / `orderdetail` | 清空所有订单 |
+| `shortagerecord` | 清空缺货记录 |
+| `procurement` / `procurementdetail` | 清空采购记录 |
+
+---
+
+## 测试流程（演示用例）
+
+### 顾客端
+#### 1. 注册
 通过账号密码注册，并可以引导输入个人详细信息——地址、联系方式等。
-### 2.搜索
-书名/关键字/isbn
-### 3.购物车添加
+
+#### 2. 搜索
+书名 / 关键字 / ISBN
+
+#### 3. 购物车添加
 可以调整数量，点击即可成功添加至购物车。
-当输入数量大于库存时，会提示需要输入<=库存的数
-### 4.下单与付款（不涉及缺货等特殊情况）
-（注意为了简单，我没有在有些新创建的账号里面补齐Totalspent应该有的历史订单）
-这里字段的显示，分别关注主页、购物车、动作消息提示以及个人账户
-#### 4.1 信用等级LevelID=1 OR 2，不享受先享后付，只能使用余额支付
-设置：
--- 客户数据
+当输入数量大于库存时，会提示需要输入 ≤ 库存的数量。
+
+#### 4. 下单与付款
+
+##### 4.1 信用等级 1/2 级（只能余额支付）
+```
 CustomerID=1, TotalSpent=285.30, Balance=714.70, LevelID=1
 CustomerID=4, TotalSpent=1300.00, Balance=2000.00, LevelID=2
--- 图书数据
-ISBN='978-7-115-48935-5', StockQty=40, MinStockLimit=10
-创建订单：
-ISBN='978-7-115-48935-5', quantity=5
-预期：
-- 下单时，totalspent自动增加，balance减少
-- 当明细字段isshipped全部改为1，订单status改为1
-#### 4.2 信用等级LevelID=3 OR 4 OR 5，享受先享后付，能选择使用余额支付或信用支付
+ISBN='978-7-115-48935-5', StockQty=40, quantity=5
+```
+预期：下单时 TotalSpent 增加，Balance 减少；明细全部 IsShipped=1 后订单 Status 变为 1。
+
+##### 4.2 信用等级 3/4/5 级（可使用信用支付）
+```
 CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
 CustomerID=2, TotalSpent=1300.00, Balance=2000.00, LevelID=4
-CustomerID=3, TotalSpent=285.30, Balance=714.70, LevelID=5
-这里建议自行根据用户额度和信用额度选择数据（因为前面customer数据可能后期会变动，这里确定哪个具体数据无意义。）
-1. 选择未超余额和信用余额的数据
-2. 选择不超过余额但完整金额超过信用余额的数据
-3. 选择超过余额但多出部分不超过信用余额的数据，且完整金额超过信用余额。
-4. 选择超过余额和多出部分超过信用余额的数据
-5. 选择超过余额但完整金额不超过信用余额的数据
-预期：
-1. 
-使用余额付款
-  - 下单时，totalspent自动增加，balance减少
-  - 当明细字段isshipped全部改为1，订单status改为1
-使用信用额度付款
-  - 下单时，totalspent自动增加，usedcredit自动增加
-  - 当明细字段isshipped全部改为1，订单status改为1
-2. 只能使用余额付款
-情况同1中
-3. 只能先使用全部余额，不足从信用额度扣款。
-  下单时点击信用扣款会
-  - 下单时，totalspent自动增加，usedcredit自动增加，balance自动减少
-  - 其余同上
-4. 无论勾选哪种都会提示错误，无法下单
-5. 先使用全部余额再使用信用余额和直接使用信用余额付款都OK
-具体情况同上类似例子。
-#### 5.信用升级
-CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
-选择
-ISBN='978-7-302-51123-4', quantity=12, MinStockLimit=12
-ISBN='978-7-111-54425-7', quantity=10, MinStockLimit=12
-预期：
-totalamount=2181.10，等级由3升至4
-#### 6.我的订单
-所有的历史订单详情都可以在此查看，具体如下
-暂时无法在飞书文档外展示此内容
-未全额支付的订单可以在详情页选择全部还款。
-在收到货后可以确认订单以彻底完成整个订单。
-#### 7.我的主页
-可以修改密码，联系方式、地址
-可以充值。
-可以查看账户的完整信息——余额，信用等级，信用余额等。
+CustomerID=3, TotalSpent=285.30,  Balance=714.70,  LevelID=5
+```
+五种场景：余额充足 / 仅余额 / 混合 / 均不足 / 纯信用。
 
-## 管理员端
-对于订单，创建在顾客端，管理员端只能手动修改其状态为已下单、已发货，不允许创建订单。
-### 1. 缺货登记和采购单
-- 当顾客端订单使得库存低于最小限制时，将在数据库中自动生成缺货登记和采购单
-- 当采购单状态为已到货入库时，缺货单要自动将status标记为1（已处理），且图书库存也自动补上
-- 可以手动添加采购记录和缺货登记
-- 可搜索
-### 2. 订单
-- 可以修改订单状态为已发货、已完成和已取消
-- 可搜索
-- 禁止将已取消订单重新打开，否则抛出错误提示，不允许此类行为
-### 3. 客户、图书、图书作者、信用等级规则、供应商图书对应信息和供应商信息管理
-均可实现增删改查
-1. 客户：包括客户名、密码、balance、levelid等详细信息的修改
-2. 图书主数据管理：除基础信息（书号、书名、出版社、价格）外，还需支持复杂的图书关系。
-3. 图书-作者表：通过“作者序位”字段管理最多四位有序作者；通过“丛书编号”关联同一丛书下的不同分册；
-4. 信用等级规则：规定信用等级规则
-5. 供货信息管理：维护供应商与图书的关联信息，包括 供应价格、最新供货日期等。理想情况下，系统应能为供应商提供一个门户，让其自行更新可供货的书目信息。
-6. 供应商基本信息：详细记录供应商名称、联系人、地址、银行账户等，并可通过“合作状态”字段管理活跃或已终止合作的供应商。
+##### 5. 信用升级
+```
+CustomerID=5, TotalSpent=2022.15, LevelID=3
+ISBN='978-7-302-51123-4', quantity=12
+ISBN='978-7-111-54425-7', quantity=10
+预期：totalamount=2181.10，等级由 3 升至 4
+```
+
+#### 6. 我的订单
+历史订单详情、补款、确认收货。
+
+#### 7. 我的主页
+修改密码、联系方式、地址；充值；查看余额/信用等级/信用余额。
+
+---
+
+### 管理员端
+#### 1. 缺货登记和采购单
+- 顾客下单导致库存低于 MinStockLimit 时自动生成缺货记录和采购单
+- 采购单标记为「已到货入库」时自动补库存、标记缺货单已处理
+- 可手动添加、可搜索
+
+#### 2. 订单管理
+- 修改订单状态：已发货 / 已完成 / 已取消
+- 禁止将已取消订单重新打开
+
+#### 3. 数据管理
+客户、图书、图书作者、信用等级规则、供应商信息、供货关系均可增删改查。
+
+---
+
+## APP 联调地址
+
+修改 `mobile/app/src/main/java/com/example/bookwiseapp/data/api/ApiClient.kt` 第 16 行：
+
+| 场景 | SERVER_BASE |
+|---|---|
+| Android 模拟器 | `http://10.0.2.2:8000` |
+| 真机（USB 共享网络） | `http://192.168.42.100:8000` |
+| 真机（同 Wi-Fi） | `http://电脑局域网IP:8000` |
+
+后端须以 `0.0.0.0:8000` 启动才能接受手机请求。

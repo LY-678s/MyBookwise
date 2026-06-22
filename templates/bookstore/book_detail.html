@@ -23,15 +23,24 @@
                         <img src="{{ book.cover_image_url }}"
                              alt="{{ book.title }}"
                              style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;"
-                             onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
+                            <span style="font-size:5rem;">📖</span>
+                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
+                        </div>
                     {% elif book.coverimage %}
                         <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}"
                              alt="{{ book.title }}"
                              style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;"
-                             onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
+                            <span style="font-size:5rem;">📖</span>
+                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
+                        </div>
                     {% else %}
-                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 5rem;">
-                            📖
+                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
+                            <span style="font-size:5rem;">📖</span>
+                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
                         </div>
                     {% endif %}
 
@@ -79,42 +88,8 @@
                 </div>
             </div>
 
-            <!-- 快速信息卡片 -->
-            <div class="card">
-                <div class="card-header">
-                    <h4 style="margin: 0; color: var(--text-primary);">
-                        <span class="material-symbols-outlined">
-                            bar_chart
-                        </span>
-                        快速信息</h4>
-                </div>
-                <div class="card-body">
-                    <div style="display: grid; gap: 1rem;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: var(--text-secondary);">ISBN</span>
-                            <span style="font-weight: 600;">{{ book.isbn }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: var(--text-secondary);">出版社</span>
-                            <span style="font-weight: 600;">{{ book.publisher|default:"未知" }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: var(--text-secondary);">库存位置</span>
-                            <span style="font-weight: 600;">{{ book.location|default:"未设置" }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: var(--text-secondary);">最低库存</span>
-                            <span style="font-weight: 600;">{{ book.minstocklimit }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 右侧：详细信息 -->
-        <div>
-            <!-- 图书标题和关键词 -->
-            <div class="card" style="margin-bottom: 2rem;">
+            <!-- 图书标题、关键词和交互按钮（原第二卡，调至此处） -->
+            <div class="card" style="margin-bottom: 1.5rem;">
                 <div class="card-body">
                     <h1 style="color: var(--text-primary); margin: 0 0 1rem 0; font-size: 2rem; font-weight: 300;">
                         {{ book.title }}
@@ -134,14 +109,14 @@
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                             <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
                                 favorite
-                                </span>
+                            </span>
                             收藏
                         </button>
                         <button class="btn btn-secondary" onclick="shareBook()"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                             <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
                                 share
-                            </span> 
+                            </span>
                             分享
                         </button>
                         <button class="btn btn-secondary" onclick="toggleDetails(this)"
@@ -153,7 +128,7 @@
                         </button>
                     </div>
 
-                    <!-- 详细信息（默认隐藏） -->
+                    <!-- 详细信息（默认隐藏，去掉内部字段） -->
                     <div id="book-details" style="display: none; padding: 1rem; background: var(--secondary-bg); border-radius: 8px; margin-top: 1rem;">
                         <h4 style="margin: 0 0 1rem 0; color: var(--text-primary);">
                             <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
@@ -166,12 +141,38 @@
                             <p><strong>出版社:</strong> {{ book.publisher|default:"未知" }}</p>
                             <p><strong>价格:</strong> ¥{{ book.price }}</p>
                             <p><strong>库存:</strong> {{ book.stockqty }} 本</p>
-                            <p><strong>库存位置:</strong> {{ book.location|default:"未设置" }}</p>
-                            <p><strong>最低库存预警:</strong> {{ book.minstocklimit }} 本</p>
                             {% if book.keywords %}
                             <p><strong>关键词:</strong> {{ book.keywords }}</p>
                             {% endif %}
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快速信息卡片（原第一卡，调至此处；去掉库存位置和最低库存） -->
+            <div class="card">
+                <div class="card-header">
+                    <h4 style="margin: 0; color: var(--text-primary);">
+                        <span class="material-symbols-outlined">bar_chart</span>
+                        快速信息
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div style="display: grid; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">ISBN</span>
+                            <span style="font-weight: 600;">{{ book.isbn }}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">出版社</span>
+                            <span style="font-weight: 600;">{{ book.publisher|default:"未知" }}</span>
+                        </div>
+                        {% if book.location %}
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary);">库存位置</span>
+                            <span style="font-weight: 600;">{{ book.location }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

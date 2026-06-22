@@ -47,7 +47,7 @@
                     <div class="ai-msg-avatar {% if msg.role == 'user' %}ai-msg-avatar-user{% else %}ai-msg-avatar-bot{% endif %}" aria-hidden="true">
                         <span class="material-symbols-outlined">{% if msg.role == 'user' %}person{% else %}smart_toy{% endif %}</span>
                     </div>
-                    <div class="ai-msg-bubble">{{ msg.content }}</div>
+                    <div class="ai-msg-bubble{% if msg.role == 'assistant' %} ai-msg-markdown{% endif %}"{% if msg.role == 'assistant' %} data-markdown-content{% endif %}>{{ msg.content }}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -151,6 +151,68 @@
     box-shadow: 0 2px 8px var(--shadow);
 }
 
+.ai-msg-markdown {
+    white-space: normal;
+}
+
+.ai-msg-markdown h1,
+.ai-msg-markdown h2,
+.ai-msg-markdown h3,
+.ai-msg-markdown h4 {
+    margin: 0.75rem 0 0.35rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.ai-msg-markdown h1 { font-size: 1.25rem; }
+.ai-msg-markdown h2 { font-size: 1.1rem; }
+.ai-msg-markdown h3 { font-size: 1rem; }
+
+.ai-msg-markdown p {
+    margin: 0.35rem 0;
+}
+
+.ai-msg-markdown ul,
+.ai-msg-markdown ol {
+    margin: 0.35rem 0 0.35rem 1.25rem;
+    padding: 0;
+}
+
+.ai-msg-markdown li {
+    margin: 0.2rem 0;
+}
+
+.ai-msg-markdown code {
+    background: var(--secondary-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.ai-msg-markdown pre {
+    background: var(--secondary-bg);
+    padding: 0.75rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+}
+
+.ai-msg-markdown pre code {
+    background: none;
+    padding: 0;
+}
+
+.ai-msg-markdown strong {
+    font-weight: 600;
+}
+
+.ai-msg-markdown blockquote {
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid var(--accent);
+    color: var(--text-secondary);
+}
+
 .ai-msg-user .ai-msg-bubble {
     background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%);
 }
@@ -220,6 +282,8 @@
 }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
 <script>
 (function () {
     const form = document.getElementById('chat-form');
@@ -229,6 +293,27 @@
     const clearBtn = document.getElementById('clear-btn');
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const aiConfigured = {{ ai_configured|yesno:"true,false" }};
+
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({ breaks: true, gfm: true });
+    }
+
+    function renderMarkdown(text) {
+        if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+            return null;
+        }
+        return DOMPurify.sanitize(marked.parse(text || ''));
+    }
+
+    function applyMarkdown(bubble, content) {
+        const html = renderMarkdown(content);
+        if (html !== null) {
+            bubble.innerHTML = html;
+            bubble.classList.add('ai-msg-markdown');
+        } else {
+            bubble.textContent = content;
+        }
+    }
 
     function scrollToBottom() {
         messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -253,7 +338,11 @@
 
         const bubble = document.createElement('div');
         bubble.className = 'ai-msg-bubble';
-        bubble.textContent = content;
+        if (role === 'assistant' && !isLoading) {
+            applyMarkdown(bubble, content);
+        } else {
+            bubble.textContent = content;
+        }
 
         wrap.appendChild(createAvatar(role));
         wrap.appendChild(bubble);
@@ -279,6 +368,12 @@
         input.disabled = loading || !aiConfigured;
         sendBtn.querySelector('.material-symbols-outlined').textContent = loading ? 'hourglass_empty' : 'send';
     }
+
+    // 渲染服务端返回的历史消息（assistant 为 Markdown）
+    messagesEl.querySelectorAll('[data-markdown-content]').forEach(function (bubble) {
+        applyMarkdown(bubble, bubble.textContent);
+        bubble.removeAttribute('data-markdown-content');
+    });
 
     form.addEventListener('submit', async function (e) {
         e.preventDefault();

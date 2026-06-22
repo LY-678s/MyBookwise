@@ -79,4 +79,14 @@ interface ApiService {
 
     @POST("account/repay/")
     suspend fun repay(): Response<AccountResponse>
+
+    // ── AI 助手 ──────────────────────────────────────────────────────
+    @GET("ai/")
+    suspend fun getAiStatus(): Response<AiStatusResponse>
+
+    @POST("ai/chat/")
+    suspend fun sendAiMessage(@Body request: AiChatRequest): Response<AiChatResponse>
+
+    @POST("ai/clear/")
+    suspend fun clearAiChat(): Response<SimpleResponse>
 }

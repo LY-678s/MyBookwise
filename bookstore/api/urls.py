@@ -38,4 +38,8 @@ urlpatterns = [
     path("account/", views.AccountView.as_view(), name="account"),
     path("account/recharge/", views.AccountRechargeView.as_view(), name="account-recharge"),
     path("account/repay/", views.AccountRepayView.as_view(), name="account-repay"),
+    # AI 助手 — 对应 views.ai_chat / ai_chat_api / ai_chat_clear
+    path("ai/", views.AiChatView.as_view(), name="ai-status"),
+    path("ai/chat/", views.AiChatView.as_view(), name="ai-chat"),
+    path("ai/clear/", views.AiClearView.as_view(), name="ai-clear"),
 ]

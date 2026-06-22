@@ -16,6 +16,7 @@ lifecycleViewmodelCompose = "2.8.7"
 coil = "2.7.0"
 datastorePreferences = "1.1.2"
 coroutines = "1.9.0"
+markdownRenderer = "0.26.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,6 +42,8 @@ lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+multiplatform-markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
+androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

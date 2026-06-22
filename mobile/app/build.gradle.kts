@@ -62,6 +62,9 @@ dependencies {
     implementation(libs.datastore.preferences)
     // 协程
     implementation(libs.kotlinx.coroutines.android)
+    // Markdown 渲染 + 扩展图标
+    implementation(libs.multiplatform.markdown.renderer.m3)
+    implementation(libs.androidx.material.icons.extended)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

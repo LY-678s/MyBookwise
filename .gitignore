@@ -37,3 +37,4 @@ mobile/.cxx/
 .pytest_cache/
 .coverage
 htmlcov/
+MyBookwise/settings.example.py

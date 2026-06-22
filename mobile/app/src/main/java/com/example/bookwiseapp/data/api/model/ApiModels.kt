@@ -210,3 +210,27 @@ data class UpdateAccountRequest(
     @SerializedName("new_password") val newPassword: String? = null,
     @SerializedName("confirm_password") val confirmPassword: String? = null
 )
+
+// ────────────────── AI 助手 ──────────────────
+
+data class AiMessage(
+    val role: String,
+    val content: String
+)
+
+data class AiStatusResponse(
+    val success: Boolean,
+    @SerializedName("ai_configured") val aiConfigured: Boolean = false,
+    val history: List<AiMessage> = emptyList(),
+    val error: String? = null
+)
+
+data class AiChatRequest(
+    val message: String
+)
+
+data class AiChatResponse(
+    val success: Boolean,
+    val reply: String? = null,
+    val error: String? = null
+)

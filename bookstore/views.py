@@ -11,6 +11,7 @@ from django.db import transaction
 
 from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel
 from .cart_store import get_cart, save_cart, clear_cart
+from .ai_chat_store import attach_customer_ai_history
 from decimal import Decimal
 from functools import wraps
 
@@ -22,9 +23,9 @@ def customer_login(request: HttpRequest) -> HttpResponse:
 
         try:
             customer = Customer.objects.get(username=username, password=password)
-            # 用 session 记录登录顾客的 ID
             request.session["customer_id"] = customer.customerid
             request.session["customer_name"] = customer.name
+            attach_customer_ai_history(request, customer.customerid)
             messages.success(request, "登录成功")
             return redirect("bookstore:index")
         except Customer.DoesNotExist:
@@ -85,6 +86,7 @@ def customer_register(request: HttpRequest) -> HttpResponse:
             # 自动登录新用户
             request.session["customer_id"] = customer.customerid
             request.session["customer_name"] = customer.name
+            attach_customer_ai_history(request, customer.customerid)
 
             messages.success(request, f"注册成功！欢迎加入，{customer.name}")
             return redirect("bookstore:index")
@@ -99,6 +101,7 @@ def customer_register(request: HttpRequest) -> HttpResponse:
 def customer_logout(request: HttpRequest) -> HttpResponse:
     request.session.pop("customer_id", None)
     request.session.pop("customer_name", None)
+    request.session.pop("ai_chat_history", None)
     messages.info(request, "您已退出登录")
     return redirect("bookstore:index")
 
@@ -113,25 +116,39 @@ def customer_required(view_func):
     return _wrapped_view
 
 
-def get_book_cover_image(book_title: str) -> str:
+def get_book_cover_image(book_title: str, coverimage=None) -> str:
     """
-    根据书名返回对应的封面图片路径
+    根据书名返回封面图片路径或 URL。
+
+    优先级：
+      1. settings.COVER_IMAGE_MAPPINGS 关键字匹配 → 本地静态图 URL
+      2. coverimage 字段本身是 HTTP URL（导入数据集时写入）→ 直接返回
+      3. 无匹配 → 返回 None
     """
     title_lower = book_title.lower()
 
-    # 从 settings 中读取映射与目录，保持可配置性
     from django.conf import settings
     from urllib.parse import quote
     image_mappings = getattr(settings, "COVER_IMAGE_MAPPINGS", {})
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     default_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
 
-    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
     for keyword, image_filename in image_mappings.items():
         if keyword in title_lower:
             return f"{default_prefix}{images_subdir}/{quote(image_filename)}"
 
-    # 如果没有匹配的图片，返回None
+    # 数据库字段里存的 HTTP URL（来自导入数据集）
+    if coverimage:
+        if isinstance(coverimage, str) and coverimage.strip().startswith("http"):
+            return coverimage.strip()
+        if isinstance(coverimage, (bytes, bytearray)):
+            try:
+                decoded = coverimage.decode("utf-8").strip()
+                if decoded.startswith("http"):
+                    return decoded
+            except Exception:
+                pass
+
     return None
 
 
@@ -161,7 +178,7 @@ def index(request: HttpRequest) -> HttpResponse:
         }
 
         # 优先使用静态图片文件
-        static_image = get_book_cover_image(book.title)
+        static_image = get_book_cover_image(book.title, book.coverimage)
         if static_image:
             book_data['cover_image_url'] = static_image
         # 如果没有静态图片，则尝试使用数据库中的base64图片
@@ -218,7 +235,7 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
 
     # 如果有封面图片，转换为base64
     # 优先使用静态图片映射
-    static_image = get_book_cover_image(book.title)
+    static_image = get_book_cover_image(book.title, book.coverimage)
     if static_image:
         book_data['cover_image_url'] = static_image
     elif book.coverimage:
@@ -336,7 +353,7 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
         book = get_object_or_404(Book, pk=isbn)
         # 准备封面显示数据：优先静态图片，其次尝试将数据库中的 coverimage 转为 base64 字符串
         try:
-            static_image = get_book_cover_image(book.title)
+            static_image = get_book_cover_image(book.title, book.coverimage)
         except Exception:
             static_image = None
         # 挂载到 book 对象以供模板使用（临时属性，无持久化）
@@ -889,27 +906,16 @@ def confirm_receipt(request: HttpRequest, order_id: int) -> HttpResponse:
 # AI 聊天助手
 # ============================================================================
 
-def _get_ai_history(request: HttpRequest) -> list:
-    history = request.session.get("ai_chat_history", [])
-    if not isinstance(history, list):
-        history = []
-    return history[-20:]
-
-
-def _save_ai_history(request: HttpRequest, history: list) -> None:
-    request.session["ai_chat_history"] = history[-20:]
-    request.session.modified = True
-
-
 def ai_chat(request: HttpRequest) -> HttpResponse:
     """AI 对话页面。"""
     from .ai_service import is_ai_configured
+    from .ai_chat_store import get_ai_history_for_request
 
     return render(
         request,
         "bookstore/ai_chat.html",
         {
-            "chat_history": _get_ai_history(request),
+            "chat_history": get_ai_history_for_request(request),
             "ai_configured": is_ai_configured(),
         },
     )
@@ -918,6 +924,8 @@ def ai_chat(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["POST"])
 def ai_chat_api(request: HttpRequest) -> JsonResponse:
     """接收用户消息，调用 AI 并返回 JSON 回复。"""
+    from .ai_chat_store import get_ai_history_for_request, save_ai_history_for_request
+
     try:
         payload = json.loads(request.body.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -927,7 +935,7 @@ def ai_chat_api(request: HttpRequest) -> JsonResponse:
     if not user_message:
         return JsonResponse({"error": "请输入消息。"}, status=400)
 
-    history = _get_ai_history(request)
+    history = get_ai_history_for_request(request)
 
     try:
         from .ai_service import chat_with_ai, AIServiceError
@@ -940,7 +948,7 @@ def ai_chat_api(request: HttpRequest) -> JsonResponse:
 
     history.append({"role": "user", "content": user_message})
     history.append({"role": "assistant", "content": reply})
-    _save_ai_history(request, history)
+    save_ai_history_for_request(request, history)
 
     return JsonResponse({"reply": reply})
 
@@ -948,6 +956,7 @@ def ai_chat_api(request: HttpRequest) -> JsonResponse:
 @require_http_methods(["POST"])
 def ai_chat_clear(request: HttpRequest) -> JsonResponse:
     """清空当前会话的历史记录。"""
-    request.session["ai_chat_history"] = []
-    request.session.modified = True
+    from .ai_chat_store import clear_ai_history_for_request
+
+    clear_ai_history_for_request(request)
     return JsonResponse({"ok": True})

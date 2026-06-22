@@ -379,3 +379,62 @@ class AccountRepayView(APIView):
                 "account": serialize_account_summary(result["customer"]),
             }
         )
+
+
+# ---------------------------------------------------------------------------
+# AI 助手 — 对应 ai_chat / ai_chat_api / ai_chat_clear
+# ---------------------------------------------------------------------------
+
+class AiChatView(APIView):
+    """GET /api/ai/  获取配置状态与历史；POST /api/ai/chat/  发送消息。"""
+
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        from bookstore.ai_service import is_ai_configured
+        from bookstore.ai_chat_store import get_ai_history
+
+        customer = _customer_view(request)
+        return _ok(
+            {
+                "ai_configured": is_ai_configured(),
+                "history": get_ai_history(customer.customerid),
+            }
+        )
+
+    def post(self, request):
+        from bookstore.ai_chat_store import get_ai_history, save_ai_history
+        from bookstore.ai_service import chat_with_ai, AIServiceError
+
+        user_message = (request.data.get("message") or "").strip()
+        if not user_message:
+            return _err("请输入消息。")
+
+        customer = _customer_view(request)
+        history = get_ai_history(customer.customerid)
+
+        try:
+            reply = chat_with_ai(history, user_message)
+        except AIServiceError as exc:
+            return _err(str(exc))
+        except Exception:
+            return _err("服务器内部错误，请稍后再试。", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        history.append({"role": "user", "content": user_message})
+        history.append({"role": "assistant", "content": reply})
+        save_ai_history(customer.customerid, history)
+
+        return _ok({"reply": reply})
+
+
+class AiClearView(APIView):
+    """POST /api/ai/clear/  ←→  views.ai_chat_clear"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        from bookstore.ai_chat_store import clear_ai_history
+
+        customer = _customer_view(request)
+        clear_ai_history(customer.customerid)
+        return _ok({"message": "对话已清空"})

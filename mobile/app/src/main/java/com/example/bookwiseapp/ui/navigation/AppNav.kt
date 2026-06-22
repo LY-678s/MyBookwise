@@ -20,6 +20,7 @@ object Routes {
     const val REGISTER = "register"
     const val HOME = "home"
     const val SEARCH = "search"
+    const val AI = "ai"
     const val CART = "cart"
     const val ORDER_LIST = "orders"
     const val ACCOUNT = "account"
@@ -40,6 +41,7 @@ data class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem(Routes.HOME, "首页", Icons.Default.Home),
     BottomNavItem(Routes.SEARCH, "搜索", Icons.Default.Search),
+    BottomNavItem(Routes.AI, "AI", Icons.Default.SmartToy),
     BottomNavItem(Routes.CART, "购物车", Icons.Default.ShoppingCart),
     BottomNavItem(Routes.ORDER_LIST, "订单", Icons.Default.List),
     BottomNavItem(Routes.ACCOUNT, "我的", Icons.Default.Person)
@@ -53,6 +55,7 @@ fun AppNav(startLoggedIn: Boolean) {
     val cartVm: CartViewModel = viewModel()
     val orderVm: OrderViewModel = viewModel()
     val accountVm: AccountViewModel = viewModel()
+    val aiVm: AiViewModel = viewModel()
 
     val startDest = if (startLoggedIn) Routes.HOME else Routes.LOGIN
 
@@ -130,6 +133,9 @@ fun AppNav(startLoggedIn: Boolean) {
                     cartVm = cartVm,
                     onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) }
                 )
+            }
+            composable(Routes.AI) {
+                AiChatScreen(viewModel = aiVm)
             }
             composable(Routes.CART) {
                 CartScreen(

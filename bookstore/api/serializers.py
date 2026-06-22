@@ -35,19 +35,45 @@ def _cover_base64(raw) -> str | None:
     if not raw:
         return None
     try:
+        if isinstance(raw, (bytes, bytearray)):
+            return base64.b64encode(raw).decode("utf-8")
         if isinstance(raw, str):
             s = raw.strip()
+            # CoverImage 存的是 HTTP URL（来自导入数据集），直接返回 None，
+            # 由 serialize_book 的 cover_image_url 字段承接
+            if s.startswith("http"):
+                return None
             if re.fullmatch(r"[A-Za-z0-9+/=\s]+", s) and len(s) > 50:
                 return s.replace("\\n", "").replace("\\r", "")
             return base64.b64encode(s.encode("utf-8")).decode("utf-8")
-        return base64.b64encode(raw).decode("utf-8")
+        return None
     except Exception:
         return None
 
 
 def serialize_book(book: Book, *, include_authors: bool = False) -> dict:
-    """图书 JSON；对应 Web index / book_detail。"""
+    """图书 JSON；对应 Web index / book_detail。
+
+    封面优先级：
+      1. settings.COVER_IMAGE_MAPPINGS 关键字匹配（本地静态图）
+      2. CoverImage 字段存的 HTTP URL（导入数据集时写入）
+      3. CoverImage 字段存的 base64 二进制
+    """
     cover_url = _cover_url_for_title(book.title)
+
+    # 若本地静态映射无结果，尝试从 CoverImage 字段读取 URL
+    if not cover_url and book.coverimage:
+        raw = book.coverimage
+        if isinstance(raw, str) and raw.strip().startswith("http"):
+            cover_url = raw.strip()
+        elif isinstance(raw, (bytes, bytearray)):
+            try:
+                decoded = raw.decode("utf-8").strip()
+                if decoded.startswith("http"):
+                    cover_url = decoded
+            except Exception:
+                pass
+
     data = {
         "isbn": book.isbn,
         "title": book.title,
