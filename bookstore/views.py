@@ -116,39 +116,25 @@ def customer_required(view_func):
     return _wrapped_view
 
 
-def get_book_cover_image(book_title: str, coverimage=None) -> str:
+def get_book_cover_image(book_title: str) -> str:
     """
-    根据书名返回封面图片路径或 URL。
-
-    优先级：
-      1. settings.COVER_IMAGE_MAPPINGS 关键字匹配 → 本地静态图 URL
-      2. coverimage 字段本身是 HTTP URL（导入数据集时写入）→ 直接返回
-      3. 无匹配 → 返回 None
+    根据书名返回对应的封面图片路径
     """
     title_lower = book_title.lower()
 
+    # 从 settings 中读取映射与目录，保持可配置性
     from django.conf import settings
     from urllib.parse import quote
     image_mappings = getattr(settings, "COVER_IMAGE_MAPPINGS", {})
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     default_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
 
+    # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
     for keyword, image_filename in image_mappings.items():
         if keyword in title_lower:
             return f"{default_prefix}{images_subdir}/{quote(image_filename)}"
 
-    # 数据库字段里存的 HTTP URL（来自导入数据集）
-    if coverimage:
-        if isinstance(coverimage, str) and coverimage.strip().startswith("http"):
-            return coverimage.strip()
-        if isinstance(coverimage, (bytes, bytearray)):
-            try:
-                decoded = coverimage.decode("utf-8").strip()
-                if decoded.startswith("http"):
-                    return decoded
-            except Exception:
-                pass
-
+    # 如果没有匹配的图片，返回None
     return None
 
 
@@ -178,7 +164,7 @@ def index(request: HttpRequest) -> HttpResponse:
         }
 
         # 优先使用静态图片文件
-        static_image = get_book_cover_image(book.title, book.coverimage)
+        static_image = get_book_cover_image(book.title)
         if static_image:
             book_data['cover_image_url'] = static_image
         # 如果没有静态图片，则尝试使用数据库中的base64图片
@@ -235,7 +221,7 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
 
     # 如果有封面图片，转换为base64
     # 优先使用静态图片映射
-    static_image = get_book_cover_image(book.title, book.coverimage)
+    static_image = get_book_cover_image(book.title)
     if static_image:
         book_data['cover_image_url'] = static_image
     elif book.coverimage:
@@ -353,7 +339,7 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
         book = get_object_or_404(Book, pk=isbn)
         # 准备封面显示数据：优先静态图片，其次尝试将数据库中的 coverimage 转为 base64 字符串
         try:
-            static_image = get_book_cover_image(book.title, book.coverimage)
+            static_image = get_book_cover_image(book.title)
         except Exception:
             static_image = None
         # 挂载到 book 对象以供模板使用（临时属性，无持久化）
