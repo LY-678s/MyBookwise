@@ -103,6 +103,17 @@
                     </div>
                     {% endif %}
 
+                    {% if book.description %}
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="color: var(--text-primary); margin: 0 0 0.75rem 0; font-size: 1.2rem; font-weight: 600;">
+                            图书简介
+                        </h3>
+                        <p style="color: var(--text-secondary); line-height: 1.8; margin: 0; white-space: pre-line;">
+                            {{ book.description }}
+                        </p>
+                    </div>
+                    {% endif %}
+
                     <!-- 交互按钮组 -->
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
                         <button class="btn btn-secondary" onclick="toggleFavorite(this)"
@@ -143,6 +154,9 @@
                             <p><strong>库存:</strong> {{ book.stockqty }} 本</p>
                             {% if book.keywords %}
                             <p><strong>关键词:</strong> {{ book.keywords }}</p>
+                            {% endif %}
+                            {% if book.description %}
+                            <p><strong>图书简介:</strong> {{ book.description }}</p>
                             {% endif %}
                         </div>
                     </div>

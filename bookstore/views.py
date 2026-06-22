@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -118,7 +118,8 @@ def customer_required(view_func):
 
 def get_book_cover_image(book_title: str) -> str:
     """
-    根据书名返回对应的封面图片路径
+    根据书名返回对应的封面图片路径。
+    如果没有匹配，返回默认封面图片。
     """
     title_lower = book_title.lower()
 
@@ -128,84 +129,23 @@ def get_book_cover_image(book_title: str) -> str:
     image_mappings = getattr(settings, "COVER_IMAGE_MAPPINGS", {})
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     default_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "default_cover.png")
 
     # 查找匹配的关键词并构建静态 URL（对文件名进行 URL 编码以支持中文）
     for keyword, image_filename in image_mappings.items():
         if keyword in title_lower:
             return f"{default_prefix}{images_subdir}/{quote(image_filename)}"
 
-    # 如果没有匹配的图片，返回None
-    return None
+    # 如果没有匹配的关键词，返回默认封面图片
+    return f"{default_prefix}{images_subdir}/{quote(default_filename)}"
 
 
-def index(request: HttpRequest) -> HttpResponse:
-    books = Book.objects.all().order_by("title")
+def _build_book_data(book):
+    """构建书籍数据字典，包含封面图片处理"""
+    # 查询该书的作者，按序位排序后用 / 拼接
+    authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
+    author_names = ' / '.join([a.authorname for a in authors])
 
-    # 处理图书封面图片的base64编码
-    import base64
-    books_with_covers = []
-    for book in books:
-        # 查询该书的作者，按序位排序后用 / 拼接
-        authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
-        author_names = ' / '.join([a.authorname for a in authors])
-
-        book_data = {
-            'isbn': book.isbn,
-            'title': book.title,
-            'publisher': book.publisher,
-            'price': book.price,
-            'keywords': book.keywords,
-            'stockqty': book.stockqty,
-            'location': book.location,
-            'minstocklimit': book.minstocklimit,
-            'coverimage': None,
-            'cover_image_url': None,
-            'authors': author_names,
-        }
-
-        # 优先使用静态图片文件
-        static_image = get_book_cover_image(book.title)
-        if static_image:
-            book_data['cover_image_url'] = static_image
-        # 如果没有静态图片，则尝试使用数据库中的base64图片
-        elif book.coverimage:
-            try:
-                # 有些情况下数据库中存储的可能已经是 base64 字符串，也可能是文本或二进制数据。
-                # 先检测是否看起来像 base64 字符串（仅包含 base64 字符），若是则直接使用；否则按文本/二进制编码后再 base64 编码。
-                import re
-                raw = book.coverimage
-                if isinstance(raw, str):
-                    s = raw.strip()
-                    # 简单判断是否为 base64 字符串（较长且只包含 base64 字符）
-                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
-                        # 移除换行并直接使用
-                        book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
-                    else:
-                        # 将文本按 utf-8 编码后再 base64 编码
-                        book_data['coverimage'] = base64.b64encode(s.encode('utf-8')).decode('utf-8')
-                else:
-                    # 假设为 bytes-like，直接 base64 编码
-                    book_data['coverimage'] = base64.b64encode(raw).decode('utf-8')
-            except Exception:
-                book_data['coverimage'] = None
-
-        books_with_covers.append(book_data)
-
-    # 计算默认封面 URL（由 settings 控制）
-    from django.conf import settings
-    from urllib.parse import quote
-    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
-    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
-    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
-    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
-
-    return render(request, "bookstore/index.html", {"books": books_with_covers, "DEFAULT_COVER_IMAGE_URL": default_cover_url})
-
-def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
-    book = get_object_or_404(Book, pk=isbn)
-
-    # 处理图书封面图片的base64编码
-    import base64
     book_data = {
         'isbn': book.isbn,
         'title': book.title,
@@ -216,28 +156,129 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
         'location': book.location,
         'minstocklimit': book.minstocklimit,
         'coverimage': None,
+        'cover_image_url': None,
+        'authors': author_names,
+    }
+
+    # 优先使用数据库中的URL封面
+    if book.coverimage:
+        cover_url = book.coverimage
+        # 处理 bytes 格式 (b'...') 和字符串格式
+        if isinstance(cover_url, bytes):
+            try:
+                cover_url = cover_url.decode('utf-8')
+            except:
+                cover_url = None
+        elif isinstance(cover_url, str):
+            # 清理 bytes 格式字符串 b'...' 或 b"..."
+            if cover_url.startswith("b'") and cover_url.endswith("'"):
+                cover_url = cover_url[2:-1]
+            elif cover_url.startswith('b"') and cover_url.endswith('"'):
+                cover_url = cover_url[2:-1]
+        
+        # 验证是否为有效的URL
+        if cover_url and (cover_url.startswith('http://') or cover_url.startswith('https://')):
+            book_data['cover_image_url'] = cover_url
+    # 如果没有URL图片，则尝试使用静态图片文件
+    if not book_data['cover_image_url']:
+        static_image = get_book_cover_image(book.title)
+        if static_image:
+            book_data['cover_image_url'] = static_image
+
+    return book_data
+
+
+def index(request: HttpRequest) -> HttpResponse:
+    from django.conf import settings
+    from urllib.parse import quote
+    
+    # 获取分页参数
+    page = int(request.GET.get("page", 1))
+    if page < 1:
+        page = 1
+    page_size = 12
+    
+    # 根据用户是否登录获取不同的推荐
+    customer_id = request.session.get("customer_id")
+    if customer_id:
+        from .recommendations import get_recommendations_for_user
+        all_books = get_recommendations_for_user(customer_id, limit=1000)
+    else:
+        from .recommendations import get_default_recommendations
+        all_books = get_default_recommendations(limit=1000)
+    
+    # 计算总页数
+    total_count = len(all_books)
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    
+    # 确保页码在有效范围内
+    if page > total_pages:
+        page = total_pages
+    
+    # 获取当前页的数据
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_books = all_books[start_idx:end_idx]
+    
+    # 处理每本书的封面图片
+    books_with_covers = [_build_book_data(book) for book in page_books]
+    
+    # 计算默认封面 URL
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
+    
+    return render(request, "bookstore/index.html", {
+        "books": books_with_covers, 
+        "DEFAULT_COVER_IMAGE_URL": default_cover_url,
+        "current_page": page,
+        "total_pages": total_pages,
+        "total_count": total_count,
+    })
+
+def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
+    book = get_object_or_404(Book, pk=isbn)
+
+    # 记录用户浏览行为（仅对登录用户）
+    if request.session.get("customer_id"):
+        from .tracking import record_browse
+        record_browse(request.session["customer_id"], isbn)
+
+    book_data = {
+        'isbn': book.isbn,
+        'title': book.title,
+        'publisher': book.publisher,
+        'price': book.price,
+        'keywords': book.keywords,
+        'stockqty': book.stockqty,
+        'location': book.location,
+        'minstocklimit': book.minstocklimit,
+        'description': book.description,
+        'coverimage': None,
         'cover_image_url': None
     }
 
-    # 如果有封面图片，转换为base64
-    # 优先使用静态图片映射
-    static_image = get_book_cover_image(book.title)
-    if static_image:
-        book_data['cover_image_url'] = static_image
-    elif book.coverimage:
-        try:
+    # 优先使用数据库中的URL封面
+    if book.coverimage:
+        cover_url = book.coverimage
+        if isinstance(cover_url, bytes):
+            try:
+                cover_url = cover_url.decode('utf-8')
+            except:
+                cover_url = None
+        elif isinstance(cover_url, str):
             import re
-            raw = book.coverimage
-            if isinstance(raw, str):
-                s = raw.strip()
-                if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
-                    book_data['coverimage'] = s.replace('\\n', '').replace('\\r', '')
-                else:
-                    book_data['coverimage'] = base64.b64encode(s.encode('utf-8')).decode('utf-8')
-            else:
-                book_data['coverimage'] = base64.b64encode(raw).decode('utf-8')
-        except Exception:
-            book_data['coverimage'] = None
+            cover_url = re.sub(r"^b['\"]|['\"]$", "", cover_url)
+            if cover_url.startswith("b'") or cover_url.startswith('b"'):
+                cover_url = cover_url[2:-1]
+        
+        if cover_url and (cover_url.startswith('http://') or cover_url.startswith('https://')):
+            book_data['cover_image_url'] = cover_url
+    if not book_data['cover_image_url']:
+        static_image = get_book_cover_image(book.title)
+        if static_image:
+            book_data['cover_image_url'] = static_image
 
     from django.conf import settings
     from urllib.parse import quote
@@ -249,13 +290,41 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     return render(request, "bookstore/book_detail.html", {"book": book_data, "DEFAULT_COVER_IMAGE_URL": default_cover_url})
 
 def search(request: HttpRequest) -> HttpResponse:
-    query = request.GET.get("q", "")
-    books = Book.objects.all()
+    query = request.GET.get("q", "").strip()
     if query:
+        books = Book.objects.all().order_by("title")
         books = books.filter(
             Q(title__icontains=query) | Q(keywords__icontains=query) | Q(isbn__icontains=query)
         )
-    return render(request, "bookstore/search.html", {"books": books, "query": query})
+        # 记录用户搜索行为（仅对登录用户）
+        if request.session.get("customer_id"):
+            from .tracking import record_search
+            record_search(request.session["customer_id"], query)
+    else:
+        customer_id = request.session.get("customer_id")
+        if customer_id:
+            from .recommendations import get_recommendations_for_user
+            books = get_recommendations_for_user(customer_id, limit=12)
+        else:
+            from .recommendations import get_default_recommendations
+            books = get_default_recommendations(limit=12)
+    
+    # 处理每本书的封面图片
+    books_with_covers = [_build_book_data(book) for book in books]
+    
+    # 计算默认封面 URL
+    from django.conf import settings
+    from urllib.parse import quote
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
+    
+    return render(request, "bookstore/search.html", {
+        "books": books_with_covers, 
+        "query": query,
+        "DEFAULT_COVER_IMAGE_URL": default_cover_url
+    })
 
 def _get_cart(request):
     """读取购物车（与 APP 共用 cache，按 customer_id 存储）。"""

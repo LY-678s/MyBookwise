@@ -18,6 +18,7 @@ class Book(models.Model):
     stockqty = models.IntegerField(db_column='StockQty')  # Field name made lowercase.
     location = models.CharField(db_column='Location', max_length=50, blank=True, null=True)  # Field name made lowercase.
     minstocklimit = models.IntegerField(db_column='MinStockLimit')  # Field name made lowercase.
+    description = models.TextField(db_column='Description', blank=True, null=True)  # Field name made lowercase.
 
     class Meta:
         managed = False
@@ -230,3 +231,39 @@ class Supplierbook(models.Model):
 
     def __str__(self):
         return f"{self.supplierid.suppliername} - {self.isbn.title} (ISBN: {self.isbn.isbn})"
+
+
+class SearchHistory(models.Model):
+    """用户搜索记录"""
+    id = models.AutoField(db_column='ID', primary_key=True)
+    customer = models.ForeignKey(Customer, db_column='customer_id', on_delete=models.CASCADE)
+    keyword = models.CharField(db_column='keyword', max_length=100)
+    search_time = models.DateTimeField(db_column='search_time', auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'search_history'
+        verbose_name = '搜索记录'
+        verbose_name_plural = '搜索记录'
+        ordering = ['-search_time']
+
+    def __str__(self):
+        return f"{self.customer.username} 搜索了: {self.keyword}"
+
+
+class BrowseHistory(models.Model):
+    """用户浏览记录"""
+    id = models.AutoField(db_column='ID', primary_key=True)
+    customer = models.ForeignKey(Customer, db_column='customer_id', on_delete=models.CASCADE)
+    isbn = models.ForeignKey(Book, db_column='isbn', on_delete=models.CASCADE)
+    browse_time = models.DateTimeField(db_column='browse_time', auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'browse_history'
+        verbose_name = '浏览记录'
+        verbose_name_plural = '浏览记录'
+        ordering = ['-browse_time']
+
+    def __str__(self):
+        return f"{self.customer.username} 浏览了: {self.isbn.title}"

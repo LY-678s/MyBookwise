@@ -14,12 +14,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from bookstore.models import Book, Customer
+from bookstore.views import _build_book_data
 
 from .auth_tokens import create_token, revoke_token
 from .permissions import IsCustomer
 from . import services
 from .serializers import (
-    default_cover_url,
+    default_cover_url as get_default_cover_url,
     serialize_account_summary,
     serialize_book,
     serialize_customer,
@@ -120,11 +121,59 @@ class BookListView(APIView):
     permission_classes = []
 
     def get(self, request):
-        books = Book.objects.all().order_by("title")
+        # 获取分页参数
+        try:
+            page = int(request.query_params.get("page", 1))
+            if page < 1:
+                page = 1
+        except (ValueError, TypeError):
+            page = 1
+
+        page_size = int(request.query_params.get("page_size", 12))
+
+        # 获取所有书籍
+        all_books = Book.objects.all().order_by("title")
+        total_count = all_books.count()
+        total_pages = max(1, (total_count + page_size - 1) // page_size)
+
+        # 确保页码有效
+        if page > total_pages:
+            page = total_pages
+
+        # 分页
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        page_books = list(all_books[start_idx:end_idx])
+
+        # 获取当前页书籍的 ISBN 列表
+        page_isbns = [book.isbn for book in page_books]
+
+        # 批量查询作者信息
+        from bookstore.models import Bookauthor
+        authors_list = Bookauthor.objects.filter(isbn__in=page_isbns).order_by('isbn', 'authororder')
+        authors_dict = {}
+        for author in authors_list:
+            if author.isbn_id not in authors_dict:
+                authors_dict[author.isbn_id] = []
+            authors_dict[author.isbn_id].append(author.authorname)
+
+        # 构建返回数据
+        books_data = []
+        for book in page_books:
+            book_data = _build_book_data(book)
+            book_data["price"] = str(book_data["price"])
+            book_data["keywords"] = book_data["keywords"] or ""
+            book_data["location"] = book_data["location"] or ""
+            book_data["authors"] = " / ".join(authors_dict.get(book.isbn, []))
+            books_data.append(book_data)
+
         return _ok(
             {
-                "books": [serialize_book(b) for b in books],
-                "default_cover_url": default_cover_url(),
+                "books": books_data,
+                "default_cover_url": get_default_cover_url(),
+                "current_page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
             }
         )
 
@@ -160,7 +209,7 @@ class BookDetailView(APIView):
         return _ok(
             {
                 "book": serialize_book(book, include_authors=True),
-                "default_cover_url": default_cover_url(),
+                "default_cover_url": get_default_cover_url(),
             }
         )
 
@@ -438,3 +487,100 @@ class AiClearView(APIView):
         customer = _customer_view(request)
         clear_ai_history(customer.customerid)
         return _ok({"message": "对话已清空"})
+
+
+# ---------------------------------------------------------------------------
+# 首页推荐书籍分页 API
+# ---------------------------------------------------------------------------
+
+def get_books_page(request):
+    """
+    GET /api/books/?page=1
+    返回指定页的推荐书籍 - 优化版，解决N+1查询问题
+    """
+    from django.http import JsonResponse
+    from django.core.cache import cache
+    
+    try:
+        page = int(request.GET.get("page", 1))
+        if page < 1:
+            page = 1
+    except (ValueError, TypeError):
+        page = 1
+    
+    page_size = 12
+    
+    # 根据用户是否登录获取不同的推荐 - 先从缓存获取ISBN列表
+    customer_id = request.session.get("customer_id")
+    cache_key = f'user_recommendations_{customer_id}' if customer_id else 'default_recommendations'
+    isbn_list = cache.get(cache_key)
+    
+    if isbn_list is None:
+        # 缓存未命中，重新计算
+        if customer_id:
+            from bookstore.recommendations import get_recommendations_for_user
+            engine_books = get_recommendations_for_user(customer_id, limit=1000)
+        else:
+            from bookstore.recommendations import get_default_recommendations
+            engine_books = get_default_recommendations(limit=1000)
+        isbn_list = [b.isbn for b in engine_books]
+        cache.set(cache_key, isbn_list, 300)  # 5分钟
+    
+    # 分页计算
+    total_count = len(isbn_list)
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    
+    if page > total_pages:
+        page = total_pages
+    
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_isbns = isbn_list[start_idx:end_idx]
+    
+    if not page_isbns:
+        return JsonResponse({
+            'success': True,
+            'books': [],
+            'default_cover_url': None,
+            'current_page': page,
+            'total_pages': total_pages,
+            'total_count': total_count,
+        })
+    
+    # 批量查询书籍 - 使用in查询
+    from bookstore.models import Book, Bookauthor
+    books = Book.objects.filter(isbn__in=page_isbns)
+    books_dict = {b.isbn: b for b in books}
+    
+    # 批量查询作者
+    authors_list = Bookauthor.objects.filter(isbn__in=page_isbns).order_by('isbn', 'authororder')
+    authors_dict = {}
+    for author in authors_list:
+        if author.isbn_id not in authors_dict:
+            authors_dict[author.isbn_id] = []
+        authors_dict[author.isbn_id].append(author.authorname)
+    
+    default_cover_url = get_default_cover_url()
+    
+    # 按原始顺序构建书籍数据
+    books_data = []
+    for isbn in page_isbns:
+        book = books_dict.get(isbn)
+        if not book:
+            continue
+        
+        book_data = _build_book_data(book)
+        book_data['price'] = str(book_data['price'])
+        book_data['keywords'] = book_data['keywords'] or ''
+        book_data['location'] = book_data['location'] or ''
+        book_data['authors'] = ' / '.join(authors_dict.get(isbn, []))
+        books_data.append(book_data)
+    
+    return JsonResponse({
+        'success': True,
+        'books': books_data,
+        'default_cover_url': default_cover_url,
+        'current_page': page,
+        'total_pages': total_pages,
+        'total_count': total_count,
+    })
