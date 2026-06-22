@@ -71,7 +71,7 @@ def serialize_book(book: Book, *, include_authors: bool = False) -> dict:
 
 
 def default_cover_url() -> str:
-    filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "default_cover.png")
     return _static_cover_url(filename)
 
 

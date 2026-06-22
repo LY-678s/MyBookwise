@@ -2,8 +2,6 @@
 {% block content %}
 <head>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
-    
-
 </head>
 <div class="container animate-fade-in">
     <!-- 页面标题 -->
@@ -24,12 +22,11 @@
         </a>
     </div>
 
-   <!-- 搜索栏 -->
+    <!-- 搜索栏 -->
     <div class="card" style="margin-bottom: 3rem;">
         <div class="card-body">
             <form action="{% url 'bookstore:search' %}" method="get" style="display: flex; gap: 1rem; align-items: center;">
                 <div style="flex: 1; position: relative;">
-                    <!-- 搜索图标（使用 Material Symbols） -->
                     <span class="material-symbols-outlined" aria-hidden="true"
                           style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.25rem; pointer-events: none;">
                         search
@@ -46,101 +43,303 @@
     </div>
 
     <!-- 图书网格 -->
-    {% if books %}
-    <div class="grid grid-3">
-        {% for book in books %}
-        <div class="card book-card animate-fade-in">
-            <!-- 图书封面 -->
-            <div style="position: relative; overflow: hidden;">
-                {% if book.cover_image_url %}
-                    <!-- 如果有静态图片文件，显示静态图片；添加 onerror 以回退到默认静态图 -->
+    <div id="books-container">
+        <div id="books-grid" class="grid grid-3">
+            {% for book in books %}
+            <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
+                <!-- 图书封面 -->
+                <div style="position: relative; overflow: hidden;">
+                    {% if book.cover_image_url %}
                     <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
                          onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
-                {% elif book.coverimage %}
-                    <!-- 如果有base64图片，显示base64图片；添加 onerror 回退 -->
-                    <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
-                         onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
-                {% else %}
-                    <!-- 默认封面图片 -->
+                    {% else %}
                     <div style="width: 100%; height: 250px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">
                         📖
                     </div>
-                {% endif %}
+                    {% endif %}
 
-                <!-- 悬浮信息 -->
-                <div class="book-overlay">
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">{{ book.title }}</h4>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
-                        ISBN: {{ book.isbn }}<br>
-                        出版社: {{ book.publisher|default:"未知" }}
-                    </p>
+                    <!-- 悬浮信息 -->
+                    <div class="book-overlay">
+                        <h4 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">{{ book.title }}</h4>
+                        <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
+                            ISBN: {{ book.isbn }}<br>
+                            出版社: {{ book.publisher|default:"未知" }}
+                        </p>
+                    </div>
                 </div>
-            </div>
 
-            <!-- 图书信息 -->
-            <div class="card-body">
-                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem; font-weight: 600; color: var(--text-primary);">
-                    <a href="{% url 'bookstore:book_detail' book.isbn %}"
-                       style="color: inherit; text-decoration: none;">
-                        {{ book.title|truncatechars:30 }}
+                <!-- 图书信息 -->
+                <div class="card-body">
+                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem; font-weight: 600; color: var(--text-primary);">
+                        <a href="{% url 'bookstore:book_detail' book.isbn %}"
+                           style="color: inherit; text-decoration: none;">
+                            {{ book.title|truncatechars:30 }}
+                        </a>
+                    </h3>
+
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                        <p style="margin: 0;">ISBN: {{ book.isbn }}</p>
+                        <p style="margin: 0;">出版社: {{ book.publisher|default:"未知" }}</p>
+                        {% if book.authors %}
+                        <p style="margin: 0;">作者: {{ book.authors }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <span style="font-size: 1.4rem; font-weight: 700; color: var(--error);">
+                            ¥{{ book.price }}
+                        </span>
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">
+                            库存: {{ book.stockqty }}
+                        </span>
+                    </div>
+
+                    <!-- 操作按钮 -->
+                    {% if request.session.customer_id %}
+                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
+                        {% csrf_token %}
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
+                            <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem; font-weight: 600;">数量:</label>
+                            <input type="number" name="quantity" id="qty_{{ book.isbn }}" value="1" min="1" max="{{ book.stockqty }}"
+                                   class="form-control" style="width: 80px; padding: 0.5rem;">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+                            🛒 加入购物车
+                        </button>
+                    </form>
+                    {% else %}
+                    <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center;">
+                        <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
+                            lock
+                        </span>
+                        登录后购买
                     </a>
-                </h3>
-
-                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    <p style="margin: 0;">ISBN: {{ book.isbn }}</p>
-                    <p style="margin: 0;">出版社: {{ book.publisher|default:"未知" }}</p>
-                    {% if book.authors %}
-                    <p style="margin: 0;">作者: {{ book.authors }}</p>
                     {% endif %}
                 </div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <span style="font-size: 1.4rem; font-weight: 700; color: var(--error);">
-                        ¥{{ book.price }}
-                    </span>
-                    <span style="color: var(--text-secondary); font-size: 0.9rem;">
-                        库存: {{ book.stockqty }}
-                    </span>
-                </div>
-
-                <!-- 操作按钮 -->
-                {% if request.session.customer_id %}
-                <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
-                    {% csrf_token %}
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
-                        <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem; font-weight: 600;">数量:</label>
-                        <input type="number" name="quantity" id="qty_{{ book.isbn }}" value="1" min="1" max="{{ book.stockqty }}"
-                               class="form-control" style="width: 80px; padding: 0.5rem;">
-                    </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
-                        🛒 加入购物车
-                    </button>
-                </form>
-                {% else %}
-                <a href="{% url 'bookstore:login' %}" class="btn btn-secondary" style="width: 100%; text-align: center;">
-                    <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
-                        lock
-                    </span>
-                    登录后购买
-                </a>
-                {% endif %}
             </div>
+            {% empty %}
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-body" style="text-align: center; padding: 4rem;">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
+                    <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">暂无图书</h3>
+                    <p style="color: var(--text-secondary);">当前没有可用的图书，请稍后再试。</p>
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="card">
-        <div class="card-body" style="text-align: center; padding: 4rem;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
-            <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">暂无图书</h3>
-            <p style="color: var(--text-secondary);">当前没有可用的图书，请稍后再试。</p>
+
+        <!-- 分页控制 -->
+        {% if total_pages > 1 %}
+        <div id="pagination-controls" style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; align-items: center;">
+            <button id="prev-btn" onclick="loadBooks({{ current_page }} - 1)" 
+                    class="btn btn-secondary" {% if current_page <= 1 %}disabled{% endif %}
+                    style="padding: 0.75rem 1.5rem;">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_back</span>
+                回到上一批
+            </button>
+            <span style="color: var(--text-secondary); font-size: 1rem;">
+                第 <strong>{{ current_page }}</strong> / {{ total_pages }} 页，共 {{ total_count }} 本书
+            </span>
+            <button id="next-btn" onclick="loadBooks({{ current_page }} + 1)" 
+                    class="btn btn-primary" {% if current_page >= total_pages %}disabled{% endif %}
+                    style="padding: 0.75rem 1.5rem;">
+                换一批看看
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_forward</span>
+            </button>
         </div>
+        {% elif total_count > 0 %}
+        <div style="text-align: center; margin-top: 2rem;">
+            <button id="next-btn" onclick="loadBooks({{ current_page }} + 1)" 
+                    class="btn btn-primary"
+                    style="padding: 0.75rem 1.5rem;">
+                换一批看看
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_forward</span>
+            </button>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
+<script>
+const DEFAULT_COVER_URL = '{{ DEFAULT_COVER_IMAGE_URL }}';
+const CUSTOMER_ID = '{{ request.session.customer_id|default:"" }}';
+
+function loadBooks(page) {
+    if (page < 1) return;
+    
+    // 显示加载状态
+    const grid = document.getElementById('books-grid');
+    grid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">⏳</div>
+            <p style="color: var(--text-secondary);">加载中...</p>
+        </div>
+    `;
+    
+    // 禁用按钮防止重复点击
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    
+    // 通过 AJAX 获取新页数据
+    fetch(`/api/books/?page=${page}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderBooks(data.books, data.current_page, data.total_pages, data.total_count, data.default_cover_url);
+            } else {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
+                        <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                        <p style="color: var(--error);">加载失败，请重试</p>
+                    </div>
+                `;
+            }
+            if (prevBtn) prevBtn.disabled = false;
+            if (nextBtn) nextBtn.disabled = false;
+        })
+        .catch(error => {
+            console.error('Error loading books:', error);
+            grid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 3rem;">
+                    <div style="font-size: 2rem; margin-bottom: 1rem;">❌</div>
+                    <p style="color: var(--error);">加载失败，请重试</p>
+                </div>
+            `;
+            if (prevBtn) prevBtn.disabled = false;
+            if (nextBtn) nextBtn.disabled = false;
+        });
+}
+
+function renderBooks(books, currentPage, totalPages, totalCount, defaultCoverUrl) {
+    const grid = document.getElementById('books-grid');
+    const container = document.getElementById('books-container');
+    
+    if (books.length === 0) {
+        grid.innerHTML = `
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-body" style="text-align: center; padding: 4rem;">
+                    <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
+                    <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">暂无图书</h3>
+                    <p style="color: var(--text-secondary);">当前没有可用的图书，请稍后再试。</p>
+                </div>
+            </div>
+        `;
+        // 移除分页控制
+        const pagination = document.getElementById('pagination-controls');
+        if (pagination) pagination.remove();
+        return;
+    }
+    
+    // 构建书籍卡片HTML
+    let html = '';
+    books.forEach((book, index) => {
+        const coverHtml = book.cover_image_url 
+            ? `<img src="${book.cover_image_url}" alt="${book.title}" style="width: 100%; height: 250px; object-fit: cover;"
+                        onerror="this.onerror=null;this.src='${defaultCoverUrl || DEFAULT_COVER_URL}'">`
+            : `<div style="width: 100%; height: 250px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">📖</div>`;
+        
+        const loginBtn = CUSTOMER_ID
+            ? `<form method="post" action="/cart/add/${book.isbn}/">
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
+                    <label style="font-size: 0.9rem; font-weight: 600;">数量:</label>
+                    <input type="number" name="quantity" value="1" min="1" max="${book.stockqty}"
+                           class="form-control" style="width: 80px; padding: 0.5rem;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">
+                    🛒 加入购物车
+                </button>
+               </form>`
+            : `<a href="/login/" class="btn btn-secondary" style="width: 100%; text-align: center;">
+                <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;">lock</span>
+                登录后购买
+               </a>`;
+        
+        html += `
+            <div class="card book-card animate-fade-in" data-isbn="${book.isbn}" style="animation-delay: ${index * 100}ms;">
+                <div style="position: relative; overflow: hidden;">
+                    ${coverHtml}
+                    <div class="book-overlay">
+                        <h4 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">${book.title}</h4>
+                        <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">
+                            ISBN: ${book.isbn}<br>
+                            出版社: ${book.publisher || '未知'}
+                        </p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem; font-weight: 600; color: var(--text-primary);">
+                        <a href="/book/${book.isbn}/" style="color: inherit; text-decoration: none;">
+                            ${book.title.length > 30 ? book.title.substring(0, 30) + '...' : book.title}
+                        </a>
+                    </h3>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                        <p style="margin: 0;">ISBN: ${book.isbn}</p>
+                        <p style="margin: 0;">出版社: ${book.publisher || '未知'}</p>
+                        ${book.authors ? `<p style="margin: 0;">作者: ${book.authors}</p>` : ''}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <span style="font-size: 1.4rem; font-weight: 700; color: var(--error);">
+                            ¥${book.price}
+                        </span>
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">
+                            库存: ${book.stockqty}
+                        </span>
+                    </div>
+                    ${loginBtn}
+                </div>
+            </div>
+        `;
+    });
+    grid.innerHTML = html;
+    
+    // 更新或添加分页控制
+    let paginationHtml = '';
+    if (totalPages > 1) {
+        paginationHtml = `
+            <div id="pagination-controls" style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; align-items: center;">
+                <button id="prev-btn" onclick="loadBooks(${currentPage - 1})" 
+                        class="btn btn-secondary" ${currentPage <= 1 ? 'disabled' : ''}
+                        style="padding: 0.75rem 1.5rem;">
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_back</span>
+                    回到上一批
+                </button>
+                <span style="color: var(--text-secondary); font-size: 1rem;">
+                    第 <strong>${currentPage}</strong> / ${totalPages} 页，共 ${totalCount} 本书
+                </span>
+                <button id="next-btn" onclick="loadBooks(${currentPage + 1})" 
+                        class="btn btn-primary" ${currentPage >= totalPages ? 'disabled' : ''}
+                        style="padding: 0.75rem 1.5rem;">
+                    换一批看看
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_forward</span>
+                </button>
+            </div>
+        `;
+    } else {
+        paginationHtml = `
+            <div style="text-align: center; margin-top: 2rem;">
+                <button id="next-btn" onclick="loadBooks(${currentPage + 1})" 
+                        class="btn btn-primary"
+                        style="padding: 0.75rem 1.5rem;">
+                    换一批看看
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem; vertical-align: middle;">arrow_forward</span>
+                </button>
+            </div>
+        `;
+    }
+    
+    // 移除旧的分页控制并添加新的
+    const oldPagination = document.getElementById('pagination-controls');
+    if (oldPagination) oldPagination.remove();
+    container.insertAdjacentHTML('beforeend', paginationHtml);
+    
+    // 滚动到顶部
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+
 <style>
-/* 自定义动画延迟 */
 .animate-fade-in:nth-child(1) { animation-delay: 0ms; }
 .animate-fade-in:nth-child(2) { animation-delay: 100ms; }
 .animate-fade-in:nth-child(3) { animation-delay: 200ms; }

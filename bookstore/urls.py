@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from bookstore.api import views as api_views
 
 app_name = "bookstore"
 
@@ -34,4 +35,7 @@ urlpatterns = [
     path("account/", views.account_recharge, name="account"),
     path("account/edit/", views.account_edit, name="account_edit"),
     path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
+
+    # AJAX API - 获取推荐书籍分页
+    path("api/books/", api_views.get_books_page, name="api_books"),
 ]
