@@ -178,12 +178,90 @@ ISBN='978-7-111-54425-7', quantity=10
 
 ## APP 联调地址
 
-修改 `mobile/app/src/main/java/com/example/bookwiseapp/data/api/ApiClient.kt` 第 16 行：
+修改 `mobile/app/src/main/java/com/example/bookwiseapp/data/api/ApiClient.kt` 中的 `SERVER_BASE`：
 
 | 场景 | SERVER_BASE |
 |---|---|
 | Android 模拟器 | `http://10.0.2.2:8000` |
-| 真机（USB 共享网络） | `http://192.168.42.100:8000` |
-| 真机（同 Wi-Fi） | `http://电脑局域网IP:8000` |
+| 真机（同 Wi-Fi / USB 共享网络） | `http://电脑局域网IP:8000` |
+| **跨网访问（手机 4G、不同 Wi-Fi）** | `https://xxxx.trycloudflare.com`（见下方） |
 
 后端须以 `0.0.0.0:8000` 启动才能接受手机请求。
+
+---
+
+## 跨网访问（内网穿透）
+
+手机和电脑**不在同一局域网**时（例如手机用 4G、同学在别的网络），需要把本机 Django 暴露到公网。推荐 **cloudflared**（Cloudflare 快速隧道）：**免注册、一条命令**。
+
+### 一次性安装 cloudflared
+
+```powershell
+# 方式 A：winget（Windows 推荐）
+winget install Cloudflare.cloudflared
+
+# 方式 B：手动下载
+# https://github.com/cloudflare/cloudflared/releases
+# 下载 cloudflared-windows-amd64.exe，放到 PATH 或项目根 directory
+```
+
+安装后执行 `cloudflared --version` 确认可用。
+
+### 每次演示操作（两个终端）
+
+**终端 1 — 启动 Django**
+
+```powershell
+cd d:\Engineering\MyBookwise
+
+# 先启动隧道拿到 URL 后，在本终端设置（Web 登录需要，APP 可省略）
+# 把下面的地址换成终端 2 输出的 https://....trycloudflare.com
+$env:TUNNEL_ORIGIN = "https://xxxx.trycloudflare.com"
+
+python manage.py runserver 0.0.0.0:8000
+```
+
+**终端 2 — 启动隧道**
+
+```powershell
+cloudflared tunnel --url http://localhost:8000
+```
+
+终端 2 会输出类似：
+
+```
+Your quick Tunnel has been created! Visit it at:
+https://random-words-xxxx.trycloudflare.com
+```
+
+复制这个 **https** 地址，按下面三步配置。
+
+### 配置清单
+
+| 步骤 | 做什么 |
+|------|--------|
+| ① | 终端 1 设置 `$env:TUNNEL_ORIGIN = "https://你复制的地址"`，**重启** `runserver`（Web 表单需要） |
+| ② | 修改 `ApiClient.kt`：`const val SERVER_BASE = "https://你复制的地址"`（不要末尾斜杠） |
+| ③ | Android Studio **Rebuild** 后安装到手机 |
+
+### 验证
+
+- 手机浏览器（可开 4G）打开 `https://xxxx.trycloudflare.com` → 应看到书城首页
+- 打开 APP → 登录 `zhangsan` / `pass123` → 首页能加载图书即成功
+
+### 注意事项
+
+- **隧道 URL 每次重启 cloudflared 都会变**，需重复上述 ①② 步
+- **电脑和 cloudflared 必须保持运行**，关掉后外网无法访问
+- 仅用于课设演示，`DEBUG=True` 不要长期暴露公网
+- 穿透走 **HTTPS**，APP 无需改 `network_security_config.xml`
+- 也可用项目脚本一键开隧道：`powershell -File scripts/start_tunnel.ps1`
+
+### 常见问题
+
+| 现象 | 处理 |
+|------|------|
+| `DisallowedHost` | 确认 `settings.py` 含 `.trycloudflare.com`，重启 Django |
+| Web 登录报 CSRF 403 | 设置 `$env:TUNNEL_ORIGIN` 并重启 runserver |
+| APP 网络错误 | 检查 `SERVER_BASE` 是否为 **https** 且与隧道地址一致 |
+| cloudflared 找不到命令 | 重新打开终端，或把 exe 所在路径加入 PATH |

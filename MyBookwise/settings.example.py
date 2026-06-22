@@ -15,7 +15,18 @@ SECRET_KEY = "django-insecure-emrbeuu1kr_*)z5@y43v5bh19o4zy-k@vc-j340de-6we$w)&k
 
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# 本机 + 局域网 + 内网穿透域名（见 README「跨网访问」）
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    ".trycloudflare.com",  # cloudflared 快速隧道（推荐，免注册）
+    ".ngrok-free.app",     # ngrok 免费域名（可选）
+]
+
+# Web 端经 HTTPS 隧道访问时需配置，否则登录/表单会 CSRF 失败
+# PowerShell 示例：$env:TUNNEL_ORIGIN = "https://xxxx.trycloudflare.com"
+_tunnel_origin = os.environ.get("TUNNEL_ORIGIN", "").strip().rstrip("/")
+CSRF_TRUSTED_ORIGINS = [_tunnel_origin] if _tunnel_origin else []
 
 INSTALLED_APPS = [
     "django.contrib.admin",

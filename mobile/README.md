@@ -24,27 +24,31 @@ mobile/app/src/main/java/com/example/bookwiseapp/
         ├── OrderDetailScreen.kt   # 订单详情 + 操作（补款/取消/确认收货）
         └── AccountScreen.kt       # 账户 + 充值 + 还款 + 编辑资料
 
-`ApiClient.kt` 第 16 行这一个常量控制所有请求地址：
+`ApiClient.kt` 中的 `SERVER_BASE` 控制所有请求地址：
 
 ```kotlin
 const val SERVER_BASE = "http://10.0.2.2:8000"
 ```
 
-| 场景 | 值 | 原理 |
-|------|-----|------|
-| **Android 模拟器**（当前默认） | `http://10.0.2.2:8000` | Android 模拟器把 `10.0.2.2` 映射到宿主机的 `localhost` |
-| **真机**（手机和电脑同 Wi-Fi） | `http://192.168.x.x:8000` | 手机直接访问电脑局域网 IP |
+| 场景 | 值 |
+|------|-----|
+| **Android 模拟器** | `http://10.0.2.2:8000` |
+| **真机同 Wi-Fi** | `http://192.168.x.x:8000`（`ipconfig` 查电脑 IP） |
+| **跨网（4G / 不同 Wi-Fi）** | `https://xxxx.trycloudflare.com`（见根 README「跨网访问」） |
 
-## 真机联调怎么改
+## 真机联调（同局域网）
 
-1. 查电脑的局域网 IP（PowerShell 执行 `ipconfig`，找 `WLAN` 的 IPv4 地址）
-2. 把 `ApiClient.kt` 第 16 行改成：
-   ```kotlin
-   const val SERVER_BASE = "http://192.168.x.x:8000"  // 换成实际 IP
-   ```
-3. 后端必须用 `0.0.0.0:8000` 启动（已在 README 里）才能接受局域网请求：
-   ```powershell
-   python manage.py runserver 0.0.0.0:8000
-   ```
+1. 查电脑 IP：`ipconfig` → WLAN 的 IPv4
+2. 改 `SERVER_BASE` 为 `http://该IP:8000`
+3. 后端：`python manage.py runserver 0.0.0.0:8000`
 
-手机和电脑在同一个 Wi-Fi 下就能联通。
+## 跨网联调（最简单：cloudflared）
+
+手机和电脑不在同一网络时使用，**免注册**。完整步骤见项目根 [README.md](../README.md) 的「跨网访问」章节，简要流程：
+
+1. 安装：`winget install Cloudflare.cloudflared`
+2. 终端 A：`python manage.py runserver 0.0.0.0:8000`
+3. 终端 B：`powershell -File scripts/start_tunnel.ps1`（或 `cloudflared tunnel --url http://localhost:8000`）
+4. 复制输出的 `https://....trycloudflare.com`
+5. 改 `SERVER_BASE` 为该地址（**https，无末尾斜杠**）
+6. Rebuild APP；Web 演示还需在后端终端设 `$env:TUNNEL_ORIGIN` 并重启 runserver

@@ -9,10 +9,17 @@ import retrofit2.converter.gson.GsonConverterFactory
 object ApiClient {
 
     /**
-     * 服务器地址。
-     * 模拟器用 10.0.2.2（映射宿主机 localhost）；
-     * 真机演示时改为本机局域网 IP，例如 "http://192.168.1.100:8000"
+     * 服务器地址（改这一处即可）。
+     *
+     * | 场景           | 示例 |
+     * |----------------|------|
+     * | 模拟器         | http://10.0.2.2:8000 |
+     * | 真机同 Wi-Fi   | http://192.168.x.x:8000 |
+     * | 跨网（cloudflared） | https://xxxx.trycloudflare.com |
+     *
+     * 跨网步骤见项目根 README「跨网访问」。
      */
+    // const val SERVER_BASE = "https://xxxx.trycloudflare.com"  // 跨网穿透时用 https
     const val SERVER_BASE = "http://10.16.206.195:8000"
     const val BASE_URL = "$SERVER_BASE/api/"
 
