@@ -32,3 +32,42 @@ Thumbs.db
 测试计划-成员C.md
 结构.md
 触发器.md
+# Python / Django
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+venv/
+env/
+*.sqlite3
+*.db
+db.sqlite3
+
+# Django local settings (machine-specific)
+settings.py
+MyBookwise/settings.py
+
+# JetBrains / PyCharm / Android Studio (local IDE config)
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android — mobile/ (build output & local SDK paths)
+mobile/.gradle/
+mobile/**/build/
+mobile/local.properties
+mobile/.idea/
+mobile/*.iml
+mobile/captures/
+mobile/.externalNativeBuild/
+mobile/.cxx/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/

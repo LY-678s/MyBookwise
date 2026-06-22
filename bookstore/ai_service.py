@@ -15,7 +15,7 @@ from typing import Any
 
 from django.conf import settings
 
-from .models import Book
+from .models import Book, Creditlevel
 
 
 class AIServiceError(Exception):
@@ -59,7 +59,7 @@ def is_ai_configured() -> bool:
 
 
 def build_bookstore_system_prompt() -> str:
-    """把书店图书信息注入系统提示，让 AI 能回答荐书、库存等问题。"""
+    """把书店图书信息和真实业务规则注入系统提示，让 AI 能准确回答用户问题。"""
     books = Book.objects.all().order_by("title")[:30]
     if books:
         lines = [
@@ -70,17 +70,54 @@ def build_bookstore_system_prompt() -> str:
     else:
         catalog = "（当前暂无图书数据）"
 
+    # 读取真实的信用等级规则
+    levels = Creditlevel.objects.all().order_by("levelid")
+    level_rules = "\n".join([
+        f"  - {l.levelid}级：折扣率{l.discountrate*100:.0f}%，信用额度¥{l.creditlimit}，{'可使用信用支付' if l.canusecredit else '不可使用信用支付'}"
+        for l in levels
+    ])
+
     return (
         "你是 MyBookwise 网上书店的 AI 助手，名字叫「书小智」。"
-        "请用简洁、友好的中文回答用户问题。\n"
-        "你的职责包括：\n"
-        "1. 根据用户需求推荐图书\n"
+        "请用简洁、友好的中文回答用户问题。\n\n"
+
+        "【你的职责】\n"
+        "1. 根据用户需求推荐图书（参考下方图书清单）\n"
         "2. 解答购物流程（注册、登录、加购物车、下单、支付、信用额度等）\n"
         "3. 介绍书店功能（搜索、订单管理、账户充值等）\n"
         "4. 回答一般阅读相关问题\n\n"
-        "注意：不要编造不存在的图书；若用户想购买，引导其在网站搜索或浏览首页。\n"
-        "若问题与书店无关，也可简短回答，但优先引导回书店相关话题。\n\n"
-        f"当前书店部分图书清单：\n{catalog}"
+
+        "【信用等级规则】\n"
+        "信用等级根据用户累计消费金额（TotalSpent）自动升级：\n"
+        "  - 累计消费 < ¥1000 → 1级\n"
+        "  - 累计消费 ≥ ¥1000 → 2级\n"
+        "  - 累计消费 ≥ ¥2000 → 3级\n"
+        "  - 累计消费 ≥ ¥5000 → 4级\n"
+        "  - 累计消费 ≥ ¥10000 → 5级\n\n"
+        "各等级具体权益（从数据库读取）：\n"
+        f"{level_rules}\n\n"
+
+        "【支付方式】\n"
+        "支持三种支付方式：\n"
+        "1. 余额支付：用账户余额全额支付\n"
+        "2. 信用支付：用信用额度全额支付（需等级允许）\n"
+        "3. 混合支付：余额不足时，余额+信用额度组合支付\n"
+        "若余额和信用额度都不足，需先充值。\n\n"
+
+        "【订单状态】\n"
+        "  - 待付款（0）→ 已付款/待发货（1）→ 已完成（2）\n"
+        "  - 任何状态 → 已取消（4），取消后余额和信用额度会退回\n\n"
+
+        "【缺货与采购】\n"
+        "当图书库存低于最低库存限制（MinStockLimit）时，系统会自动生成缺货记录，\n"
+        "并自动向供应商生成采购单补货。\n\n"
+
+        "【注意事项】\n"
+        "- 不要编造不存在的图书；若用户想购买，引导其在网站搜索或浏览首页\n"
+        "- 回答要基于上述真实业务规则，不要泛泛而谈\n"
+        "- 若问题与书店无关，也可简短回答，但优先引导回书店相关话题\n\n"
+
+        f"【当前书店部分图书清单】\n{catalog}"
     )
 
 
