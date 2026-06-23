@@ -115,13 +115,30 @@
                     {% endif %}
 
                     <!-- 交互按钮组 -->
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
-                        <button class="btn btn-secondary" onclick="toggleFavorite(this)"
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
+                        {% if request.session.customer_id %}
+                        <select id="favorite-folder-select" class="form-control"
+                                {% if is_favorited %}disabled{% endif %}
+                                style="width: 180px; height: 38px; padding: 0.35rem 0.75rem;">
+                            {% for folder in favorite_folders %}
+                            <option value="{{ folder.id }}" {% if folder.id == favorite_folder_id %}selected{% endif %}>
+                                {{ folder.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% endif %}
+                        <button id="favorite-button"
+                                class="btn {% if is_favorited %}btn-primary{% else %}btn-secondary{% endif %}"
+                                data-favorite-url="{% url 'bookstore:favorite_toggle' book.isbn %}"
+                                data-login-url="{% url 'bookstore:login' %}"
+                                data-is-favorited="{% if is_favorited %}true{% else %}false{% endif %}"
+                                onclick="toggleFavorite(this)"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                             <span class="material-symbols-outlined" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
                                 favorite
-                            </span>
-                            收藏
+                                </span>
+                            <span class="favorite-label">{% if is_favorited %}已收藏{% else %}收藏{% endif %}</span>
+                            <span class="favorite-count">({{ favorite_count }})</span>
                         </button>
                         <button class="btn btn-secondary" onclick="shareBook()"
                                 style="padding: 0.5rem 1rem; font-size: 0.9rem;">
@@ -195,6 +212,74 @@
 </div>
 
 <script>
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+        return parts.pop().split(';').shift();
+    }
+    return '';
+}
+
+function setFavoriteButtonState(btn, isFavorited, count) {
+    btn.dataset.isFavorited = isFavorited ? 'true' : 'false';
+    btn.classList.toggle('btn-primary', isFavorited);
+    btn.classList.toggle('btn-secondary', !isFavorited);
+
+    const label = btn.querySelector('.favorite-label');
+    const counter = btn.querySelector('.favorite-count');
+    if (label) {
+        label.textContent = isFavorited ? '已收藏' : '收藏';
+    }
+    if (counter) {
+        counter.textContent = `(${count})`;
+    }
+}
+
+async function toggleFavorite(btn) {
+    btn.disabled = true;
+    try {
+        const body = new URLSearchParams();
+        const folderSelect = document.getElementById('favorite-folder-select');
+        if (folderSelect && btn.dataset.isFavorited !== 'true') {
+            body.append('folder_id', folderSelect.value);
+        }
+
+        const response = await fetch(btn.dataset.favoriteUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body
+        });
+        const data = await response.json();
+
+        if (response.status === 401) {
+            alert(data.message || '请先登录后再收藏图书。');
+            window.location.href = data.login_url || btn.dataset.loginUrl;
+            return;
+        }
+        if (!response.ok || !data.success) {
+            alert(data.message || '收藏操作失败，请稍后再试。');
+            return;
+        }
+
+        setFavoriteButtonState(btn, data.is_favorited, data.favorite_count);
+        if (folderSelect) {
+            folderSelect.disabled = data.is_favorited;
+            if (data.folder_id) {
+                folderSelect.value = data.folder_id;
+            }
+        }
+    } catch (error) {
+        alert('网络异常，收藏操作失败。');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 // 分享功能
 function shareBook() {
     const url = window.location.href;

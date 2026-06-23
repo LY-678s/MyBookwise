@@ -669,6 +669,8 @@
             <div class="nav-links">
                 <a href="{% url 'bookstore:index' %}">首页</a>
                 <a href="{% url 'bookstore:search' %}">搜索</a>
+                <a href="{% url 'bookstore:categories' %}">分区</a>
+                <a href="{% url 'bookstore:rankings' %}">榜单</a>
                 <a href="{% url 'bookstore:ai_chat' %}">AI 助手</a>
                 
                 {% if request.session.customer_id %}

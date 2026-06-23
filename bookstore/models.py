@@ -267,3 +267,43 @@ class BrowseHistory(models.Model):
 
     def __str__(self):
         return f"{self.customer.username} 浏览了: {self.isbn.title}"
+
+
+class FavoriteFolder(models.Model):
+    """用户收藏夹"""
+    id = models.AutoField(db_column='ID', primary_key=True)
+    customer = models.ForeignKey(Customer, db_column='customer_id', on_delete=models.CASCADE)
+    name = models.CharField(db_column='name', max_length=60)
+    is_default = models.IntegerField(db_column='is_default', default=0)
+    created_at = models.DateTimeField(db_column='created_at', auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'favorite_folder'
+        verbose_name = '收藏夹'
+        verbose_name_plural = '收藏夹'
+        unique_together = (('customer', 'name'),)
+        ordering = ['-is_default', 'created_at']
+
+    def __str__(self):
+        return f"{self.customer.username} - {self.name}"
+
+
+class BookFavorite(models.Model):
+    """用户收藏图书"""
+    id = models.AutoField(db_column='ID', primary_key=True)
+    customer = models.ForeignKey(Customer, db_column='customer_id', on_delete=models.CASCADE)
+    isbn = models.ForeignKey(Book, db_column='isbn', on_delete=models.CASCADE)
+    folder = models.ForeignKey(FavoriteFolder, db_column='folder_id', on_delete=models.CASCADE, blank=True, null=True)
+    created_at = models.DateTimeField(db_column='created_at', auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'book_favorite'
+        verbose_name = '图书收藏'
+        verbose_name_plural = '图书收藏'
+        unique_together = (('customer', 'isbn'),)
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.customer.username} 收藏了: {self.isbn.title}"

@@ -3,17 +3,19 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Q, F, Sum
-from django.db import transaction
+from django.db import transaction, connection
+from django.core.paginator import Paginator
 
-from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel
+from .models import Book, Bookauthor, Customer, Orders, Orderdetail, Creditlevel, BookFavorite, FavoriteFolder
 from .cart_store import get_cart, save_cart, clear_cart
 from .ai_chat_store import attach_customer_ai_history
 from decimal import Decimal
 from functools import wraps
+from datetime import timedelta
 
 
 def customer_login(request: HttpRequest) -> HttpResponse:
@@ -237,6 +239,137 @@ def index(request: HttpRequest) -> HttpResponse:
         "total_count": total_count,
     })
 
+
+def _split_keywords(keywords: str) -> list[str]:
+    if not keywords:
+        return []
+    return [kw.strip() for kw in keywords.replace("，", ",").split(",") if kw.strip()]
+
+
+def _category_stats(limit: int = 24) -> list[dict]:
+    counts = {}
+    for keywords in Book.objects.filter(stockqty__gt=0).exclude(keywords__isnull=True).values_list("keywords", flat=True):
+        for keyword in _split_keywords(keywords):
+            counts[keyword] = counts.get(keyword, 0) + 1
+    return [
+        {"name": name, "count": count}
+        for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ]
+
+
+def categories(request: HttpRequest) -> HttpResponse:
+    """书籍分区浏览页：按关键词聚合成商城式分类入口。"""
+    selected_category = request.GET.get("category", "").strip()
+    sort = request.GET.get("sort", "title")
+    page_number = request.GET.get("page", 1)
+
+    books = Book.objects.filter(stockqty__gt=0)
+    if selected_category:
+        books = books.filter(keywords__icontains=selected_category)
+
+    sort_options = {
+        "title": "title",
+        "price_asc": "price",
+        "price_desc": "-price",
+        "stock_desc": "-stockqty",
+    }
+    books = books.order_by(sort_options.get(sort, "title"))
+
+    paginator = Paginator(books, 12)
+    page_obj = paginator.get_page(page_number)
+    books_with_covers = [_build_book_data(book) for book in page_obj.object_list]
+
+    categories_data = _category_stats()
+    for item in categories_data:
+        item["active"] = item["name"] == selected_category
+
+    from django.conf import settings
+    from urllib.parse import quote
+    default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
+    images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
+    static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
+    default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
+
+    return render(request, "bookstore/categories.html", {
+        "categories": categories_data,
+        "books": books_with_covers,
+        "page_obj": page_obj,
+        "selected_category": selected_category,
+        "sort": sort,
+        "DEFAULT_COVER_IMAGE_URL": default_cover_url,
+    })
+
+
+def _rank_book_data(book, metric_label: str, metric_value) -> dict:
+    data = _build_book_data(book)
+    data["metric_label"] = metric_label
+    data["metric_value"] = metric_value if metric_value is not None else 0
+    return data
+
+
+def _ranked_books_from_order_rows(rows, metric_key: str, metric_label: str) -> list[dict]:
+    rows = list(rows)
+    isbns = [row["isbn"] for row in rows]
+    books = Book.objects.filter(isbn__in=isbns, stockqty__gt=0)
+    book_map = {book.isbn: book for book in books}
+
+    ranked_books = []
+    for row in rows:
+        book = book_map.get(row["isbn"])
+        if book:
+            ranked_books.append(_rank_book_data(book, metric_label, row.get(metric_key, 0)))
+    return ranked_books
+
+
+def rankings(request: HttpRequest) -> HttpResponse:
+    """商城榜单页：复用订单、库存和图书数据生成多个实用榜单。"""
+    recent_cutoff = timezone.now() - timedelta(days=30)
+
+    best_seller_rows = Orderdetail.objects.values("isbn").annotate(
+        total_sales=Sum("quantity")
+    ).order_by("-total_sales")[:20]
+
+    recent_hot_rows = Orderdetail.objects.filter(
+        orderid__orderdate__gte=recent_cutoff
+    ).values("isbn").annotate(
+        recent_sales=Sum("quantity")
+    ).order_by("-recent_sales")[:20]
+
+    low_stock = Book.objects.filter(stockqty__gt=0, stockqty__lte=F("minstocklimit")).order_by("stockqty", "title")[:10]
+
+    rich_descriptions = Book.objects.filter(
+        stockqty__gt=0
+    ).exclude(description__isnull=True).exclude(description="").order_by("title")[:10]
+
+    sections = [
+        {
+            "title": "畅销榜",
+            "subtitle": "按历史订单销量排序，适合作为热门采购参考。",
+            "icon": "local_fire_department",
+            "books": _ranked_books_from_order_rows(best_seller_rows, "total_sales", "销量")[:10],
+        },
+        {
+            "title": "近30天热销",
+            "subtitle": "观察最近一段时间更受欢迎的图书。",
+            "icon": "trending_up",
+            "books": _ranked_books_from_order_rows(recent_hot_rows, "recent_sales", "近30天销量")[:10],
+        },
+        {
+            "title": "库存紧俏",
+            "subtitle": "库存低于预警线的图书，适合提醒补货或优先下单。",
+            "icon": "inventory_2",
+            "books": [_rank_book_data(book, "库存", book.stockqty) for book in low_stock],
+        },
+        {
+            "title": "有简介可读",
+            "subtitle": "优先展示已有简介的图书，方便用户做购买判断。",
+            "icon": "menu_book",
+            "books": [_rank_book_data(book, "库存", book.stockqty) for book in rich_descriptions],
+        },
+    ]
+
+    return render(request, "bookstore/rankings.html", {"sections": sections})
+
 def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     book = get_object_or_404(Book, pk=isbn)
 
@@ -287,7 +420,26 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
     static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
     default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
 
-    return render(request, "bookstore/book_detail.html", {"book": book_data, "DEFAULT_COVER_IMAGE_URL": default_cover_url})
+    _ensure_book_favorite_table()
+    customer_id = request.session.get("customer_id")
+    is_favorited = False
+    favorite_folder_id = None
+    favorite_folders = []
+    if customer_id:
+        favorite = BookFavorite.objects.filter(customer_id=customer_id, isbn_id=isbn).first()
+        is_favorited = favorite is not None
+        favorite_folder_id = favorite.folder_id if favorite else None
+        favorite_folders = _favorite_folders_for_customer(customer_id)
+    favorite_count = BookFavorite.objects.filter(isbn_id=isbn).count()
+
+    return render(request, "bookstore/book_detail.html", {
+        "book": book_data,
+        "DEFAULT_COVER_IMAGE_URL": default_cover_url,
+        "is_favorited": is_favorited,
+        "favorite_count": favorite_count,
+        "favorite_folders": favorite_folders,
+        "favorite_folder_id": favorite_folder_id,
+    })
 
 def search(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
@@ -332,6 +484,166 @@ def _get_cart(request):
 
 def _save_cart(request, cart):
     save_cart(request.session["customer_id"], cart)
+
+
+def _ensure_book_favorite_table():
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `favorite_folder` (
+                `ID` INT NOT NULL AUTO_INCREMENT,
+                `customer_id` INT NOT NULL,
+                `name` VARCHAR(60) NOT NULL,
+                `is_default` TINYINT NOT NULL DEFAULT 0,
+                `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                PRIMARY KEY (`ID`),
+                UNIQUE KEY `favorite_folder_customer_name` (`customer_id`, `name`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS `book_favorite` (
+                `ID` INT NOT NULL AUTO_INCREMENT,
+                `customer_id` INT NOT NULL,
+                `isbn` VARCHAR(20) NOT NULL,
+                `folder_id` INT NULL,
+                `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                PRIMARY KEY (`ID`),
+                UNIQUE KEY `book_favorite_customer_isbn` (`customer_id`, `isbn`),
+                KEY `book_favorite_folder_idx` (`folder_id`),
+                KEY `book_favorite_isbn_idx` (`isbn`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """)
+        cursor.execute("SHOW COLUMNS FROM `book_favorite` LIKE 'folder_id'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE `book_favorite` ADD COLUMN `folder_id` INT NULL AFTER `isbn`")
+            cursor.execute("ALTER TABLE `book_favorite` ADD KEY `book_favorite_folder_idx` (`folder_id`)")
+
+
+def _get_default_favorite_folder(customer_id: int) -> FavoriteFolder:
+    _ensure_book_favorite_table()
+    folder = FavoriteFolder.objects.filter(customer_id=customer_id, is_default=1).first()
+    if folder:
+        return folder
+    return FavoriteFolder.objects.create(customer_id=customer_id, name="默认收藏夹", is_default=1)
+
+
+def _favorite_folders_for_customer(customer_id: int):
+    _get_default_favorite_folder(customer_id)
+    return FavoriteFolder.objects.filter(customer_id=customer_id).order_by("-is_default", "created_at")
+
+
+@require_POST
+def favorite_toggle(request: HttpRequest, isbn: str) -> JsonResponse:
+    customer_id = request.session.get("customer_id")
+    if not customer_id:
+        return JsonResponse({
+            "success": False,
+            "message": "请先登录后再收藏图书。",
+            "login_url": reverse("bookstore:login"),
+        }, status=401)
+
+    get_object_or_404(Book, pk=isbn)
+    _ensure_book_favorite_table()
+
+    favorite = BookFavorite.objects.filter(customer_id=customer_id, isbn_id=isbn).first()
+    if favorite:
+        favorite.delete()
+        is_favorited = False
+        message = "已取消收藏"
+        folder_id = None
+    else:
+        requested_folder_id = request.POST.get("folder_id")
+        folder = None
+        if requested_folder_id:
+            folder = FavoriteFolder.objects.filter(id=requested_folder_id, customer_id=customer_id).first()
+        if folder is None:
+            folder = _get_default_favorite_folder(customer_id)
+
+        BookFavorite.objects.create(customer_id=customer_id, isbn_id=isbn, folder=folder)
+        is_favorited = True
+        folder_id = folder.id
+        message = f"已加入「{folder.name}」"
+
+    favorite_count = BookFavorite.objects.filter(isbn_id=isbn).count()
+    from .recommendations import invalidate_recommendation_cache
+    invalidate_recommendation_cache(customer_id=customer_id)
+
+    return JsonResponse({
+        "success": True,
+        "is_favorited": is_favorited,
+        "favorite_count": favorite_count,
+        "folder_id": folder_id,
+        "message": message,
+    })
+
+
+@customer_required
+def favorite_folders(request: HttpRequest) -> HttpResponse:
+    customer_id = request.session["customer_id"]
+    customer = get_object_or_404(Customer, pk=customer_id)
+    _ensure_book_favorite_table()
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if not name:
+            messages.error(request, "收藏夹名称不能为空")
+        elif len(name) > 60:
+            messages.error(request, "收藏夹名称不能超过60个字符")
+        elif FavoriteFolder.objects.filter(customer_id=customer_id, name=name).exists():
+            messages.error(request, "该收藏夹名称已存在")
+        else:
+            FavoriteFolder.objects.create(customer_id=customer_id, name=name, is_default=0)
+            messages.success(request, f"收藏夹「{name}」创建成功")
+        return redirect("bookstore:favorite_folders")
+
+    folders = list(_favorite_folders_for_customer(customer_id))
+    folder_ids = [folder.id for folder in folders]
+    favorites = BookFavorite.objects.filter(
+        customer_id=customer_id,
+        folder_id__in=folder_ids,
+    ).select_related("isbn", "folder").order_by("folder_id", "-created_at")
+
+    favorite_map = {folder.id: [] for folder in folders}
+    for favorite in favorites:
+        favorite_map.setdefault(favorite.folder_id, []).append(_build_book_data(favorite.isbn))
+
+    folder_cards = []
+    total_count = 0
+    for folder in folders:
+        books = favorite_map.get(folder.id, [])
+        total_count += len(books)
+        folder_cards.append({
+            "folder": folder,
+            "books": books,
+            "count": len(books),
+        })
+
+    return render(request, "bookstore/favorite_folders.html", {
+        "customer": customer,
+        "folder_cards": folder_cards,
+        "total_count": total_count,
+    })
+
+
+@customer_required
+@require_POST
+def favorite_folder_delete(request: HttpRequest, folder_id: int) -> HttpResponse:
+    customer_id = request.session["customer_id"]
+    _ensure_book_favorite_table()
+    folder = get_object_or_404(FavoriteFolder, pk=folder_id, customer_id=customer_id)
+
+    if folder.is_default:
+        messages.error(request, "默认收藏夹不能删除")
+        return redirect("bookstore:favorite_folders")
+
+    folder_name = folder.name
+    with transaction.atomic():
+        BookFavorite.objects.filter(customer_id=customer_id, folder=folder).delete()
+        folder.delete()
+
+    from .recommendations import invalidate_recommendation_cache
+    invalidate_recommendation_cache(customer_id=customer_id)
+    messages.success(request, f"收藏夹「{folder_name}」已删除")
+    return redirect("bookstore:favorite_folders")
 
 @customer_required
 def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:

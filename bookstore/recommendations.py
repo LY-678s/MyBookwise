@@ -1,270 +1,347 @@
 """
-个性化推荐算法模块 - 优化版
+Book recommendation engine.
 
-优化点：
-1. 销量分数和时间衰减分数预计算并缓存
-2. 用户推荐使用 SQL 查询替代遍历
-3. 添加多层缓存机制
+The homepage expects a ranked list of Book objects.  This module keeps that
+contract, but builds the ranking from common bookstore signals:
 
-推荐分数计算公式：
-    最终分数 = 销量分数 × 0.4 + 时间衰减分数 × 0.2 + 用户倾向度 × 0.4
+1. global popularity: total sales and recent sales
+2. user behavior: recent browse history and search history
+3. content similarity: title, keywords and description overlap
+
+Performance notes:
+- expensive global scores are cached for hours
+- per-user recommendation ISBN lists are cached briefly
+- personalized scoring only evaluates a bounded candidate set instead of the
+  whole book table
 """
 
-from django.db.models import Sum, Max, Q
-from django.core.cache import cache
-from django.utils import timezone
+from collections import Counter
 from datetime import timedelta
-from typing import List, Set, Optional
-import logging
+import math
+import re
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from .models import Book, Orderdetail, SearchHistory, BrowseHistory
+from django.core.cache import cache
+from django.db.models import Max, Q, Sum
+from django.utils import timezone
 
-logger = logging.getLogger(__name__)
+from .models import Book, BookFavorite, BrowseHistory, Orderdetail, SearchHistory
 
-# 缓存配置
-SALES_CACHE_KEY = 'recommendation_sales_scores'
-RECENCY_CACHE_KEY = 'recommendation_recency_scores'
-SALES_CACHE_TIMEOUT = 3600 * 6  # 6小时
-RECENCY_CACHE_TIMEOUT = 3600  # 1小时
+
+SALES_CACHE_KEY = "recommendation_sales_scores"
+RECENCY_CACHE_KEY = "recommendation_recency_scores"
+GLOBAL_RANKING_CACHE_KEY = "recommendation_global_ranking"
+SALES_CACHE_TIMEOUT = 3600 * 6
+RECENCY_CACHE_TIMEOUT = 3600
+GLOBAL_RANKING_CACHE_TIMEOUT = 1800
+
+
+TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+")
+STOP_WORDS = {
+    "the", "and", "for", "with", "from", "into", "this", "that", "book",
+    "edition", "introduction", "a", "an", "of", "to", "in", "on", "by",
+}
+
+
+def _tokenize(text: Optional[str]) -> List[str]:
+    """Split mixed Chinese/English book text into compact matching tokens."""
+    if not text:
+        return []
+
+    tokens: List[str] = []
+    for raw in TOKEN_RE.findall(text.lower()):
+        if raw in STOP_WORDS:
+            continue
+        if re.fullmatch(r"[\u4e00-\u9fff]+", raw):
+            if len(raw) <= 4:
+                tokens.append(raw)
+            else:
+                tokens.extend(raw[i:i + 2] for i in range(len(raw) - 1))
+        elif len(raw) > 1:
+            tokens.append(raw)
+    return tokens
+
+
+def _book_tokens(book: Book) -> Counter:
+    tokens = Counter()
+    tokens.update({token: 3.0 for token in _tokenize(book.keywords)})
+    tokens.update({token: 2.0 for token in _tokenize(book.title)})
+    tokens.update({token: 1.0 for token in _tokenize(getattr(book, "description", None))})
+    return tokens
+
+
+def _cosine_like(profile: Counter, item: Counter) -> float:
+    if not profile or not item:
+        return 0.0
+
+    dot = sum(profile[token] * item[token] for token in item.keys() & profile.keys())
+    if dot <= 0:
+        return 0.0
+
+    profile_norm = math.sqrt(sum(weight * weight for weight in profile.values()))
+    item_norm = math.sqrt(sum(weight * weight for weight in item.values()))
+    return dot / max(profile_norm * item_norm, 1.0)
 
 
 class RecommendationEngine:
-    """推荐引擎 - 优化版"""
+    """Rank books for anonymous users or a specific customer."""
 
-    # 权重配置
-    SALES_WEIGHT = 0.4
-    RECENCY_WEIGHT = 0.2
-    USER_PREFERENCE_WEIGHT = 0.4
+    SALES_WEIGHT = 0.35
+    RECENCY_WEIGHT = 0.20
+    CONTENT_WEIGHT = 0.40
+    SEED_BOOK_WEIGHT = 0.05
 
-    # 时间衰减配置
     RECENCY_DAYS = 30
-    RECENCY_DECAY_RATE = 0.1
+    RECENCY_DECAY_RATE = 0.08
 
-    # 用户偏好配置
-    PREFERENCE_KEYWORD_LIMIT = 50  # 关键词数量限制
-    PREFERENCE_BOOK_LIMIT = 500  # 候选书籍数量
+    RECENT_BROWSE_LIMIT = 30
+    RECENT_FAVORITE_LIMIT = 50
+    RECENT_SEARCH_LIMIT = 20
+    PROFILE_TOKEN_LIMIT = 40
+    CANDIDATE_TOKEN_LIMIT = 12
+    CANDIDATE_BOOK_LIMIT = 700
+    GLOBAL_POOL_LIMIT = 1000
 
     def __init__(self, customer_id: Optional[int] = None):
         self.customer_id = customer_id
 
     def get_recommendations(self, limit: int = 20) -> List[Book]:
-        """
-        获取推荐书籍列表 - 优化版
-        """
-        # 获取用户偏好书籍集合
-        preference_isbns = self._get_preference_isbns()
-        
-        # 获取全局排名（销量+时间衰减）
-        global_scores = self._get_global_scores()
-        
-        # 如果有用户偏好，混合排序
-        if preference_isbns:
-            scored_books = []
-            for isbn, score_data in global_scores.items():
-                # 用户偏好书籍获得额外加分
-                pref_boost = 0.5 if isbn in preference_isbns else 0
-                total = score_data['total_score'] + pref_boost * self.USER_PREFERENCE_WEIGHT
-                scored_books.append((isbn, total, score_data['book']))
-            
-            # 混合排序
-            scored_books.sort(key=lambda x: x[1], reverse=True)
-            result = [book for _, _, book in scored_books[:limit]]
-        else:
-            # 无偏好，按全局排名
-            result = [score_data['book'] for _, score_data in list(global_scores.items())[:limit]]
-        
-        return result
-
-    def _get_preference_isbns(self) -> Set[str]:
-        """获取用户偏好书籍的ISBN集合 - 使用SQL优化"""
         if not self.customer_id:
-            return set()
-        
-        # 获取用户搜索和浏览记录中的关键词
-        keywords = self._get_user_keywords()
-        if not keywords:
-            return set()
-        
-        # 用SQL直接查询匹配的书籍
-        query = Q()
-        for kw in keywords:
-            query |= Q(title__icontains=kw) | Q(keywords__icontains=kw)
-        
-        if not query:
-            return set()
-        
-        # 只返回有库存的书籍
-        matching_books = Book.objects.filter(query, stockqty__gt=0).values_list('isbn', flat=True)[:self.PREFERENCE_BOOK_LIMIT]
-        return set(matching_books)
+            return self._books_from_ranked_isbns(self._get_global_ranking()[:limit])
 
-    def _get_user_keywords(self) -> List[str]:
-        """获取用户偏好关键词"""
-        keywords = set()
-        
-        # 获取搜索关键词
-        search_records = SearchHistory.objects.filter(
-            customer_id=self.customer_id
-        ).values_list('keyword', flat=True)[:self.PREFERENCE_KEYWORD_LIMIT]
-        
-        for kw in search_records:
-            if kw:
-                keywords.update([w.strip().lower() for w in kw.split() if len(w) > 1])
-        
-        # 获取浏览书籍的关键词
-        browse_records = BrowseHistory.objects.filter(
-            customer_id=self.customer_id
-        ).select_related('isbn')[:self.PREFERENCE_KEYWORD_LIMIT]
-        
-        for record in browse_records:
-            book = record.isbn
-            if book.keywords:
-                keywords.update([w.strip().lower() for w in book.keywords.split(',') if len(w) > 1])
-            # 从书名提取关键词
-            title_words = book.title.replace('(', ' ').replace(')', ' ').replace('-', ' ')
-            keywords.update([w.lower() for w in title_words.split() if len(w) > 1])
-        
-        return list(keywords)[:self.PREFERENCE_KEYWORD_LIMIT]
+        profile, interacted_isbns, favorite_isbns = self._build_user_profile()
+        if not profile:
+            return self._books_from_ranked_isbns(self._get_global_ranking()[:limit])
 
-    def _get_global_scores(self) -> dict:
-        """
-        获取全局分数（销量+时间衰减）- 带缓存
-        """
-        # 尝试从缓存获取
-        sales_scores = cache.get(SALES_CACHE_KEY)
-        recency_scores = cache.get(RECENCY_CACHE_KEY)
-        
-        # 计算缺少的分数
-        if sales_scores is None:
-            sales_scores = self._calculate_sales_scores()
-            cache.set(SALES_CACHE_KEY, sales_scores, SALES_CACHE_TIMEOUT)
-        
-        if recency_scores is None:
-            recency_scores = self._calculate_recency_scores()
-            cache.set(RECENCY_CACHE_KEY, recency_scores, RECENCY_CACHE_TIMEOUT)
-        
-        # 获取有库存的书籍
-        books = Book.objects.filter(stockqty__gt=0).only('isbn', 'title', 'publisher', 'price', 'keywords', 'stockqty', 'location', 'minstocklimit', 'coverimage')
-        
-        scores = {}
+        global_scores = self._get_global_score_map()
+        candidate_isbns = self._get_candidate_isbns(profile, interacted_isbns)
+        ranked: List[Tuple[str, float]] = []
+
+        books = Book.objects.filter(
+            isbn__in=candidate_isbns,
+            stockqty__gt=0,
+        ).only(
+            "isbn", "title", "publisher", "price", "keywords", "description",
+            "stockqty", "location", "minstocklimit", "coverimage",
+        )
+
         for book in books:
-            isbn = book.isbn
-            sales = sales_scores.get(isbn, 0)
-            recency = recency_scores.get(isbn, 0)
-            
-            total_score = sales * self.SALES_WEIGHT + recency * self.RECENCY_WEIGHT
-            
-            scores[isbn] = {
-                'total_score': total_score,
-                'sales_score': sales,
-                'recency_score': recency,
-                'book': book
-            }
-        
-        # 按分数排序
-        sorted_scores = sorted(scores.items(), key=lambda x: x[1]['total_score'], reverse=True)
-        
-        return dict(sorted_scores[:1000])  # 只保留前1000本
+            content_score = _cosine_like(profile, _book_tokens(book))
+            global_score = global_scores.get(book.isbn, 0.0)
+            seen_penalty = 0.08 if book.isbn in interacted_isbns else 0.0
+            favorite_penalty = 0.10 if book.isbn in favorite_isbns else 0.0
+            seed_bonus = 0.03 if book.isbn in candidate_isbns else 0.0
+            total = (
+                content_score * self.CONTENT_WEIGHT
+                + global_score * (self.SALES_WEIGHT + self.RECENCY_WEIGHT)
+                + seed_bonus * self.SEED_BOOK_WEIGHT
+                - seen_penalty
+                - favorite_penalty
+            )
+            ranked.append((book.isbn, total))
 
-    def _calculate_sales_scores(self) -> dict:
-        """计算销量分数 - 归一化到 0-1"""
-        sales_data = Orderdetail.objects.values('isbn').annotate(
-            total_qty=Sum('quantity')
-        ).order_by('-total_qty')
-        
+        ranked.sort(key=lambda item: item[1], reverse=True)
+        ranked_isbns = [isbn for isbn, _ in ranked]
+
+        # Fill with globally good books so the homepage always has enough pages.
+        seen = set(ranked_isbns)
+        for isbn in self._get_global_ranking():
+            if isbn not in seen:
+                ranked_isbns.append(isbn)
+                seen.add(isbn)
+            if len(ranked_isbns) >= max(limit, self.GLOBAL_POOL_LIMIT):
+                break
+
+        return self._books_from_ranked_isbns(ranked_isbns[:limit])
+
+    def _build_user_profile(self) -> Tuple[Counter, Set[str], Set[str]]:
+        profile = Counter()
+        interacted_isbns: Set[str] = set()
+        favorite_isbns: Set[str] = set()
+
+        searches = SearchHistory.objects.filter(
+            customer_id=self.customer_id
+        ).only("keyword", "search_time")[:self.RECENT_SEARCH_LIMIT]
+
+        for index, record in enumerate(searches):
+            weight = 2.0 * self._position_decay(index)
+            for token in _tokenize(record.keyword):
+                profile[token] += weight
+
+        browses = BrowseHistory.objects.filter(
+            customer_id=self.customer_id
+        ).select_related("isbn").only(
+            "isbn__isbn", "isbn__title", "isbn__keywords", "isbn__description", "browse_time"
+        )[:self.RECENT_BROWSE_LIMIT]
+
+        for index, record in enumerate(browses):
+            book = record.isbn
+            interacted_isbns.add(book.isbn)
+            weight = 3.0 * self._position_decay(index)
+            for token, token_weight in _book_tokens(book).items():
+                profile[token] += weight * token_weight
+
+        favorites = BookFavorite.objects.filter(
+            customer_id=self.customer_id
+        ).select_related("isbn").only(
+            "isbn__isbn", "isbn__title", "isbn__keywords", "isbn__description", "created_at"
+        )[:self.RECENT_FAVORITE_LIMIT]
+
+        for index, record in enumerate(favorites):
+            book = record.isbn
+            favorite_isbns.add(book.isbn)
+            interacted_isbns.add(book.isbn)
+            weight = 5.0 * self._position_decay(index)
+            for token, token_weight in _book_tokens(book).items():
+                profile[token] += weight * token_weight
+
+        return Counter(dict(profile.most_common(self.PROFILE_TOKEN_LIMIT))), interacted_isbns, favorite_isbns
+
+    @staticmethod
+    def _position_decay(index: int) -> float:
+        return 1 / (1 + index * 0.15)
+
+    def _get_candidate_isbns(self, profile: Counter, browsed_isbns: Set[str]) -> Set[str]:
+        tokens = [token for token, _ in profile.most_common(self.CANDIDATE_TOKEN_LIMIT)]
+        query = Q()
+        for token in tokens:
+            query |= (
+                Q(title__icontains=token)
+                | Q(keywords__icontains=token)
+                | Q(description__icontains=token)
+            )
+
+        candidate_isbns: Set[str] = set(browsed_isbns)
+        if query:
+            candidate_isbns.update(
+                Book.objects.filter(query, stockqty__gt=0)
+                .values_list("isbn", flat=True)[:self.CANDIDATE_BOOK_LIMIT]
+            )
+
+        candidate_isbns.update(self._get_global_ranking()[:200])
+        return candidate_isbns
+
+    def _get_global_score_map(self) -> Dict[str, float]:
+        sales_scores = self._get_sales_scores()
+        recency_scores = self._get_recency_scores()
+        all_isbns = set(sales_scores) | set(recency_scores)
+        return {
+            isbn: sales_scores.get(isbn, 0.0) * self.SALES_WEIGHT
+            + recency_scores.get(isbn, 0.0) * self.RECENCY_WEIGHT
+            for isbn in all_isbns
+        }
+
+    def _get_global_ranking(self) -> List[str]:
+        cached = cache.get(GLOBAL_RANKING_CACHE_KEY)
+        if cached is not None:
+            return cached
+
+        global_scores = self._get_global_score_map()
+        books = Book.objects.filter(stockqty__gt=0).only("isbn", "title")
+        ranked = sorted(
+            ((book.isbn, global_scores.get(book.isbn, 0.0), book.title) for book in books),
+            key=lambda item: (item[1], item[2] or ""),
+            reverse=True,
+        )
+        isbns = [isbn for isbn, _, _ in ranked[:self.GLOBAL_POOL_LIMIT]]
+        cache.set(GLOBAL_RANKING_CACHE_KEY, isbns, GLOBAL_RANKING_CACHE_TIMEOUT)
+        return isbns
+
+    def _get_sales_scores(self) -> Dict[str, float]:
+        scores = cache.get(SALES_CACHE_KEY)
+        if scores is None:
+            scores = self._calculate_sales_scores()
+            cache.set(SALES_CACHE_KEY, scores, SALES_CACHE_TIMEOUT)
+        return scores
+
+    def _get_recency_scores(self) -> Dict[str, float]:
+        scores = cache.get(RECENCY_CACHE_KEY)
+        if scores is None:
+            scores = self._calculate_recency_scores()
+            cache.set(RECENCY_CACHE_KEY, scores, RECENCY_CACHE_TIMEOUT)
+        return scores
+
+    def _calculate_sales_scores(self) -> Dict[str, float]:
+        sales_data = list(
+            Orderdetail.objects.values("isbn").annotate(total_qty=Sum("quantity"))
+        )
         if not sales_data:
             return {}
-        
-        max_sales = sales_data[0]['total_qty'] or 1
-        min_sales = sales_data.last()['total_qty'] or 0
+
+        quantities = [item["total_qty"] or 0 for item in sales_data]
+        max_sales = max(quantities) or 1
+        min_sales = min(quantities)
         sales_range = max(max_sales - min_sales, 1)
-        
         return {
-            item['isbn']: (item['total_qty'] or 0 - min_sales) / sales_range
+            item["isbn"]: ((item["total_qty"] or 0) - min_sales) / sales_range
             for item in sales_data
         }
 
-    def _calculate_recency_scores(self) -> dict:
-        """计算时间衰减分数"""
+    def _calculate_recency_scores(self) -> Dict[str, float]:
         cutoff_date = timezone.now() - timedelta(days=self.RECENCY_DAYS)
-        
-        recent_orders = Orderdetail.objects.filter(
-            orderid__orderdate__gte=cutoff_date
-        ).values('isbn').annotate(
-            recent_qty=Sum('quantity'),
-            latest_date=Max('orderid__orderdate')
+        recent_orders = list(
+            Orderdetail.objects.filter(orderid__orderdate__gte=cutoff_date)
+            .values("isbn")
+            .annotate(recent_qty=Sum("quantity"), latest_date=Max("orderid__orderdate"))
         )
-        
         if not recent_orders:
             return {}
-        
-        max_recency = recent_orders[0]['recent_qty'] or 1
-        
-        scores = {}
+
+        max_recent = max(item["recent_qty"] or 0 for item in recent_orders) or 1
         now = timezone.now()
+        scores: Dict[str, float] = {}
         for item in recent_orders:
-            isbn = item['isbn']
-            recent_qty = item['recent_qty'] or 0
-            days_ago = (now - item['latest_date']).days
-            
-            base_score = recent_qty / max_recency
+            latest_date = item["latest_date"] or now
+            days_ago = max((now - latest_date).days, 0)
             decay = (1 - self.RECENCY_DECAY_RATE) ** days_ago
-            scores[isbn] = base_score * decay
-        
+            scores[item["isbn"]] = ((item["recent_qty"] or 0) / max_recent) * decay
         return scores
+
+    @staticmethod
+    def _books_from_ranked_isbns(isbns: Sequence[str]) -> List[Book]:
+        if not isbns:
+            return []
+
+        books = Book.objects.filter(isbn__in=isbns, stockqty__gt=0).only(
+            "isbn", "title", "publisher", "price", "keywords", "description",
+            "stockqty", "location", "minstocklimit", "coverimage",
+        )
+        book_dict = {book.isbn: book for book in books}
+        return [book_dict[isbn] for isbn in isbns if isbn in book_dict]
 
 
 def get_recommendations_for_user(customer_id: int, limit: int = 20) -> List[Book]:
-    """为指定用户获取推荐 - 带缓存"""
-    # 短期缓存用户推荐结果（5分钟）
-    cache_key = f'user_recommendations_{customer_id}'
+    cache_key = f"user_recommendations_{customer_id}"
     cached = cache.get(cache_key)
-    
     if cached is not None:
-        # 从缓存获取，只需要取前limit个
-        isbns = cached[:limit]
-        if isbns:
-            books = Book.objects.filter(isbn__in=isbns, stockqty__gt=0)
-            # 保持顺序
-            book_dict = {b.isbn: b for b in books}
-            return [book_dict[isbn] for isbn in isbns if isbn in book_dict]
-    
-    # 计算推荐
+        return RecommendationEngine._books_from_ranked_isbns(cached[:limit])
+
     engine = RecommendationEngine(customer_id=customer_id)
-    books = engine.get_recommendations(limit=1000)  # 计算更多用于缓存
-    
-    # 缓存ISBN列表
-    isbn_list = [b.isbn for b in books]
-    cache.set(cache_key, isbn_list, 300)  # 5分钟
-    
+    books = engine.get_recommendations(limit=RecommendationEngine.GLOBAL_POOL_LIMIT)
+    isbn_list = [book.isbn for book in books]
+    cache.set(cache_key, isbn_list, 300)
     return books[:limit]
 
 
 def get_default_recommendations(limit: int = 20) -> List[Book]:
-    """为未登录用户获取推荐 - 使用全局排名"""
-    # 尝试从缓存获取
-    cache_key = 'default_recommendations'
+    cache_key = "default_recommendations"
     cached = cache.get(cache_key)
-    
     if cached is not None:
-        isbns = cached[:limit]
-        if isbns:
-            books = Book.objects.filter(isbn__in=isbns, stockqty__gt=0)
-            book_dict = {b.isbn: b for b in books}
-            return [book_dict[isbn] for isbn in isbns if isbn in book_dict]
-    
-    # 计算全局排名
+        return RecommendationEngine._books_from_ranked_isbns(cached[:limit])
+
     engine = RecommendationEngine(customer_id=None)
-    books = engine.get_recommendations(limit=1000)
-    
-    # 缓存
-    isbn_list = [b.isbn for b in books]
-    cache.set(cache_key, isbn_list, 300)  # 5分钟
-    
+    books = engine.get_recommendations(limit=RecommendationEngine.GLOBAL_POOL_LIMIT)
+    isbn_list = [book.isbn for book in books]
+    cache.set(cache_key, isbn_list, 300)
     return books[:limit]
 
 
-def invalidate_recommendation_cache():
-    """清除推荐缓存"""
+def invalidate_recommendation_cache(customer_id: Optional[int] = None):
+    if customer_id:
+        cache.delete(f"user_recommendations_{customer_id}")
+        return
+
     cache.delete(SALES_CACHE_KEY)
     cache.delete(RECENCY_CACHE_KEY)
-    cache.delete('default_recommendations')
+    cache.delete(GLOBAL_RANKING_CACHE_KEY)
+    cache.delete("default_recommendations")

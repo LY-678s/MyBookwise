@@ -1,20 +1,23 @@
 from django.urls import path
+
 from . import views
 from bookstore.api import views as api_views
+
 
 app_name = "bookstore"
 
 urlpatterns = [
-    path("", views.index, name="index"),   # 首页：图书列表
+    path("", views.index, name="index"),
     path("book/<str:isbn>/", views.book_detail, name="book_detail"),
+    path("book/<str:isbn>/favorite/", views.favorite_toggle, name="favorite_toggle"),
     path("search/", views.search, name="search"),
+    path("categories/", views.categories, name="categories"),
+    path("rankings/", views.rankings, name="rankings"),
 
-    # 顾客登录 / 注册 / 注销
     path("login/", views.customer_login, name="login"),
     path("register/", views.customer_register, name="register"),
     path("logout/", views.customer_logout, name="logout"),
 
-    # 购物车 & 下单
     path("cart/", views.cart_detail, name="cart_detail"),
     path("cart/add/<str:isbn>/", views.cart_add, name="cart_add"),
     path("cart/update/<str:isbn>/", views.cart_update, name="cart_update"),
@@ -25,17 +28,16 @@ urlpatterns = [
     path("orders/<int:order_id>/pay/", views.pay_order, name="pay_order"),
     path("orders/<int:order_id>/cancel/", views.cancel_order, name="cancel_order"),
     path("orders/<int:order_id>/confirm/", views.confirm_receipt, name="confirm_receipt"),
-    
-    # AI 聊天助手
+
     path("ai/", views.ai_chat, name="ai_chat"),
     path("ai/chat/", views.ai_chat_api, name="ai_chat_api"),
     path("ai/clear/", views.ai_chat_clear, name="ai_chat_clear"),
 
-    # 账户管理
     path("account/", views.account_recharge, name="account"),
     path("account/edit/", views.account_edit, name="account_edit"),
     path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
+    path("account/favorites/", views.favorite_folders, name="favorite_folders"),
+    path("account/favorites/<int:folder_id>/delete/", views.favorite_folder_delete, name="favorite_folder_delete"),
 
-    # AJAX API - 获取推荐书籍分页
     path("api/books/", api_views.get_books_page, name="api_books"),
 ]

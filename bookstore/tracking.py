@@ -31,6 +31,8 @@ def record_search(customer_id: int, keyword: str) -> bool:
             customer_id=customer_id,
             keyword=keyword.strip()[:100]  # 限制关键词长度
         )
+        from .recommendations import invalidate_recommendation_cache
+        invalidate_recommendation_cache(customer_id=customer_id)
         return True
     except IntegrityError:
         logger.warning(f"Failed to record search for customer {customer_id}")
@@ -59,6 +61,8 @@ def record_browse(customer_id: int, isbn: str) -> bool:
             customer_id=customer_id,
             isbn_id=isbn
         )
+        from .recommendations import invalidate_recommendation_cache
+        invalidate_recommendation_cache(customer_id=customer_id)
         return True
     except IntegrityError:
         logger.warning(f"Failed to record browse for customer {customer_id}, ISBN {isbn}")
