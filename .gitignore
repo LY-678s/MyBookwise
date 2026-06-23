@@ -71,3 +71,7 @@ mobile/.cxx/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Cloudflare 隧道本地凭证（勿提交）
+scripts/cloudflared-mybookwise.yml
+.cloudflared/

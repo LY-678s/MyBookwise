@@ -7,8 +7,37 @@ python manage.py runserver 0.0.0.0:8000
 Android 模拟器常用 http://10.0.2.2:8000
 真机演示用电脑局域网 IP，如 http://192.168.x.x:8000
 
+---
 
+## 数据库
 
+数据文件：`SetDatabase/bookstoredb.sql`（完整库结构 + 英文图书 + 演示顾客/订单等初始数据）。
+
+### 首次导入
+
+```powershell
+# 1. 创建数据库（MySQL 中执行一次即可）
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS bookstoredb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 2. 导入（在项目根目录执行；PowerShell 请用 cmd 重定向，不要用 <）
+cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
+```
+
+`settings.py` 中 `DATABASES` 的库名、用户名、密码需与上面一致。
+
+### 重置数据库（测试后恢复初始状态）
+
+测试过程中若产生大量订单、余额变动等，可用同一 SQL **整库覆盖**恢复：
+
+```powershell
+cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
+```
+
+> 会清空并重建 `bookstoredb` 内所有表和数据，图书、顾客、订单等均回到 SQL 文件中的初始状态。
+
+导入完成后重启 Django：`python manage.py runserver 0.0.0.0:8000`
+
+---
 # 数据库课设——网上图书管理系统
 以下是主要功能模块测试流程示例
 ## 顾客端
@@ -108,15 +137,102 @@ totalamount=2181.10，等级由3升至4
 |---|---|
 | Android 模拟器 | `http://10.0.2.2:8000` |
 | 真机（同 Wi-Fi / USB 共享网络） | `http://电脑局域网IP:8000` |
-| **跨网访问（手机 4G、不同 Wi-Fi）** | `https://xxxx.trycloudflare.com`（见下方） |
+| **公网固定域名（推荐）** | `https://mybookwise.xyz` |
+| 临时穿透（快速隧道） | `https://xxxx.trycloudflare.com` |
 
 后端须以 `0.0.0.0:8000` 启动才能接受手机请求。
 
 ---
 
-## 跨网访问（内网穿透）
+## 公网域名 mybookwise.xyz（固定地址，推荐）
 
-手机和电脑**不在同一局域网**时，用 **cloudflared** 快速隧道（免注册）把本机 Django 暴露到公网。
+域名已通过 Cloudflare 管理时，用 **命名隧道** 把本机 Django 映射到 `https://mybookwise.xyz`，地址固定、APP 不用反复改。
+
+### 一次性配置
+
+**1. 域名接入 Cloudflare**
+
+- 登录 [Cloudflare Dashboard](https://dash.cloudflare.com)，添加站点 `mybookwise.xyz`
+- 在域名注册商处把 **DNS 服务器** 改为 Cloudflare 提供的 NS（状态变为 Active）
+
+**2. 安装 cloudflared**
+
+```powershell
+winget install Cloudflare.cloudflared
+```
+
+**3. 登录并创建隧道**
+
+```powershell
+cloudflared tunnel login
+cloudflared tunnel create mybookwise
+```
+
+记下输出的 **Tunnel UUID**（形如 `a1b2c3d4-...`）。
+
+**4. 绑定 DNS（CNAME 指向隧道）**
+
+```powershell
+cloudflared tunnel route dns mybookwise mybookwise.xyz
+cloudflared tunnel route dns mybookwise www.mybookwise.xyz
+```
+
+在 Cloudflare DNS 页面应出现两条 CNAME，Proxied（橙色云）即可。
+
+**5. 本地隧道配置文件**
+
+```powershell
+cd d:\Engineering\MyBookwise
+copy scripts\cloudflared-mybookwise.yml.example scripts\cloudflared-mybookwise.yml
+```
+
+编辑 `scripts/cloudflared-mybookwise.yml`，填入：
+
+- `tunnel:` 你的 UUID
+- `credentials-file:` 凭证路径，一般为 `C:\Users\你的用户名\.cloudflared\<UUID>.json`
+
+> `cloudflared-mybookwise.yml` 含本机路径，已在 `.gitignore`，勿提交 Git。
+
+**6. 项目内网络配置（已完成，核对即可）**
+
+| 位置 | 配置 |
+|------|------|
+| `MyBookwise/settings.py` | `ALLOWED_HOSTS` 含 `mybookwise.xyz`；`CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz` |
+| `ApiClient.kt` | `SERVER_BASE = "https://mybookwise.xyz"` |
+
+修改 settings 后需重启 Django。
+
+### 每次演示（两个终端）
+
+**终端 1 — Django**
+
+```powershell
+cd d:\Engineering\MyBookwise
+python manage.py runserver 0.0.0.0:8000
+```
+
+**终端 2 — 命名隧道**
+
+```powershell
+scripts\start_tunnel_named.cmd
+```
+
+验证：浏览器打开 https://mybookwise.xyz ；手机 4G 打开 APP（Rebuild 后）。
+
+### 常见问题
+
+| 现象 | 处理 |
+|------|------|
+| 域名无法访问 | 确认隧道终端在跑、DNS 已生效（可能需等待几分钟） |
+| `DisallowedHost` | 检查 `settings.py` 的 `ALLOWED_HOSTS`，重启 Django |
+| Web 登录 CSRF 403 | 确认 `CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz` |
+| APP 连不上 | `SERVER_BASE` 为 `https://mybookwise.xyz`（无末尾 `/`），Rebuild |
+
+---
+
+## 跨网访问（临时快速隧道，备选）
+
+不想配固定域名、或隧道未就绪时，仍可用 **trycloudflare.com** 临时地址：
 
 ### 一次性安装
 
@@ -138,7 +254,7 @@ python manage.py runserver 0.0.0.0:8000
 **终端 2 — 隧道**
 
 ```powershell
-powershell -File scripts/start_tunnel.ps1
+scripts\start_tunnel.cmd
 # 或：cloudflared tunnel --url http://localhost:8000
 ```
 

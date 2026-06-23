@@ -13,14 +13,15 @@ object ApiClient {
      *
      * | 场景           | 示例 |
      * |----------------|------|
+     * | 公网固定域名   | https://mybookwise.xyz |
      * | 模拟器         | http://10.0.2.2:8000 |
      * | 真机同 Wi-Fi   | http://192.168.x.x:8000 |
-     * | 跨网（cloudflared） | https://xxxx.trycloudflare.com |
      *
-     * 跨网步骤见项目根 README「跨网访问」。
+     * 公网域名需本机 cloudflared 命名隧道运行，见 README。
      */
-    // const val SERVER_BASE = "https://xxxx.trycloudflare.com"  // 跨网穿透时用 https
-    const val SERVER_BASE = "http://10.16.206.195:8000"
+    const val SERVER_BASE = "https://mybookwise.xyz"
+    // const val SERVER_BASE = "http://10.0.2.2:8000"       // 模拟器本地
+    // const val SERVER_BASE = "http://192.168.x.x:8000"  // 同 Wi-Fi 真机
     const val BASE_URL = "$SERVER_BASE/api/"
 
     /** 当前登录 Token（内存中），由 TokenStore 在 App 启动时恢复。*/

@@ -1,7 +1,7 @@
 # 启动 cloudflared 内网穿透（跨网访问 Django）
 #
-# 用法（在项目根 directory 执行）：
-#   powershell -File scripts/start_tunnel.ps1
+# 用法（推荐）：scripts\start_tunnel.cmd
+# 或：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_tunnel.ps1
 #
 # 前提：另开终端已运行  python manage.py runserver 0.0.0.0:8000
 
