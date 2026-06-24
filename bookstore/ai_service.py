@@ -9,13 +9,69 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Any
 
 from django.conf import settings
+from django.db.models import Q
 
 from .models import Book, Creditlevel
+
+_BOOK_QUERY_HINTS = (
+    "书", "图书", "ISBN", "isbn", "推荐", "作者", "阅读", "购买", "库存", "藏书",
+)
+_AI_QUERY_STOP_WORDS = {
+    "什么", "有没有", "哪些", "怎么", "如何", "可以", "想要", "想找", "帮我",
+    "推荐", "相关", "关于", "的书", "书籍", "一本", "一些", "请问", "吗", "呢",
+    "the", "and", "for", "with", "book", "books",
+}
+
+
+def _is_book_recommendation_query(message: str) -> bool:
+    text = (message or "").strip()
+    return any(hint in text for hint in _BOOK_QUERY_HINTS)
+
+
+def _extract_search_tokens(message: str) -> list[str]:
+    tokens = re.findall(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+", message or "")
+    seen: set[str] = set()
+    result: list[str] = []
+    for token in tokens:
+        key = token.lower()
+        if len(token) < 2 or key in _AI_QUERY_STOP_WORDS or key in seen:
+            continue
+        seen.add(key)
+        result.append(token)
+    return result
+
+
+def _search_books_for_ai(message: str, limit: int = 20) -> list[Book]:
+    tokens = _extract_search_tokens(message)
+    if not tokens:
+        return []
+
+    qs = Book.objects.none()
+    for token in tokens:
+        qs = qs | Book.objects.filter(
+            Q(title__icontains=token)
+            | Q(keywords__icontains=token)
+            | Q(description__icontains=token)
+            | Q(isbn__icontains=token)
+        )
+    return list(
+        qs.distinct()
+        .only("isbn", "title", "price", "stockqty")
+        .order_by("title")[:limit]
+    )
+
+
+def _format_book_lines(books: list[Book]) -> str:
+    return "\n".join(
+        f"- 《{book.title}》 ISBN:{book.isbn} 价格:¥{book.price} 库存:{book.stockqty}册"
+        for book in books
+    )
 
 
 class AIServiceError(Exception):
@@ -58,17 +114,33 @@ def is_ai_configured() -> bool:
         return False
 
 
-def build_bookstore_system_prompt() -> str:
+def build_bookstore_system_prompt(user_message: str | None = None) -> str:
     """把书店图书信息和真实业务规则注入系统提示，让 AI 能准确回答用户问题。"""
-    books = Book.objects.all().order_by("title")[:30]
-    if books:
-        lines = [
-            f"- 《{book.title}》 ISBN:{book.isbn} 价格:¥{book.price} 库存:{book.stockqty}册"
-            for book in books
-        ]
-        catalog = "\n".join(lines)
+    user_message = (user_message or "").strip()
+    if user_message and _is_book_recommendation_query(user_message):
+        matched_books = _search_books_for_ai(user_message)
+        if matched_books:
+            catalog = _format_book_lines(matched_books)
+            catalog_section = (
+                "【与用户问题匹配的店内图书（只能推荐以下书籍，不得补充清单外书名或 ISBN）】\n"
+                f"{catalog}"
+            )
+        else:
+            catalog_section = (
+                f"【与用户问题匹配的店内图书】\n"
+                f"（未在店内找到与「{user_message}」相关的图书。"
+                "请明确告诉用户：店内暂无该类书籍，建议换个关键词在搜索页查找；"
+                "不要编造书名、ISBN 或价格。）"
+            )
     else:
-        catalog = "（当前暂无图书数据）"
+        books = Book.objects.all().order_by("title")[:30]
+        if books:
+            catalog_section = (
+                "【当前书店部分图书清单（仅作参考，推荐时仍须与用户问题在店内可搜到的书一致）】\n"
+                f"{_format_book_lines(books)}"
+            )
+        else:
+            catalog_section = "【当前书店部分图书清单】\n（当前暂无图书数据）"
 
     # 读取真实的信用等级规则
     levels = Creditlevel.objects.all().order_by("levelid")
@@ -113,11 +185,13 @@ def build_bookstore_system_prompt() -> str:
         "并自动向供应商生成采购单补货。\n\n"
 
         "【注意事项】\n"
-        "- 不要编造不存在的图书；若用户想购买，引导其在网站搜索或浏览首页\n"
+        "- 推荐图书时，只能引用上方清单里列出的书名与 ISBN；清单为空时必须如实说明店内没有\n"
+        "- 严禁使用模型训练数据中的名书来凑答案（例如 Python Crash Course 等若不在清单中则不可推荐）\n"
+        "- 若用户想购买，引导其在网站搜索或浏览首页\n"
         "- 回答要基于上述真实业务规则，不要泛泛而谈\n"
         "- 若问题与书店无关，也可简短回答，但优先引导回书店相关话题\n\n"
 
-        f"【当前书店部分图书清单】\n{catalog}"
+        f"{catalog_section}"
     )
 
 
@@ -135,9 +209,11 @@ def _history_to_gemini_contents(history: list[dict[str, str]]) -> list[dict[str,
     return contents
 
 
-def _history_to_openai_messages(history: list[dict[str, str]]) -> list[dict[str, str]]:
+def _history_to_openai_messages(
+    history: list[dict[str, str]], user_message: str
+) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": build_bookstore_system_prompt()}
+        {"role": "system", "content": build_bookstore_system_prompt(user_message)}
     ]
     for item in history:
         role = item.get("role")
@@ -184,8 +260,8 @@ def _chat_with_gemini_sdk(
         model=model,
         contents=contents,
         config=types.GenerateContentConfig(
-            system_instruction=build_bookstore_system_prompt(),
-            temperature=0.7,
+            system_instruction=build_bookstore_system_prompt(user_message),
+            temperature=0.3,
             max_output_tokens=1024,
         ),
     )
@@ -201,9 +277,9 @@ def _chat_with_gemini_rest(
     contents = _history_to_gemini_contents(history)
     contents.append({"role": "user", "parts": [{"text": user_message}]})
     payload = {
-        "systemInstruction": {"parts": [{"text": build_bookstore_system_prompt()}]},
+        "systemInstruction": {"parts": [{"text": build_bookstore_system_prompt(user_message)}]},
         "contents": contents,
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024},
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1024},
     }
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     req = urllib.request.Request(
@@ -270,13 +346,13 @@ def _chat_with_deepseek(history: list[dict[str, str]], user_message: str) -> str
     api_base = getattr(settings, "DEEPSEEK_API_BASE", "https://api.deepseek.com").rstrip("/")
     timeout = getattr(settings, "AI_REQUEST_TIMEOUT", 60)
 
-    messages = _history_to_openai_messages(history)
+    messages = _history_to_openai_messages(history, user_message)
     messages.append({"role": "user", "content": user_message})
 
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": 0.7,
+        "temperature": 0.3,
         "max_tokens": 1024,
         "stream": False,
     }
