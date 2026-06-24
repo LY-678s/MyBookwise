@@ -80,3 +80,9 @@ scripts/cloudflared-mybookwise.yml
 # Local deployment secrets/configs. Each developer keeps their own copy.
 .env
 /scripts/cloudflared-mybookwise.yml
+
+# Local Docker overrides. Keep Dockerfile/docker-compose.yml tracked.
+docker-compose.override.yml
+docker-compose*.local.yml
+.docker/
+staticfiles/
