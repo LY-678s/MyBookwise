@@ -17,9 +17,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN chmod +x docker/entrypoint.sh
+RUN sed -i 's/\r$//' docker/entrypoint.sh \
+    && cp docker/entrypoint.sh /usr/local/bin/mybookwise-entrypoint \
+    && chmod +x /usr/local/bin/mybookwise-entrypoint
 
 EXPOSE 8000
 
-ENTRYPOINT ["docker/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/mybookwise-entrypoint"]
 CMD ["sh", "-c", "gunicorn MyBookwise.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-4} --threads ${GUNICORN_THREADS:-25} --timeout ${GUNICORN_TIMEOUT:-60}"]
