@@ -308,6 +308,29 @@
             color: var(--text-primary);
             border-left: 4px solid var(--accent);
         }
+
+        .cart-toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: none;
+            padding: 0.75rem 1.25rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.97);
+            color: var(--text-primary);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            font-weight: 500;
+            max-width: calc(100vw - 2rem);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .cart-toast.is-visible {
+            display: block;
+        }
         
         .message.warning {
             background-color: #fff3cd;
@@ -864,6 +887,7 @@
     </div>
     
     <!-- 页脚 -->
+    <div id="cart-toast" class="cart-toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <footer>
         <p>&copy; 2026 MyBookwise 网上书店 | 专业实训项目</p>
     </footer>
@@ -938,6 +962,68 @@
             if (!isNaN(y)) {
                 requestAnimationFrame(function () { window.scrollTo(0, y); });
             }
+        });
+
+        function getCsrfToken(form) {
+            var input = form && form.querySelector('[name=csrfmiddlewaretoken]');
+            if (input && input.value) return input.value;
+            var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        function showCartToast(message) {
+            var toast = document.getElementById('cart-toast');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.classList.add('is-visible');
+            clearTimeout(toast._hideTimer);
+            toast._hideTimer = setTimeout(function () {
+                toast.classList.remove('is-visible');
+            }, 2600);
+        }
+
+        document.addEventListener('submit', function (e) {
+            var form = e.target;
+            if (!form || form.tagName !== 'FORM') return;
+            var action = form.getAttribute('action') || '';
+            if (!form.classList.contains('js-cart-add-form') && !/\/cart\/add\//.test(action)) return;
+            e.preventDefault();
+
+            var submitBtn = form.querySelector('[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(form),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new FormData(form)
+            })
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return { response: response, data: data };
+                }).catch(function () {
+                    return { response: response, data: null };
+                });
+            })
+            .then(function (result) {
+                if (result.response.redirected) {
+                    window.location.href = result.response.url;
+                    return;
+                }
+                if (!result.response.ok || !result.data || !result.data.success) {
+                    alert((result.data && result.data.message) || '加入购物车失败，请稍后再试。');
+                    return;
+                }
+                showCartToast(result.data.message || '已加入购物车');
+            })
+            .catch(function () {
+                alert('网络异常，加入购物车失败。');
+            })
+            .finally(function () {
+                if (submitBtn) submitBtn.disabled = false;
+            });
         });
     })();
     </script>

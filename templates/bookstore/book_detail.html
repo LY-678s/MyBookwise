@@ -64,7 +64,7 @@
 
                     <!-- 加入购物车表单 -->
                     {% if request.session.customer_id %}
-                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
+                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}" class="js-cart-add-form">
                         {% csrf_token %}
                         <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
                             <div style="flex: 1;">

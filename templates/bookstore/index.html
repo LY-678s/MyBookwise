@@ -132,7 +132,7 @@ html.bookwise-index-restore-pending .animate-fade-in { animation: none !importan
 
                     <!-- 操作按钮 -->
                     {% if request.session.customer_id %}
-                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}">
+                    <form method="post" action="{% url 'bookstore:cart_add' book.isbn %}" class="js-cart-add-form">
                         {% csrf_token %}
                         <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
                             <label for="qty_{{ book.isbn }}" style="font-size: 0.9rem; font-weight: 600;">数量:</label>
@@ -186,6 +186,7 @@ html.bookwise-index-restore-pending .animate-fade-in { animation: none !importan
 <script>
 const DEFAULT_COVER_URL = '{{ DEFAULT_COVER_IMAGE_URL }}';
 const CUSTOMER_ID = '{{ request.session.customer_id|default:"" }}';
+const CSRF_TOKEN = '{{ csrf_token }}';
 const PAGE_SIZE = 12;
 
 let currentPage = 1;
@@ -226,7 +227,8 @@ function buildBookCardHtml(book, index, defaultCoverUrl) {
                        display:flex; align-items:center; justify-content:center; font-size:3rem;">📖</div>`;
 
     const loginBtn = CUSTOMER_ID
-        ? `<form method="post" action="/cart/add/${book.isbn}/">
+        ? `<form method="post" action="/cart/add/${book.isbn}/" class="js-cart-add-form">
+            <input type="hidden" name="csrfmiddlewaretoken" value="${CSRF_TOKEN}">
             <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem;">
                 <label style="font-size:0.9rem; font-weight:600;">数量:</label>
                 <input type="number" name="quantity" value="1" min="1" max="${book.stockqty}"

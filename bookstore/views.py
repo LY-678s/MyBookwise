@@ -142,6 +142,10 @@ def get_book_cover_image(book_title: str) -> str:
     return f"{default_prefix}{images_subdir}/{quote(default_filename)}"
 
 
+def _default_cover_url() -> str:
+    return get_book_cover_image("")
+
+
 def _build_book_data(book):
     """构建书籍数据字典，包含封面图片处理"""
     # 查询该书的作者，按序位排序后用 / 拼接
@@ -666,7 +670,15 @@ def cart_add(request: HttpRequest, isbn: str) -> HttpResponse:
     _save_cart(request, cart)
     
     messages.success(request, f"已将《{book.title}》× {quantity} 加入购物车")
-    
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        cart_count = sum(item.get("quantity", 0) for item in cart.values())
+        return JsonResponse({
+            "success": True,
+            "message": f"已将《{book.title}》× {quantity} 加入购物车",
+            "cart_count": cart_count,
+        })
+
     # 获取来源页面，返回原页面而不是跳转到购物车
     referer = request.META.get('HTTP_REFERER', '')
     if '/cart/' in referer or not referer:
@@ -717,17 +729,13 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
 
     for isbn, data in cart.items():
         book = get_object_or_404(Book, pk=isbn)
-        # 准备封面显示数据：优先静态图片，其次尝试将数据库中的 coverimage 转为 base64 字符串
-        try:
-            static_image = get_book_cover_image(book.title)
-        except Exception:
-            static_image = None
-        # 挂载到 book 对象以供模板使用（临时属性，无持久化）
-        setattr(book, "cover_image_url", static_image)
+        book_data = _build_book_data(book)
+        setattr(book, "cover_image_url", book_data.get("cover_image_url"))
         cover_b64 = None
-        if not static_image and getattr(book, "coverimage", None):
+        if not book_data.get("cover_image_url") and getattr(book, "coverimage", None):
             try:
-                import base64, re
+                import base64
+                import re
                 raw = book.coverimage
                 if isinstance(raw, str):
                     s = raw.strip()
@@ -762,6 +770,7 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
         "discount_rate": discount_rate,
         "discount_percent": discount_percent,
         "customer": customer,
+        "DEFAULT_COVER_IMAGE_URL": _default_cover_url(),
     })
 
 @customer_required
