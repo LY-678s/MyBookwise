@@ -3,15 +3,15 @@
 <head>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
 </head>
-<div class="container animate-fade-in">
-    <!-- 页面标题 -->
-    <div style="text-align: center; margin-bottom: 3rem;">
-        <h1 style="color: var(--text-primary); font-size: 2.5rem; font-weight: 300; margin-bottom: 0.5rem;">
-            确认订单
-        </h1>
-        <p style="color: var(--text-secondary); font-size: 1.1rem;">
-            请确认订单信息并选择支付方式
-        </p>
+<div class="page-content animate-fade-in">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">receipt_long</span>
+                确认订单
+            </h1>
+            <p class="page-subtitle">请确认订单信息并选择支付方式</p>
+        </div>
     </div>
 
     {% if customer %}

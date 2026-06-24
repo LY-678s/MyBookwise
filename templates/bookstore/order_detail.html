@@ -1,6 +1,18 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>订单详情：{{ order.orderno }}</h2>
+<div class="page-content animate-fade-in">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">receipt</span>
+                订单详情
+            </h1>
+            <p class="page-subtitle">订单号：{{ order.orderno }}</p>
+        </div>
+        <div class="page-header-actions">
+            <a href="{% url 'bookstore:order_list' %}" class="btn btn-secondary">返回订单列表</a>
+        </div>
+    </div>
 
 <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
   <p><strong>订单状态：</strong>
@@ -138,5 +150,6 @@
     ⚠️ 提示：此订单尚未付款，请尽快支付以完成订单。
   </p>
   {% endif %}
+</div>
 </div>
 {% endblock %}

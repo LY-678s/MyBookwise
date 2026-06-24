@@ -42,6 +42,29 @@ def record_search(customer_id: int, keyword: str) -> bool:
         return False
 
 
+def get_recent_search_keywords(customer_id: int, limit: int = 10) -> list[str]:
+    """最近搜索词（去重，保留时间顺序）。"""
+    seen: set[str] = set()
+    keywords: list[str] = []
+    rows = (
+        SearchHistory.objects.filter(customer_id=customer_id)
+        .order_by("-search_time")
+        .values_list("keyword", flat=True)[:50]
+    )
+    for raw in rows:
+        kw = (raw or "").strip()
+        if not kw:
+            continue
+        key = kw.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        keywords.append(kw)
+        if len(keywords) >= limit:
+            break
+    return keywords
+
+
 def record_browse(customer_id: int, isbn: str) -> bool:
     """
     记录用户浏览图书行为

@@ -1,6 +1,15 @@
 {% extends "bookstore/base.html" %}
 {% block content %}
-<h2>顾客注册</h2>
+<div class="page-content animate-fade-in" style="max-width:560px; margin:0 auto;">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">person_add</span>
+                顾客注册
+            </h1>
+            <p class="page-subtitle">注册后成为会员，享受购书优惠</p>
+        </div>
+    </div>
 
 <form method="post" style="max-width: 400px; margin: 0 auto;">
   {% csrf_token %}
@@ -82,6 +91,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     }
 });
 </script>
+</div>
 {% endblock %}
 
 

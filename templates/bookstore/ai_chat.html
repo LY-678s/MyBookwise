@@ -3,15 +3,15 @@
 {% block title %}AI 书小智 - MyBookwise{% endblock %}
 
 {% block content %}
-<div class="container animate-fade-in" style="max-width: 900px;">
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="color: var(--text-primary); font-size: 2rem; font-weight: 300; margin-bottom: 0.5rem; display: inline-flex; align-items: center; gap: 0.5rem;">
-            <span class="material-symbols-outlined icon-lg" aria-hidden="true">smart_toy</span>
-            AI 书小智
-        </h1>
-        <p style="color: var(--text-secondary);">
-            智能荐书、解答购物流程，随时为你服务
-        </p>
+<div class="page-content animate-fade-in" style="max-width: 900px; margin: 0 auto;">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">smart_toy</span>
+                AI 书小智
+            </h1>
+            <p class="page-subtitle">智能荐书、解答购物流程，随时为你服务</p>
+        </div>
     </div>
 
     {% if not ai_configured %}

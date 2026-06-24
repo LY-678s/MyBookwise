@@ -424,28 +424,24 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
 
 def search(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
+    recent_searches: list[str] = []
+    books_with_covers: list = []
+
     if query:
         books = Book.objects.all().order_by("title")
         books = books.filter(
             Q(title__icontains=query) | Q(keywords__icontains=query) | Q(isbn__icontains=query)
         )
-        # 记录用户搜索行为（仅对登录用户）
         if request.session.get("customer_id"):
             from .tracking import record_search
             record_search(request.session["customer_id"], query)
+        books_with_covers = [_build_book_data(book) for book in books]
     else:
         customer_id = request.session.get("customer_id")
         if customer_id:
-            from .recommendations import get_recommendations_for_user
-            books = get_recommendations_for_user(customer_id, limit=12)
-        else:
-            from .recommendations import get_default_recommendations
-            books = get_default_recommendations(limit=12)
-    
-    # 处理每本书的封面图片
-    books_with_covers = [_build_book_data(book) for book in books]
-    
-    # 计算默认封面 URL
+            from .tracking import get_recent_search_keywords
+            recent_searches = get_recent_search_keywords(customer_id)
+
     from django.conf import settings
     from urllib.parse import quote
     default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
@@ -454,8 +450,9 @@ def search(request: HttpRequest) -> HttpResponse:
     default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
     
     return render(request, "bookstore/search.html", {
-        "books": books_with_covers, 
+        "books": books_with_covers,
         "query": query,
+        "recent_searches": recent_searches,
         "DEFAULT_COVER_IMAGE_URL": default_cover_url
     })
 

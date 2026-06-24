@@ -3,14 +3,15 @@
 <head> 
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
 </head>
-<div class="container animate-fade-in">
-    <div style="text-align:center; margin-bottom:2rem;">
-        <h1 style="font-weight:400; color:var(--text-primary);">
-          <span class="material-symbols-outlined icon-md" role="img" aria-label="快递盒" style="font-size: inherit; vertical-align: middle;" aria-hidden="true">
-            box
-          </span>
-          我的订单</h1>
-        <p style="color:var(--text-secondary);">查看历史订单与支付状态</p>
+<div class="page-content animate-fade-in">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">inventory_2</span>
+                我的订单
+            </h1>
+            <p class="page-subtitle">查看历史订单与支付状态</p>
+        </div>
     </div>
 
     {% if orders_with_details %}

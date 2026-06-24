@@ -328,6 +328,56 @@
             padding-bottom: 0.5rem;
             border-bottom: 2px solid #3498db;
         }
+
+        /* 统一页面标题区 */
+        .page-content {
+            margin-top: -0.5rem;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1.25rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+
+        .page-header-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .page-title {
+            color: var(--text-primary);
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0 0 0.35rem 0;
+            line-height: 1.3;
+        }
+
+        .page-title-icon {
+            font-size: inherit;
+            vertical-align: middle;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        .page-header-actions {
+            flex-shrink: 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .page-header-actions .btn {
+            white-space: nowrap;
+        }
         
         /* 搜索框 */
         form input[type="text"] {
@@ -353,6 +403,95 @@
         
         form button:hover, .btn:hover {
             background-color: #2980b9;
+        }
+
+        /* 带清除按钮的搜索框 */
+        .search-field-wrap {
+            flex: 1;
+            position: relative;
+            min-width: 0;
+        }
+
+        .search-field-wrap .search-field-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary, #666);
+            font-size: 1.25rem;
+            pointer-events: none;
+        }
+
+        .search-field-wrap .search-field-input {
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 1rem;
+            padding: 0.5rem 2.5rem 0.5rem 2.8rem;
+            height: 44px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .search-field-wrap .search-clear-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--text-secondary, #888);
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .search-field-wrap .search-clear-btn.is-visible {
+            display: flex;
+        }
+
+        .search-field-wrap .search-clear-btn:hover {
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--text-primary, #333);
+        }
+
+        .recent-search-section {
+            margin-top: 0.5rem;
+        }
+
+        .recent-search-title {
+            color: var(--text-primary, #2c3e50);
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0 0 1rem 0;
+        }
+
+        .recent-search-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+        }
+
+        .recent-search-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.45rem 0.9rem;
+            border-radius: 999px;
+            background: var(--accent-light, #f5f0e8);
+            color: var(--text-primary, #333);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: filter 0.15s;
+        }
+
+        .recent-search-chip:hover {
+            filter: brightness(0.96);
         }
         
         /* 图书列表 */
@@ -595,6 +734,11 @@
         .grid-3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
         .grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
+        /* 首页 / 分区：桌面端固定四本一行 */
+        .grid-books {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
         /* 动画效果 */
         @keyframes fadeInUp {
             from {
@@ -651,8 +795,13 @@
                 gap: 1rem;
             }
 
-            .grid-2, .grid-3, .grid-4 {
+            .grid-2, .grid-3, .grid-4, .grid-books {
                 grid-template-columns: 1fr;
+            }
+
+            .page-header {
+                flex-direction: column;
+                align-items: stretch;
             }
 
             .card-body {
@@ -660,6 +809,7 @@
             }
         }
     </style>
+    {% block head_scripts %}{% endblock %}
 </head>
 <body {% if request.user.is_staff %}class="admin-ui"{% endif %}>
     <!-- 导航栏 -->
@@ -708,6 +858,70 @@
     <footer>
         <p>&copy; 2026 MyBookwise 网上书店 | 专业实训项目</p>
     </footer>
+    <script>
+    (function () {
+        function initSearchClear(root) {
+            (root || document).querySelectorAll('.search-field-wrap').forEach(function (wrap) {
+                var input = wrap.querySelector('input[type="text"]');
+                var btn = wrap.querySelector('.search-clear-btn');
+                if (!input || !btn) return;
+                function sync() {
+                    btn.classList.toggle('is-visible', !!input.value);
+                }
+                input.addEventListener('input', sync);
+                btn.addEventListener('click', function () {
+                    input.value = '';
+                    input.focus();
+                    sync();
+                });
+                sync();
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () { initSearchClear(); });
+        } else {
+            initSearchClear();
+        }
+
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'auto';
+        }
+
+        function scrollStorageKey() {
+            return 'bookwise-scroll:' + location.pathname + location.search;
+        }
+
+        window.goBackFromBookDetail = function (fallbackUrl) {
+            if (document.referrer && document.referrer.indexOf(location.origin) === 0) {
+                history.back();
+                return;
+            }
+            if (window.history.length > 1) {
+                history.back();
+                return;
+            }
+            location.href = fallbackUrl;
+        };
+
+        document.addEventListener('click', function (e) {
+            var link = e.target.closest('a[href*="/book/"]');
+            if (!link || link.origin !== location.origin) return;
+            if (document.getElementById('books-grid')) return;
+            sessionStorage.setItem(scrollStorageKey(), String(window.scrollY));
+        });
+
+        window.addEventListener('pageshow', function (e) {
+            if (e.persisted || document.getElementById('books-grid')) return;
+            var raw = sessionStorage.getItem(scrollStorageKey());
+            if (raw === null) return;
+            sessionStorage.removeItem(scrollStorageKey());
+            var y = parseInt(raw, 10);
+            if (!isNaN(y)) {
+                requestAnimationFrame(function () { window.scrollTo(0, y); });
+            }
+        });
+    })();
+    </script>
 </body>
 </html>
 
