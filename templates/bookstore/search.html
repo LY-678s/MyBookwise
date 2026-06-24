@@ -38,14 +38,8 @@
             {% for book in books %}
             <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
                 <div style="position: relative; overflow: hidden;">
-                    {% if book.cover_image_url %}
-                    <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
+                    <img src="/api/books/{{ book.isbn }}/cover/" alt="{{ book.title }}" style="width: 100%; height: 250px; object-fit: cover;"
                          onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
-                    {% else %}
-                    <div style="width: 100%; height: 250px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">
-                        📖
-                    </div>
-                    {% endif %}
                     <div class="book-overlay">
                         <h4 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">{{ book.title }}</h4>
                         <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">

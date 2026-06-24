@@ -68,13 +68,8 @@
                     <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
                         <a href="{% url 'bookstore:book_detail' book.isbn %}" style="display: block; color: inherit; text-decoration: none;">
                             <div style="position: relative; overflow: hidden;">
-                                {% if book.cover_image_url %}
-                                <img src="{{ book.cover_image_url }}" alt="{{ book.title }}" style="width: 100%; height: 220px; object-fit: cover;">
-                                {% else %}
-                                <div style="width: 100%; height: 220px; background: linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%); display: flex; align-items: center; justify-content: center; color: var(--text-primary); font-size: 3rem;">
-                                    📖
-                                </div>
-                                {% endif %}
+                                <img src="/api/books/{{ book.isbn }}/cover/" alt="{{ book.title }}" style="width: 100%; height: 220px; object-fit: cover;"
+                                     onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
                             </div>
                         </a>
                         <div class="card-body">

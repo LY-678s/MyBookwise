@@ -275,6 +275,13 @@ data class AccountResponse(
     val error: String? = null
 )
 
+data class BrowseHistoryResponse(
+    val success: Boolean,
+    val books: List<BookData>? = null,
+    @SerializedName("default_cover_url") val defaultCoverUrl: String? = null,
+    val error: String? = null
+)
+
 data class MeResponse(
     val success: Boolean,
     val customer: CustomerData? = null,

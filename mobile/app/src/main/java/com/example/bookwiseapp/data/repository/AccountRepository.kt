@@ -37,4 +37,10 @@ class AccountRepository : BaseRepository() {
         errorField = { it.error },
         successCheck = { it.success }
     )
+
+    suspend fun getBrowseHistory(): Result<BrowseHistoryResponse> = safeCall(
+        call = { ApiClient.service.getBrowseHistory() },
+        errorField = { it.error },
+        successCheck = { it.success }
+    )
 }

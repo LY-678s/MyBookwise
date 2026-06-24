@@ -1,11 +1,14 @@
 package com.example.bookwiseapp.ui.navigation
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -24,6 +27,9 @@ object Routes {
     const val CART = "cart"
     const val ORDER_LIST = "orders"
     const val ACCOUNT = "account"
+    const val ACCOUNT_PROFILE = "account/profile"
+    const val ACCOUNT_WALLET = "account/wallet"
+    const val BROWSE_HISTORY = "account/browse-history"
     const val CATEGORIES = "categories"
     const val RANKINGS = "rankings"
     const val FAVORITES = "favorites"
@@ -68,7 +74,12 @@ fun AppNav(startLoggedIn: Boolean) {
 
     val showBottomBar = currentRoute in mainRoutes
 
+    // 记住底部导航高度：进入详情页隐藏底栏时仍保留相同 bottom padding，
+    // 避免返回首页时列表区域高度突变导致滚动位置跳动。
+    var stableBottomPadding by remember { mutableStateOf(Dp.Unspecified) }
+
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -93,10 +104,22 @@ fun AppNav(startLoggedIn: Boolean) {
             }
         }
     ) { innerPadding ->
+        val liveBottomPadding = innerPadding.calculateBottomPadding()
+        if (showBottomBar && liveBottomPadding > Dp.Hairline) {
+            stableBottomPadding = liveBottomPadding
+        }
+        val navHostBottomPadding = when {
+            showBottomBar -> liveBottomPadding
+            stableBottomPadding != Dp.Unspecified -> stableBottomPadding
+            else -> liveBottomPadding
+        }
+
         NavHost(
             navController = navController,
             startDestination = startDest,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = navHostBottomPadding)
         ) {
             // 认证
             composable(Routes.LOGIN) {
@@ -150,9 +173,10 @@ fun AppNav(startLoggedIn: Boolean) {
             }
             composable(Routes.ACCOUNT) {
                 AccountScreen(
-                    viewModel = accountVm,
+                    onProfileClick = { navController.navigate(Routes.ACCOUNT_PROFILE) },
+                    onWalletClick = { navController.navigate(Routes.ACCOUNT_WALLET) },
                     onFavoritesClick = { navController.navigate(Routes.FAVORITES) },
-                    onOrdersClick = { navController.navigate(Routes.ORDER_LIST) },
+                    onBrowseHistoryClick = { navController.navigate(Routes.BROWSE_HISTORY) },
                     onLogout = {
                         authVm.logout {
                             navController.navigate(Routes.LOGIN) {
@@ -160,6 +184,29 @@ fun AppNav(startLoggedIn: Boolean) {
                             }
                         }
                     }
+                )
+            }
+
+            composable(Routes.ACCOUNT_PROFILE) {
+                AccountProfileScreen(
+                    viewModel = accountVm,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Routes.ACCOUNT_WALLET) {
+                AccountWalletScreen(
+                    viewModel = accountVm,
+                    onBack = { navController.popBackStack() },
+                    onOrdersClick = { navController.navigate(Routes.ORDER_LIST) }
+                )
+            }
+
+            composable(Routes.BROWSE_HISTORY) {
+                BrowseHistoryScreen(
+                    viewModel = accountVm,
+                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) },
+                    onBack = { navController.popBackStack() }
                 )
             }
 

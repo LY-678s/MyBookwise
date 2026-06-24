@@ -5,8 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +27,7 @@ fun FavoriteFoldersScreen(
     val state by viewModel.state.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
+    var expandedFolderIds by remember { mutableStateOf(setOf<Int>()) }
     val snackbarHost = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) { viewModel.loadFolders() }
@@ -39,6 +39,7 @@ fun FavoriteFoldersScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text("我的收藏 (${state.totalCount})") },
@@ -64,63 +65,98 @@ fun FavoriteFoldersScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(state.folders, key = { it.folder.id }) { card ->
+                        val expanded = card.folder.id in expandedFolderIds
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
                                 Row(
-                                    Modifier.fillMaxWidth(),
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            expandedFolderIds = if (expanded) {
+                                                expandedFolderIds - card.folder.id
+                                            } else {
+                                                expandedFolderIds + card.folder.id
+                                            }
+                                        },
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            if (expanded) Icons.Default.ExpandMore else Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.outline
+                                        )
+                                        Icon(
+                                            if (card.folder.isDefault) Icons.Default.FolderSpecial
+                                            else Icons.Default.Folder,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                         Text(card.folder.name, style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Text(
                                             "${card.count} 本",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.outline
                                         )
-                                    }
-                                    if (!card.folder.isDefault) {
-                                        IconButton(onClick = { viewModel.deleteFolder(card.folder.id) }) {
-                                            Icon(
-                                                Icons.Default.Delete,
-                                                contentDescription = "删除收藏夹",
-                                                tint = MaterialTheme.colorScheme.error
-                                            )
+                                        if (!card.folder.isDefault) {
+                                            IconButton(onClick = { viewModel.deleteFolder(card.folder.id) }) {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = "删除收藏夹",
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                                Spacer(Modifier.height(8.dp))
-                                card.books?.forEach { book ->
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clickable { onBookClick(book.isbn) }
-                                            .padding(vertical = 6.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        BookCover(book = book, modifier = Modifier.size(48.dp, 64.dp))
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                book.title,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis,
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                            Text(
-                                                "¥${book.price}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
+                                if (expanded) {
+                                    Spacer(Modifier.height(8.dp))
+                                    if (card.books.isNullOrEmpty()) {
+                                        Text(
+                                            "暂无收藏",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    } else {
+                                        card.books.forEach { book ->
+                                            Row(
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { onBookClick(book.isbn) }
+                                                    .padding(vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                BookCover(
+                                                    book = book,
+                                                    modifier = Modifier.size(48.dp, 64.dp)
+                                                )
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(
+                                                        book.title,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                    Text(
+                                                        "¥${book.price}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
-                                }
-                                if (card.books.isNullOrEmpty()) {
-                                    Text(
-                                        "暂无收藏",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
                                 }
                             }
                         }

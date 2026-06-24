@@ -7,6 +7,7 @@ import com.example.bookwiseapp.data.api.model.CategoryItem
 import com.example.bookwiseapp.data.api.model.FavoriteFolderData
 import com.example.bookwiseapp.data.api.model.RankingSection
 import com.example.bookwiseapp.data.repository.BookRepository
+import com.example.bookwiseapp.data.repository.FavoriteRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -54,6 +55,7 @@ data class RankingsUiState(
 class BookViewModel : ViewModel() {
 
     private val repo = BookRepository()
+    private val favoriteRepo = FavoriteRepository()
     private val pageSize = 12
     private var nextPage = 1
 
@@ -185,6 +187,34 @@ class BookViewModel : ViewModel() {
                     favoriteFolderId = data.folderId,
                     favoriteMessage = data.message
                 )
+            } else {
+                _detailState.value = state.copy(
+                    favoriteLoading = false,
+                    favoriteMessage = result.exceptionOrNull()?.message
+                )
+            }
+        }
+    }
+
+    fun createFavoriteFolder(name: String, onCreated: (FavoriteFolderData) -> Unit) {
+        viewModelScope.launch {
+            val state = _detailState.value
+            _detailState.value = state.copy(favoriteLoading = true, favoriteMessage = null)
+            val result = favoriteRepo.createFolder(name)
+            if (result.isSuccess) {
+                val data = result.getOrNull()!!
+                val folder = data.folder
+                if (folder != null) {
+                    val updatedFolders = state.favoriteFolders + folder
+                    _detailState.value = state.copy(
+                        favoriteLoading = false,
+                        favoriteFolders = updatedFolders,
+                        favoriteMessage = data.message
+                    )
+                    onCreated(folder)
+                } else {
+                    _detailState.value = state.copy(favoriteLoading = false)
+                }
             } else {
                 _detailState.value = state.copy(
                     favoriteLoading = false,

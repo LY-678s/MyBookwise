@@ -109,6 +109,9 @@ interface ApiService {
     @POST("account/repay/")
     suspend fun repay(): Response<AccountResponse>
 
+    @GET("account/browse-history/")
+    suspend fun getBrowseHistory(): Response<BrowseHistoryResponse>
+
     // ── AI 助手 ──────────────────────────────────────────────────────
     @GET("ai/")
     suspend fun getAiStatus(): Response<AiStatusResponse>

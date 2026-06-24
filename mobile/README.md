@@ -24,31 +24,29 @@ mobile/app/src/main/java/com/example/bookwiseapp/
         ├── OrderDetailScreen.kt   # 订单详情 + 操作（补款/取消/确认收货）
         └── AccountScreen.kt       # 账户 + 充值 + 还款 + 编辑资料
 
-`ApiClient.kt` 中的 `SERVER_BASE` 控制所有请求地址：
+服务器地址在 **`mobile/settings.properties`**（勿提交 Git）：
 
-```kotlin
-const val SERVER_BASE = "http://10.0.2.2:8000"
+```powershell
+cd mobile
+copy settings.properties.example settings.properties
+# 编辑 server_base=...
 ```
 
-| 场景 | 值 |
+| 场景 | `server_base` 示例 |
 |------|-----|
+| **公网 / 队友子域名** | `https://mybookwise.xyz` 或 `https://xxx.example.com` |
 | **Android 模拟器** | `http://10.0.2.2:8000` |
 | **真机同 Wi-Fi** | `http://192.168.x.x:8000`（`ipconfig` 查电脑 IP） |
-| **跨网（4G / 不同 Wi-Fi）** | `https://xxxx.trycloudflare.com`（见根 README「跨网访问」） |
+| **临时隧道** | `https://xxxx.trycloudflare.com` |
+
+修改后 **Sync Gradle + Rebuild**；`ApiClient` 通过 BuildConfig 读取，无需改 Kotlin 源码。
 
 ## 真机联调（同局域网）
 
 1. 查电脑 IP：`ipconfig` → WLAN 的 IPv4
-2. 改 `SERVER_BASE` 为 `http://该IP:8000`
+2. 在 `settings.properties` 设置 `server_base=http://该IP:8000`
 3. 后端：`python manage.py runserver 0.0.0.0:8000`
 
-## 跨网联调（最简单：cloudflared）
+## 跨网联调（cloudflared）
 
-手机和电脑不在同一网络时使用，**免注册**。完整步骤见项目根 [README.md](../README.md) 的「跨网访问」章节，简要流程：
-
-1. 安装：`winget install Cloudflare.cloudflared`
-2. 终端 A：`python manage.py runserver 0.0.0.0:8000`
-3. 终端 B：`powershell -File scripts/start_tunnel.ps1`（或 `cloudflared tunnel --url http://localhost:8000`）
-4. 复制输出的 `https://....trycloudflare.com`
-5. 改 `SERVER_BASE` 为该地址（**https，无末尾斜杠**）
-6. Rebuild APP；Web 演示还需在后端终端设 `$env:TUNNEL_ORIGIN` 并重启 runserver
+见项目根 [README.md](../README.md)。隧道地址写入 `settings.properties` 的 `server_base`（**https，无末尾斜杠**），Rebuild APP。

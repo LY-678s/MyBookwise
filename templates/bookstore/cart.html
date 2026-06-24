@@ -35,17 +35,7 @@
                             <td style="padding: 1rem;">
                                 <div style="display:flex; gap:1rem; align-items:center;">
                                     <div style="width:60px; height:90px; background:var(--accent-light); border-radius:6px; overflow:hidden; flex-shrink:0;">
-                                        {% if item.book.cover_image_url %}
-                                        <img src="{{ item.book.cover_image_url }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
-                                        {% elif item.book.coverimage_b64 %}
-                                        <img src="data:image/jpeg;base64,{{ item.book.coverimage_b64|safe }}" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
-                                        {% else %}
-                                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                                            <span class="material-symbols-outlined">
-                                                book_2
-                                                </span>
-                                        </div>
-                                        {% endif %}
+                                        <img src="/api/books/{{ item.book.isbn }}/cover/" alt="{{ item.book.title }}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}'">
                                     </div>
                                     <div>
                                         <div style="font-weight:600; color:var(--text-primary);">{{ item.book.title }}</div>

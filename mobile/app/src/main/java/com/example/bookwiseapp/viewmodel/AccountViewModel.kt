@@ -2,6 +2,7 @@ package com.example.bookwiseapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.bookwiseapp.data.api.model.BookData
 import com.example.bookwiseapp.data.api.model.CustomerData
 import com.example.bookwiseapp.data.repository.AccountRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,12 +16,22 @@ data class AccountUiState(
     val error: String? = null
 )
 
+data class BrowseHistoryUiState(
+    val isLoading: Boolean = false,
+    val books: List<BookData> = emptyList(),
+    val defaultCoverUrl: String = "",
+    val error: String? = null
+)
+
 class AccountViewModel : ViewModel() {
 
     private val repo = AccountRepository()
 
     private val _state = MutableStateFlow(AccountUiState())
     val state: StateFlow<AccountUiState> = _state
+
+    private val _browseHistoryState = MutableStateFlow(BrowseHistoryUiState())
+    val browseHistoryState: StateFlow<BrowseHistoryUiState> = _browseHistoryState
 
     fun loadAccount() {
         viewModelScope.launch {
@@ -88,5 +99,23 @@ class AccountViewModel : ViewModel() {
 
     fun clearMessage() {
         _state.value = _state.value.copy(message = null, error = null)
+    }
+
+    fun loadBrowseHistory() {
+        viewModelScope.launch {
+            _browseHistoryState.value = _browseHistoryState.value.copy(isLoading = true, error = null)
+            val result = repo.getBrowseHistory()
+            if (result.isSuccess) {
+                val data = result.getOrNull()!!
+                _browseHistoryState.value = BrowseHistoryUiState(
+                    books = data.books ?: emptyList(),
+                    defaultCoverUrl = data.defaultCoverUrl ?: ""
+                )
+            } else {
+                _browseHistoryState.value = BrowseHistoryUiState(
+                    error = result.exceptionOrNull()?.message
+                )
+            }
+        }
     }
 }

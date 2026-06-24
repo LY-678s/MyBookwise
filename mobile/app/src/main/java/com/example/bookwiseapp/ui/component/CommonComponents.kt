@@ -6,9 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.bookwiseapp.data.api.ApiClient
 import com.example.bookwiseapp.data.api.model.BookData
 
@@ -34,22 +36,27 @@ fun ErrorMessage(message: String, onRetry: (() -> Unit)? = null) {
     }
 }
 
-/** 图书封面：走本域 /api/books/{isbn}/cover/；失败时用 defaultCoverUrl 或书名占位。 */
+/** 图书封面：统一走本域 /api/books/{isbn}/cover/ 代理。 */
 @Composable
 fun BookCover(
     book: BookData,
     modifier: Modifier = Modifier,
-    defaultCoverUrl: String? = null
+    defaultCoverUrl: String? = null,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
-    val primaryUrl = ApiClient.fullImageUrl(book.coverImageUrl)
+    val context = LocalContext.current
+    val primaryUrl = ApiClient.bookCoverUrl(book.isbn, book.coverImageUrl)
     val fallbackUrl = ApiClient.fullImageUrl(defaultCoverUrl)
 
     if (primaryUrl != null) {
         SubcomposeAsyncImage(
-            model = primaryUrl,
+            model = ImageRequest.Builder(context)
+                .data(primaryUrl)
+                .crossfade(true)
+                .build(),
             contentDescription = book.title,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
+            contentScale = contentScale,
             loading = {
                 Box(modifier, contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(Modifier.size(28.dp))
@@ -61,7 +68,7 @@ fun BookCover(
                         model = fallbackUrl,
                         contentDescription = book.title,
                         modifier = modifier,
-                        contentScale = ContentScale.Crop,
+                        contentScale = contentScale,
                         error = { CoverPlaceholder(book, modifier) }
                     )
                 } else {
@@ -74,7 +81,7 @@ fun BookCover(
             model = fallbackUrl,
             contentDescription = book.title,
             modifier = modifier,
-            contentScale = ContentScale.Crop,
+            contentScale = contentScale,
             error = { CoverPlaceholder(book, modifier) }
         )
     } else {

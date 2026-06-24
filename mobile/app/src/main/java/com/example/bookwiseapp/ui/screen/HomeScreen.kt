@@ -5,7 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -33,14 +34,10 @@ fun HomeScreen(
     onBookClick: (String) -> Unit
 ) {
     val state by viewModel.homeState.collectAsState()
-    val gridState = rememberLazyStaggeredGridState()
-    val scope = rememberCoroutineScope()
-
-    val atTop by remember {
-        derivedStateOf {
-            gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
-        }
+    val gridState = rememberSaveable(saver = LazyStaggeredGridState.Saver) {
+        LazyStaggeredGridState()
     }
+    val scope = rememberCoroutineScope()
 
     fun refreshAndScrollTop() {
         scope.launch {
@@ -65,6 +62,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -93,7 +91,11 @@ fun HomeScreen(
                 state.error != null && state.books.isEmpty() ->
                     ErrorMessage(state.error!!, onRetry = { viewModel.loadBooks() })
                 else -> {
-                    val gridContent: @Composable () -> Unit = {
+                    PullToRefreshBox(
+                        isRefreshing = state.isRefreshing,
+                        onRefresh = { refreshAndScrollTop() },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                         LazyVerticalStaggeredGrid(
                             columns = StaggeredGridCells.Fixed(2),
                             state = gridState,
@@ -136,18 +138,6 @@ fun HomeScreen(
                                 }
                             }
                         }
-                    }
-
-                    if (atTop) {
-                        PullToRefreshBox(
-                            isRefreshing = state.isRefreshing,
-                            onRefresh = { refreshAndScrollTop() },
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            gridContent()
-                        }
-                    } else {
-                        gridContent()
                     }
                 }
             }

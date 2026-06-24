@@ -91,8 +91,9 @@ def _serialize_favorite_folder(folder: FavoriteFolder) -> dict:
 
 
 def _app_cover_url(isbn: str) -> str:
-    """APP 封面统一走本域代理，避免手机直连 Amazon 等外链失败。"""
-    return f"/api/books/{isbn}/cover/"
+    from bookstore.views import app_cover_url
+
+    return app_cover_url(isbn)
 
 
 def _default_cover_file():
@@ -106,6 +107,10 @@ def _default_cover_file():
     return path
 
 
+def _cover_cache_headers() -> dict:
+    return {"Cache-Control": "public, max-age=86400"}
+
+
 class BookCoverView(APIView):
     """GET /api/books/<isbn>/cover/  — 封面代理（外链失败时返回本地默认图）。"""
 
@@ -114,43 +119,47 @@ class BookCoverView(APIView):
 
     def get(self, request, isbn):
         import base64
-        import urllib.error
-        import urllib.request
         from django.conf import settings as dj_settings
         from django.http import FileResponse, HttpResponse
 
-        from bookstore.views import get_book_cover_image
+        from bookstore.views import (
+            _resolve_cover_backend_sources,
+            fetch_external_cover_bytes,
+            get_book_cover_image,
+        )
 
-        book = get_object_or_404(Book, pk=isbn)
-        data = _build_book_data(book)
-        external = data.get("cover_image_url")
-        cover_b64 = data.get("coverimage")
+        try:
+            book = Book.objects.get(pk=isbn)
+        except Book.DoesNotExist:
+            return FileResponse(
+                _default_cover_file().open("rb"),
+                content_type="image/png",
+                headers=_cover_cache_headers(),
+            )
+
+        external, cover_b64 = _resolve_cover_backend_sources(book)
 
         if external and external.startswith("/static/"):
             rel = external[len("/static/") :]
             local = dj_settings.BASE_DIR / "static" / rel
             if local.exists():
-                return FileResponse(local.open("rb"), content_type="image/jpeg")
+                return FileResponse(
+                    local.open("rb"),
+                    content_type="image/jpeg",
+                    headers=_cover_cache_headers(),
+                )
 
         if external and external.startswith(("http://", "https://")):
-            try:
-                req = urllib.request.Request(
-                    external,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; MyBookwise/1.0)"},
-                )
-                with urllib.request.urlopen(req, timeout=8) as resp:
-                    body = resp.read()
-                    ctype = resp.headers.get("Content-Type", "image/jpeg")
-                    if body:
-                        return HttpResponse(body, content_type=ctype)
-            except (urllib.error.URLError, TimeoutError, ValueError):
-                pass
+            fetched = fetch_external_cover_bytes(external)
+            if fetched:
+                body, ctype = fetched
+                return HttpResponse(body, content_type=ctype, headers=_cover_cache_headers())
 
         if cover_b64:
             try:
                 body = base64.b64decode(cover_b64)
                 if body:
-                    return HttpResponse(body, content_type="image/jpeg")
+                    return HttpResponse(body, content_type="image/jpeg", headers=_cover_cache_headers())
             except (ValueError, TypeError):
                 pass
 
@@ -159,9 +168,17 @@ class BookCoverView(APIView):
             rel = static_path[len("/static/") :]
             local = dj_settings.BASE_DIR / "static" / rel
             if local.exists():
-                return FileResponse(local.open("rb"), content_type="image/jpeg")
+                return FileResponse(
+                    local.open("rb"),
+                    content_type="image/jpeg",
+                    headers=_cover_cache_headers(),
+                )
 
-        return FileResponse(_default_cover_file().open("rb"), content_type="image/png")
+        return FileResponse(
+            _default_cover_file().open("rb"),
+            content_type="image/png",
+            headers=_cover_cache_headers(),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +287,8 @@ def _books_payload_for_isbns(page_isbns: list) -> list:
         book_data["keywords"] = book_data["keywords"] or ""
         book_data["location"] = book_data["location"] or ""
         book_data["authors"] = authors_dict.get(isbn, [])
+        book_data["cover_image_url"] = _app_cover_url(isbn)
+        book_data["coverimage"] = None
         books_data.append(book_data)
     return books_data
 
@@ -361,6 +380,9 @@ class BookDetailView(APIView):
         payload["book"]["cover_image_url"] = _app_cover_url(isbn)
         if isinstance(request.user, Customer):
             customer_id = request.user.customerid
+            from bookstore.tracking import record_browse
+
+            record_browse(customer_id, isbn)
             _ensure_book_favorite_table()
             favorite = BookFavorite.objects.filter(customer_id=customer_id, isbn_id=isbn).first()
             folders = _favorite_folders_for_customer(customer_id)
@@ -923,6 +945,26 @@ class FavoriteFolderDeleteView(APIView):
 
         invalidate_recommendation_cache(customer_id=customer.customerid)
         return _ok({"message": f"收藏夹「{folder_name}」已删除"})
+
+
+class BrowseHistoryView(APIView):
+    """GET /api/account/browse-history/  ←→  views.browse_history"""
+
+    permission_classes = [IsCustomer]
+
+    def get(self, request):
+        customer = _customer_view(request)
+        from bookstore.tracking import get_recent_browsed_isbns
+
+        isbn_list = get_recent_browsed_isbns(customer.customerid)
+        books = []
+        for isbn in isbn_list:
+            book = Book.objects.filter(pk=isbn).first()
+            if book:
+                item = serialize_book(book, include_authors=True)
+                item["cover_image_url"] = _app_cover_url(book.isbn)
+                books.append(item)
+        return _ok({"books": books, "default_cover_url": get_default_cover_url()})
 
 
 # ---------------------------------------------------------------------------

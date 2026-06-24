@@ -19,31 +19,10 @@
             <div class="card" style="margin-bottom: 2rem;">
                 <!-- 改进：将封面放在一个居中容器内，使用 object-fit: contain 以完整显示封面而不裁切 -->
                 <div style="position: relative; display:flex; justify-content:center; align-items:center; height:420px; overflow:hidden; background:var(--secondary-bg); border-radius:12px 12px 0 0;">
-                    {% if book.cover_image_url %}
-                        <img src="{{ book.cover_image_url }}"
-                             alt="{{ book.title }}"
-                             style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;"
-                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                        <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
-                            <span style="font-size:5rem;">📖</span>
-                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
-                        </div>
-                    {% elif book.coverimage %}
-                        <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}"
-                             alt="{{ book.title }}"
-                             style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;"
-                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                        <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
-                            <span style="font-size:5rem;">📖</span>
-                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
-                        </div>
-                    {% else %}
-                        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:1rem; color:var(--text-primary);">
-                            <span style="font-size:5rem;">📖</span>
-                            <span style="opacity:0.5; font-size:0.9rem;">暂无封面</span>
-                        </div>
-                    {% endif %}
-
+                    <img src="/api/books/{{ book.isbn }}/cover/"
+                         alt="{{ book.title }}"
+                         style="max-width:100%; max-height:100%; object-fit:contain; border-radius:8px;"
+                         onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}';">
                 </div>
 
                 <div class="card-body">

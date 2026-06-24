@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+val appSettingsFile = rootProject.file("settings.properties")
+val appSettings = Properties().apply {
+    if (appSettingsFile.exists()) {
+        appSettingsFile.inputStream().use { load(it) }
+    }
+}
+val serverBase = appSettings.getProperty("server_base", "https://mybookwise.xyz")
+    .trim()
+    .removeSuffix("/")
 
 android {
     namespace = "com.example.bookwiseapp"
@@ -16,6 +28,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SERVER_BASE", "\"$serverBase\"")
     }
 
     buildTypes {
@@ -35,6 +48,7 @@ android {
         jvmTarget = "11"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

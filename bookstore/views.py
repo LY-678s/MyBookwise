@@ -142,6 +142,52 @@ def get_book_cover_image(book_title: str) -> str:
     return f"{default_prefix}{images_subdir}/{quote(default_filename)}"
 
 
+def app_cover_url(isbn: str) -> str:
+    """客户端统一使用的本域封面地址（由 BookCoverView 代理）。"""
+    return f"/api/books/{isbn}/cover/"
+
+
+def fetch_external_cover_bytes(url: str) -> tuple[bytes, str] | None:
+    """拉取外链封面，兼容豆瓣等防盗链。"""
+    import urllib.error
+    import urllib.request
+
+    if not url or not url.startswith(("http://", "https://")):
+        return None
+
+    candidates = [url]
+    if url.startswith("http://"):
+        candidates.append("https://" + url[len("http://"):])
+
+    header_sets = [
+        {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://book.douban.com/",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+        {"User-Agent": "Mozilla/5.0 (compatible; MyBookwise/1.0)"},
+    ]
+
+    for attempt_url in candidates:
+        for headers in header_sets:
+            try:
+                req = urllib.request.Request(attempt_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    body = resp.read()
+                    if not body:
+                        continue
+                    ctype = resp.headers.get("Content-Type") or "image/jpeg"
+                    if "image" not in ctype.lower():
+                        ctype = "image/jpeg"
+                    return body, ctype
+            except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+                continue
+    return None
+
+
 def _default_cover_url() -> str:
     return get_book_cover_image("")
 
@@ -190,12 +236,28 @@ def _cover_image_url_from_raw(raw) -> str | None:
     return None
 
 
+def _resolve_cover_backend_sources(book) -> tuple[str | None, str | None]:
+    """BookCoverView 用：从数据库解析外链 URL 或 base64（不返回代理地址）。"""
+    raw = book.coverimage
+    external = _cover_image_url_from_raw(raw)
+    cover_b64 = _cover_base64_from_raw(raw) if not external else None
+    if not external:
+        static_image = get_book_cover_image(book.title)
+        if static_image:
+            external = static_image
+    return external, cover_b64
+
+
 def _build_book_data(book):
-    """构建书籍数据字典，包含封面图片处理"""
+    """构建书籍数据字典；封面统一走本域代理 URL。"""
     authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
     author_names = ' / '.join([a.authorname for a in authors])
 
-    book_data = {
+    coverimage_b64 = None
+    if book.coverimage and not _cover_image_url_from_raw(book.coverimage):
+        coverimage_b64 = _cover_base64_from_raw(book.coverimage)
+
+    return {
         'isbn': book.isbn,
         'title': book.title,
         'publisher': book.publisher,
@@ -204,22 +266,10 @@ def _build_book_data(book):
         'stockqty': book.stockqty,
         'location': book.location,
         'minstocklimit': book.minstocklimit,
-        'coverimage': None,
-        'cover_image_url': None,
+        'coverimage': coverimage_b64,
+        'cover_image_url': app_cover_url(book.isbn),
         'authors': author_names,
     }
-
-    if book.coverimage:
-        book_data['cover_image_url'] = _cover_image_url_from_raw(book.coverimage)
-        if not book_data['cover_image_url']:
-            book_data['coverimage'] = _cover_base64_from_raw(book.coverimage)
-
-    if not book_data['cover_image_url'] and not book_data['coverimage']:
-        static_image = get_book_cover_image(book.title)
-        if static_image:
-            book_data['cover_image_url'] = static_image
-
-    return book_data
 
 
 def index(request: HttpRequest) -> HttpResponse:
@@ -743,25 +793,7 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
 
     for isbn, data in cart.items():
         book = get_object_or_404(Book, pk=isbn)
-        book_data = _build_book_data(book)
-        setattr(book, "cover_image_url", book_data.get("cover_image_url"))
-        cover_b64 = None
-        if not book_data.get("cover_image_url") and getattr(book, "coverimage", None):
-            try:
-                import base64
-                import re
-                raw = book.coverimage
-                if isinstance(raw, str):
-                    s = raw.strip()
-                    if re.fullmatch(r'[A-Za-z0-9+/=\s]+', s) and len(s) > 50:
-                        cover_b64 = s.replace('\\n', '').replace('\\r', '')
-                    else:
-                        cover_b64 = base64.b64encode(s.encode('utf-8')).decode('utf-8')
-                else:
-                    cover_b64 = base64.b64encode(raw).decode('utf-8')
-            except Exception:
-                cover_b64 = None
-        setattr(book, "coverimage_b64", cover_b64)
+        setattr(book, "cover_image_url", app_cover_url(isbn))
         quantity = data["quantity"]
         original_amount = book.price * quantity
         discounted_amount = original_amount * discount_rate

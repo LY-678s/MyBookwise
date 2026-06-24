@@ -71,28 +71,9 @@ html.bookwise-index-restore-pending .animate-fade-in { animation: none !importan
             <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
                 <!-- 图书封面 -->
                 <div style="position: relative; overflow: hidden;">
-                    {% if book.cover_image_url %}
-                    <img src="{{ book.cover_image_url }}" alt="{{ book.title }}"
+                    <img src="/api/books/{{ book.isbn }}/cover/" alt="{{ book.title }}"
                          style="width: 100%; height: 250px; object-fit: cover;"
-                         onerror="if(!this.dataset.triedProxy){this.dataset.triedProxy='1';this.src='/api/books/{{ book.isbn }}/cover/';}else{this.style.display='none';this.nextElementSibling.style.display='flex';}">
-                    <div style="display:none; width:100%; height:250px; background:linear-gradient(135deg,var(--accent-light),var(--accent)); align-items:center; justify-content:center; flex-direction:column; gap:0.5rem; color:var(--text-primary); text-align:center; padding:0.5rem;">
-                        <span style="font-size:2.5rem;">📖</span>
-                        <span style="opacity:0.7; font-size:0.8rem;">暂无封面</span>
-                    </div>
-                    {% elif book.coverimage %}
-                    <img src="data:image/jpeg;base64,{{ book.coverimage|safe }}" alt="{{ book.title }}"
-                         style="width: 100%; height: 250px; object-fit: cover;"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                    <div style="display:none; width:100%; height:250px; background:linear-gradient(135deg,var(--accent-light),var(--accent)); align-items:center; justify-content:center; flex-direction:column; gap:0.5rem; color:var(--text-primary); text-align:center; padding:0.5rem;">
-                        <span style="font-size:2.5rem;">📖</span>
-                        <span style="opacity:0.7; font-size:0.8rem;">暂无封面</span>
-                    </div>
-                    {% else %}
-                    <div style="width:100%; height:250px; background:linear-gradient(135deg,var(--accent-light),var(--accent)); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:0.5rem; color:var(--text-primary); text-align:center; padding:0.5rem;">
-                        <span style="font-size:2.5rem;">📖</span>
-                        <span style="opacity:0.7; font-size:0.8rem;">暂无封面</span>
-                    </div>
-                    {% endif %}
+                         onerror="this.onerror=null;this.src='{{ DEFAULT_COVER_IMAGE_URL }}';">
 
                     <!-- 悬浮信息 -->
                     <div class="book-overlay">
@@ -220,17 +201,9 @@ function updateFeedEnd() {
 }
 
 function buildBookCoverHtml(book, defaultCoverUrl) {
-    if (book.cover_image_url) {
-        const proxyUrl = `/api/books/${book.isbn}/cover/`;
-        return `<img src="${book.cover_image_url}" alt="${book.title}" style="width:100%; height:250px; object-fit:cover;"
-                  onerror="if(!this.dataset.triedProxy){this.dataset.triedProxy='1';this.src='${proxyUrl}';}else{this.onerror=null;this.src='${defaultCoverUrl || DEFAULT_COVER_URL}';}">`;
-    }
-    if (book.coverimage) {
-        return `<img src="data:image/jpeg;base64,${book.coverimage}" alt="${book.title}" style="width:100%; height:250px; object-fit:cover;"
-                  onerror="this.onerror=null;this.src='${defaultCoverUrl || DEFAULT_COVER_URL}'">`;
-    }
-    return `<div style="width:100%; height:250px; background:linear-gradient(135deg,var(--accent-light),var(--accent));
-                       display:flex; align-items:center; justify-content:center; font-size:3rem;">📖</div>`;
+    const proxyUrl = `/api/books/${book.isbn}/cover/`;
+    return `<img src="${proxyUrl}" alt="${book.title}" style="width:100%; height:250px; object-fit:cover;"
+              onerror="this.onerror=null;this.src='${defaultCoverUrl || DEFAULT_COVER_URL}'">`;
 }
 
 function buildBookCardHtml(book, index, defaultCoverUrl) {

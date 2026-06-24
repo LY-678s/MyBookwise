@@ -61,6 +61,7 @@ Thumbs.db
 mobile/.gradle/
 mobile/**/build/
 mobile/local.properties
+mobile/settings.properties
 mobile/.idea/
 mobile/*.iml
 mobile/captures/

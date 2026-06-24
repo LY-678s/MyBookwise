@@ -1,5 +1,6 @@
 package com.example.bookwiseapp.data.api
 
+import com.example.bookwiseapp.BuildConfig
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -9,34 +10,31 @@ import retrofit2.converter.gson.GsonConverterFactory
 object ApiClient {
 
     /**
-     * 服务器地址（改这一处即可）。
-     *
-     * | 场景           | 示例 |
-     * |----------------|------|
-     * | 公网固定域名   | https://mybookwise.xyz |
-     * | 模拟器         | http://10.0.2.2:8000 |
-     * | 真机同 Wi-Fi   | http://192.168.x.x:8000 |
-     *
-     * 公网域名需本机 cloudflared 命名隧道运行，见 README。
+     * 服务器根地址，来自 [mobile/settings.properties] 的 `server_base`。
+     * 首次克隆请：`copy settings.properties.example settings.properties` 后修改。
      */
-    const val SERVER_BASE = "https://mybookwise.xyz"
-    // const val SERVER_BASE = "http://10.0.2.2:8000"       // 模拟器本地
-    // const val SERVER_BASE = "http://192.168.x.x:8000"  // 同 Wi-Fi 真机
-    const val BASE_URL = "$SERVER_BASE/api/"
+    val SERVER_BASE: String = BuildConfig.SERVER_BASE
+    val BASE_URL: String = "$SERVER_BASE/api/"
 
     /** 当前登录 Token（内存中），由 TokenStore 在 App 启动时恢复。*/
     var token: String? = null
 
-    /** 将图书封面等相对路径拼成完整 URL，如 /static/images/xxx.jpg */
+    /** 将相对路径拼成完整 URL；封面请走 bookCoverUrl()。 */
     fun fullImageUrl(relativePath: String?): String? {
         if (relativePath.isNullOrEmpty()) return null
-        var url = if (relativePath.startsWith("http")) relativePath
+        return if (relativePath.startsWith("http")) relativePath
         else "$SERVER_BASE$relativePath"
-        // 数据库封面多为 http:// 外链；Android 9+ 默认禁止明文 HTTP 拉图
-        if (url.startsWith("http://")) {
-            url = "https://${url.removePrefix("http://")}"
+    }
+
+    /** 图书封面代理地址（优先 API 返回的 cover_image_url，否则按 ISBN 拼接）。 */
+    fun bookCoverUrl(isbn: String, coverImageUrl: String? = null): String? {
+        if (isbn.isBlank()) return null
+        val path = if (!coverImageUrl.isNullOrBlank() && coverImageUrl.contains("/cover/")) {
+            coverImageUrl
+        } else {
+            "/api/books/$isbn/cover/"
         }
-        return url
+        return fullImageUrl(path)
     }
 
     private val authInterceptor = Interceptor { chain ->
