@@ -1,0 +1,9 @@
+# Copy this file to settings.properties and edit it for your own machine.
+#
+# Examples:
+# server_base=https://mybookwise.xyz
+# server_base=https://ly.mybookwise.xyz
+# server_base=http://10.0.2.2:8000
+# server_base=http://192.168.x.x:8000
+
+server_base=https://mybookwise.xyz
