@@ -1,39 +1,51 @@
-"""
-Django settings 示例文件。
-
-使用方法：
-1. 复制本文件为 settings.py：  cp MyBookwise/settings.example.py MyBookwise/settings.py
-2. 修改数据库密码等本地配置
-3. 在 https://platform.deepseek.com/ 申请 DeepSeek API Key，填入 DEEPSEEK_API_KEY
-"""
 from pathlib import Path
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-emrbeuu1kr_*)z5@y43v5bh19o4zy-k@vc-j340de-6we$w)&k"
 
-DEBUG = True
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
-# 本机 + 局域网 + 公网域名 + 临时穿透（见 README「跨网访问」）
-ALLOWED_HOSTS = [
+
+def _env_list(name: str, default: list[str]) -> list[str]:
+    value = os.environ.get(name, "")
+    if not value.strip():
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-emrbeuu1kr_*)z5@y43v5bh19o4zy-k@vc-j340de-6we$w)&k",
+)
+
+DEBUG = _env_bool("DJANGO_DEBUG", True)
+
+_DEFAULT_ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
     "mybookwise.xyz",
     "www.mybookwise.xyz",
+    "ly.mybookwise.xyz",
     ".trycloudflare.com",
     ".ngrok-free.app",
 ]
+ALLOWED_HOSTS = _env_list("DJANGO_ALLOWED_HOSTS", _DEFAULT_ALLOWED_HOSTS)
 
-# Web 经 HTTPS 访问时的 CSRF 白名单
 _PUBLIC_ORIGINS = [
     "https://mybookwise.xyz",
     "https://www.mybookwise.xyz",
+    "https://ly.mybookwise.xyz",
 ]
 _tunnel_origin = os.environ.get("TUNNEL_ORIGIN", "").strip().rstrip("/")
-CSRF_TRUSTED_ORIGINS = _PUBLIC_ORIGINS + (
+_default_csrf_origins = _PUBLIC_ORIGINS + (
     [_tunnel_origin] if _tunnel_origin and _tunnel_origin not in _PUBLIC_ORIGINS else []
 )
+CSRF_TRUSTED_ORIGINS = _env_list("DJANGO_CSRF_TRUSTED_ORIGINS", _default_csrf_origins)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -80,11 +92,11 @@ WSGI_APPLICATION = "MyBookwise.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "bookstoredb",
-        "USER": "root",
-        "PASSWORD": "your_mysql_password",
-        "HOST": "localhost",
-        "PORT": "3306",
+        "NAME": os.environ.get("MYSQL_DATABASE", "bookstoredb"),
+        "USER": os.environ.get("MYSQL_USER", "root"),
+        "PASSWORD": os.environ.get("MYSQL_PASSWORD", "your_mysql_password"),
+        "HOST": os.environ.get("MYSQL_HOST", "localhost"),
+        "PORT": os.environ.get("MYSQL_PORT", "3306"),
         "OPTIONS": {
             "charset": "utf8mb4",
         },
@@ -103,8 +115,9 @@ TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = False
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -119,23 +132,20 @@ REST_FRAMEWORK = {
 # ---------- 图书封面配置（可选）----------
 COVER_IMAGE_SUBDIR = "images"
 DEFAULT_COVER_IMAGE_FILENAME = "default_cover.png"
+DEFAULT_COVER_IMAGE_FILENAME = "default_cover.png"
 COVER_IMAGE_MAPPINGS = {
-    "python": "Python编程从入门到实践.jpg",
-    "机器学习": "机器学习实战.jpg",
-    "深入理解计算机": "深入理解计算机系统.jpg",
-    "数据库": "数据库系统概念.png",
-    "算法导论": "算法导论.png",
+    "python": "default_cover.png",
+    "机器学习": "default_cover.png",
+    "深入理解计算机": "default_cover.png",
+    "数据库": "default_cover.png",
+    "算法导论": "default_cover.png",
 }
 
-# ---------- AI 聊天配置（硅基流动 SiliconFlow）----------
-# 免费申请 API Key：https://cloud.siliconflow.cn/account/ak
-AI_PROVIDER = "deepseek"  # 复用 deepseek 通道，硅基流动接口格式相同
-
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")  # 在此填入你自己的硅基流动 API Key
-DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"  # 免费模型
+AI_PROVIDER = "deepseek"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
 DEEPSEEK_API_BASE = "https://api.siliconflow.cn/v1"
 
-# Gemini（备用）
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
 

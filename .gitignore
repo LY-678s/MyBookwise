@@ -76,3 +76,7 @@ htmlcov/
 # Cloudflare 隧道本地凭证（勿提交）
 scripts/cloudflared-mybookwise.yml
 .cloudflared/
+
+# Local deployment secrets/configs. Each developer keeps their own copy.
+.env
+/scripts/cloudflared-mybookwise.yml

@@ -9,24 +9,18 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 object ApiClient {
 
-    /**
-     * 服务器根地址，来自 [mobile/settings.properties] 的 `server_base`。
-     * 首次克隆请：`copy settings.properties.example settings.properties` 后修改。
-     */
+    // SERVER_BASE comes from mobile/settings.properties via BuildConfig.
     val SERVER_BASE: String = BuildConfig.SERVER_BASE
     val BASE_URL: String = "$SERVER_BASE/api/"
 
-    /** 当前登录 Token（内存中），由 TokenStore 在 App 启动时恢复。*/
     var token: String? = null
 
-    /** 将相对路径拼成完整 URL；封面请走 bookCoverUrl()。 */
     fun fullImageUrl(relativePath: String?): String? {
         if (relativePath.isNullOrEmpty()) return null
         return if (relativePath.startsWith("http")) relativePath
         else "$SERVER_BASE$relativePath"
     }
 
-    /** 图书封面代理地址（优先 API 返回的 cover_image_url，否则按 ISBN 拼接）。 */
     fun bookCoverUrl(isbn: String, coverImageUrl: String? = null): String? {
         if (isbn.isBlank()) return null
         val path = if (!coverImageUrl.isNullOrBlank() && coverImageUrl.contains("/cover/")) {
