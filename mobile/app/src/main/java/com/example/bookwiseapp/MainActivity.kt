@@ -4,19 +4,39 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.example.bookwiseapp.data.api.ApiClient
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.bookwiseapp.ui.navigation.AppNav
 import com.example.bookwiseapp.ui.theme.BookwiseAppTheme
+import com.example.bookwiseapp.viewmodel.AuthViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // ApiClient.token 已在 Application.onCreate 中由 TokenStore 恢复
-        val startLoggedIn = ApiClient.token != null
         setContent {
             BookwiseAppTheme {
-                AppNav(startLoggedIn = startLoggedIn)
+                val authVm: AuthViewModel = viewModel()
+                var authReady by remember { mutableStateOf(false) }
+                var startLoggedIn by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    startLoggedIn = authVm.tryRestoreSession()
+                    authReady = true
+                }
+
+                if (!authReady) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
+                    AppNav(startLoggedIn = startLoggedIn)
+                }
             }
         }
     }

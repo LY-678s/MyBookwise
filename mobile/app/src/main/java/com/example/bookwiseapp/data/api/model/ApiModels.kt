@@ -68,13 +68,19 @@ data class BookData(
     @SerializedName("minstocklimit") val minStockLimit: Int,
     @SerializedName("cover_image_url") val coverImageUrl: String?,
     val coverimage: String?,
-    val authors: List<String>? = null
+    val authors: List<String>? = null,
+    @SerializedName("metric_label") val metricLabel: String? = null,
+    @SerializedName("metric_value") val metricValue: Int? = null
 )
 
 data class BooksResponse(
     val success: Boolean,
     val books: List<BookData>? = null,
     @SerializedName("default_cover_url") val defaultCoverUrl: String? = null,
+    @SerializedName("has_more") val hasMore: Boolean? = null,
+    @SerializedName("current_page") val currentPage: Int? = null,
+    @SerializedName("total_pages") val totalPages: Int? = null,
+    @SerializedName("total_count") val totalCount: Int? = null,
     val error: String? = null
 )
 
@@ -82,6 +88,10 @@ data class BookDetailResponse(
     val success: Boolean,
     val book: BookData? = null,
     @SerializedName("default_cover_url") val defaultCoverUrl: String? = null,
+    @SerializedName("is_favorited") val isFavorited: Boolean? = null,
+    @SerializedName("favorite_count") val favoriteCount: Int? = null,
+    @SerializedName("favorite_folder_id") val favoriteFolderId: Int? = null,
+    @SerializedName("favorite_folders") val favoriteFolders: List<FavoriteFolderData>? = null,
     val error: String? = null
 )
 
@@ -89,6 +99,79 @@ data class SearchResponse(
     val success: Boolean,
     val query: String? = null,
     val books: List<BookData>? = null,
+    val error: String? = null
+)
+
+// ────────────────── 分区 / 榜单 / 收藏 ──────────────────
+
+data class CategoryItem(
+    val name: String,
+    val count: Int,
+    val active: Boolean = false
+)
+
+data class CategoriesResponse(
+    val success: Boolean,
+    val categories: List<CategoryItem>? = null,
+    val books: List<BookData>? = null,
+    @SerializedName("selected_category") val selectedCategory: String? = null,
+    val sort: String? = null,
+    @SerializedName("default_cover_url") val defaultCoverUrl: String? = null,
+    @SerializedName("current_page") val currentPage: Int? = null,
+    @SerializedName("total_pages") val totalPages: Int? = null,
+    @SerializedName("total_count") val totalCount: Int? = null,
+    val error: String? = null
+)
+
+data class RankingSection(
+    val title: String,
+    val subtitle: String,
+    val icon: String? = null,
+    val books: List<BookData>? = null
+)
+
+data class RankingsResponse(
+    val success: Boolean,
+    val sections: List<RankingSection>? = null,
+    @SerializedName("default_cover_url") val defaultCoverUrl: String? = null,
+    val error: String? = null
+)
+
+data class FavoriteFolderData(
+    val id: Int,
+    val name: String,
+    @SerializedName("is_default") val isDefault: Boolean = false
+)
+
+data class FavoriteFolderCard(
+    val folder: FavoriteFolderData,
+    val books: List<BookData>? = null,
+    val count: Int = 0
+)
+
+data class FavoriteFoldersResponse(
+    val success: Boolean,
+    val folders: List<FavoriteFolderCard>? = null,
+    @SerializedName("total_count") val totalCount: Int? = null,
+    val message: String? = null,
+    val folder: FavoriteFolderData? = null,
+    val error: String? = null
+)
+
+data class CreateFavoriteFolderRequest(
+    val name: String
+)
+
+data class FavoriteToggleRequest(
+    @SerializedName("folder_id") val folderId: Int? = null
+)
+
+data class FavoriteToggleResponse(
+    val success: Boolean,
+    val message: String? = null,
+    @SerializedName("is_favorited") val isFavorited: Boolean? = null,
+    @SerializedName("favorite_count") val favoriteCount: Int? = null,
+    @SerializedName("folder_id") val folderId: Int? = null,
     val error: String? = null
 )
 

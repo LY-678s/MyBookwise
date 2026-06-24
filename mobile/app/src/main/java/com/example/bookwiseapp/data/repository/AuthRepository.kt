@@ -43,8 +43,13 @@ class AuthRepository : BaseRepository() {
             errorField = { it.error },
             successCheck = { it.success }
         )
-        TokenStore.instance.clearToken()
+        clearLocalSession()
         return result
+    }
+
+    /** 仅清除本地 Token（会话失效或校验失败时）。*/
+    suspend fun clearLocalSession() {
+        TokenStore.instance.clearToken()
     }
 
     suspend fun me(): Result<MeResponse> = safeCall(

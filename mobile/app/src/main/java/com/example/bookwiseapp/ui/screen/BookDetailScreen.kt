@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +33,7 @@ fun BookDetailScreen(
 
     var quantity by remember { mutableIntStateOf(1) }
     var showSnack by remember { mutableStateOf(false) }
+    var showFolderPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(isbn) { viewModel.loadBookDetail(isbn) }
 
@@ -49,6 +52,32 @@ fun BookDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    if (state.book != null) {
+                        IconButton(
+                            onClick = {
+                                if (state.isFavorited) {
+                                    viewModel.toggleFavorite(isbn)
+                                } else if (state.favoriteFolders.size > 1) {
+                                    showFolderPicker = true
+                                } else {
+                                    viewModel.toggleFavorite(
+                                        isbn,
+                                        state.favoriteFolders.firstOrNull()?.id
+                                    )
+                                }
+                            },
+                            enabled = !state.favoriteLoading
+                        ) {
+                            Icon(
+                                if (state.isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "收藏",
+                                tint = if (state.isFavorited) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
             )
@@ -88,6 +117,17 @@ fun BookDetailScreen(
                             book.keywords?.let { InfoRow("关键字", it) }
                             InfoRow("库存", "${book.stockQty} 本")
                             book.location?.let { InfoRow("位置", it) }
+                            if (state.favoriteCount > 0) {
+                                InfoRow("收藏", "${state.favoriteCount} 人")
+                            }
+                            state.favoriteMessage?.let {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    it,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
 
                             Spacer(Modifier.height(16.dp))
                             Divider()
@@ -139,5 +179,29 @@ fun BookDetailScreen(
                 }
             }
         }
+    }
+
+    if (showFolderPicker) {
+        AlertDialog(
+            onDismissRequest = { showFolderPicker = false },
+            title = { Text("选择收藏夹") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.favoriteFolders.forEach { folder ->
+                        TextButton(
+                            onClick = {
+                                viewModel.toggleFavorite(isbn, folder.id)
+                                showFolderPicker = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(folder.name) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showFolderPicker = false }) { Text("取消") }
+            }
+        )
     }
 }

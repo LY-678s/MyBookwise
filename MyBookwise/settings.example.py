@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
     "bookstore.apps.BookstoreConfig",
 ]
 
@@ -107,9 +108,17 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ---------- REST API（Android APP Token 认证）----------
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "bookstore.api.authentication.CustomerTokenAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [],
+}
+
 # ---------- 图书封面配置（可选）----------
 COVER_IMAGE_SUBDIR = "images"
-DEFAULT_COVER_IMAGE_FILENAME = "Python编程从入门到实践.jpg"
+DEFAULT_COVER_IMAGE_FILENAME = "default_cover.png"
 COVER_IMAGE_MAPPINGS = {
     "python": "Python编程从入门到实践.jpg",
     "机器学习": "机器学习实战.jpg",

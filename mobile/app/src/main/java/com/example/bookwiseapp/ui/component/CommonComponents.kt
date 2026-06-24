@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.bookwiseapp.data.api.ApiClient
 import com.example.bookwiseapp.data.api.model.BookData
 
@@ -34,34 +34,68 @@ fun ErrorMessage(message: String, onRetry: (() -> Unit)? = null) {
     }
 }
 
-/** 图书封面：优先 cover_image_url，图书 cover_image_url 是相对路径，需拼接服务器地址。*/
+/** 图书封面：走本域 /api/books/{isbn}/cover/；失败时用 defaultCoverUrl 或书名占位。 */
 @Composable
-fun BookCover(book: BookData, modifier: Modifier = Modifier) {
-    val url = ApiClient.fullImageUrl(book.coverImageUrl)
-    if (url != null) {
-        AsyncImage(
-            model = url,
+fun BookCover(
+    book: BookData,
+    modifier: Modifier = Modifier,
+    defaultCoverUrl: String? = null
+) {
+    val primaryUrl = ApiClient.fullImageUrl(book.coverImageUrl)
+    val fallbackUrl = ApiClient.fullImageUrl(defaultCoverUrl)
+
+    if (primaryUrl != null) {
+        SubcomposeAsyncImage(
+            model = primaryUrl,
             contentDescription = book.title,
             modifier = modifier,
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
+            loading = {
+                Box(modifier, contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(28.dp))
+                }
+            },
+            error = {
+                if (fallbackUrl != null && fallbackUrl != primaryUrl) {
+                    SubcomposeAsyncImage(
+                        model = fallbackUrl,
+                        contentDescription = book.title,
+                        modifier = modifier,
+                        contentScale = ContentScale.Crop,
+                        error = { CoverPlaceholder(book, modifier) }
+                    )
+                } else {
+                    CoverPlaceholder(book, modifier)
+                }
+            }
+        )
+    } else if (fallbackUrl != null) {
+        SubcomposeAsyncImage(
+            model = fallbackUrl,
+            contentDescription = book.title,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            error = { CoverPlaceholder(book, modifier) }
         )
     } else {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center
+        CoverPlaceholder(book, modifier)
+    }
+}
+
+@Composable
+private fun CoverPlaceholder(book: BookData, modifier: Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Text(
-                    text = book.title.take(2),
-                    modifier = Modifier.wrapContentSize(Alignment.Center),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    textAlign = TextAlign.Center
-                )
-            }
+            Text(
+                text = book.title.take(2),
+                modifier = Modifier.wrapContentSize(Alignment.Center),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

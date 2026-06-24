@@ -18,7 +18,17 @@ urlpatterns = [
     # 图书（无需登录）
     path("books/", views.BookListView.as_view(), name="book-list"),
     path("books/search/", views.BookSearchView.as_view(), name="book-search"),
+    path("books/<str:isbn>/cover/", views.BookCoverView.as_view(), name="book-cover"),
+    path("books/<str:isbn>/favorite/", views.BookFavoriteToggleView.as_view(), name="book-favorite-toggle"),
     path("books/<str:isbn>/", views.BookDetailView.as_view(), name="book-detail"),
+    path("categories/", views.CategoryListView.as_view(), name="categories"),
+    path("rankings/", views.RankingsView.as_view(), name="rankings"),
+    path("favorites/folders/", views.FavoriteFolderListView.as_view(), name="favorite-folders"),
+    path(
+        "favorites/folders/<int:folder_id>/",
+        views.FavoriteFolderDeleteView.as_view(),
+        name="favorite-folder-delete",
+    ),
     # 购物车
     path("cart/", views.CartView.as_view(), name="cart"),
     path("cart/items/", views.CartItemView.as_view(), name="cart-item-add"),

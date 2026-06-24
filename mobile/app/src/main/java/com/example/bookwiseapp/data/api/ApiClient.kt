@@ -30,8 +30,13 @@ object ApiClient {
     /** 将图书封面等相对路径拼成完整 URL，如 /static/images/xxx.jpg */
     fun fullImageUrl(relativePath: String?): String? {
         if (relativePath.isNullOrEmpty()) return null
-        return if (relativePath.startsWith("http")) relativePath
+        var url = if (relativePath.startsWith("http")) relativePath
         else "$SERVER_BASE$relativePath"
+        // 数据库封面多为 http:// 外链；Android 9+ 默认禁止明文 HTTP 拉图
+        if (url.startsWith("http://")) {
+            url = "https://${url.removePrefix("http://")}"
+        }
+        return url
     }
 
     private val authInterceptor = Interceptor { chain ->

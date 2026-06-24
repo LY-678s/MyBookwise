@@ -1,11 +1,15 @@
 # 1. 启动后端（Web + API 同一个服务）
+
 python manage.py runserver 0.0.0.0:8000
 
-# 2. Web：浏览器打开 http://127.0.0.1:8000
+# 2. Web：浏览器打开 [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+开启隧道后打开[https://mybookwise.xyz](https://mybookwise.xyz)
 
 # 3. APP：mobile/ 里单独 build/run，baseUrl 指向后端
-Android 模拟器常用 http://10.0.2.2:8000
-真机演示用电脑局域网 IP，如 http://192.168.x.x:8000
+
+Android 模拟器常用 [http://10.0.2.2:8000](http://10.0.2.2:8000)
+真机演示用电脑局域网 IP，如 [http://192.168.x.x:8000](http://192.168.x.x:8000)
 
 ---
 
@@ -38,20 +42,33 @@ cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDataba
 导入完成后重启 Django：`python manage.py runserver 0.0.0.0:8000`
 
 ---
+
 # 数据库课设——网上图书管理系统
+
 以下是主要功能模块测试流程示例
+
 ## 顾客端
+
 ### 1.注册
+
 通过账号密码注册，并可以引导输入个人详细信息——地址、联系方式等。
+
 ### 2.搜索
+
 书名/关键字/isbn
+
 ### 3.购物车添加
+
 可以调整数量，点击即可成功添加至购物车。
 当输入数量大于库存时，会提示需要输入<=库存的数
+
 ### 4.下单与付款（不涉及缺货等特殊情况）
+
 （注意为了简单，我没有在有些新创建的账号里面补齐Totalspent应该有的历史订单）
 这里字段的显示，分别关注主页、购物车、动作消息提示以及个人账户
+
 #### 4.1 信用等级LevelID=1 OR 2，不享受先享后付，只能使用余额支付
+
 设置：
 -- 客户数据
 CustomerID=1, TotalSpent=285.30, Balance=714.70, LevelID=1
@@ -61,65 +78,92 @@ ISBN='978-7-115-48935-5', StockQty=40, MinStockLimit=10
 创建订单：
 ISBN='978-7-115-48935-5', quantity=5
 预期：
+
 - 下单时，totalspent自动增加，balance减少
 - 当明细字段isshipped全部改为1，订单status改为1
+
 #### 4.2 信用等级LevelID=3 OR 4 OR 5，享受先享后付，能选择使用余额支付或信用支付
+
 CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
 CustomerID=2, TotalSpent=1300.00, Balance=2000.00, LevelID=4
 CustomerID=3, TotalSpent=285.30, Balance=714.70, LevelID=5
 这里建议自行根据用户额度和信用额度选择数据（因为前面customer数据可能后期会变动，这里确定哪个具体数据无意义。）
+
 1. 选择未超余额和信用余额的数据
 2. 选择不超过余额但完整金额超过信用余额的数据
 3. 选择超过余额但多出部分不超过信用余额的数据，且完整金额超过信用余额。
 4. 选择超过余额和多出部分超过信用余额的数据
 5. 选择超过余额但完整金额不超过信用余额的数据
+
 预期：
-1. 
+
+
+
 使用余额付款
-  - 下单时，totalspent自动增加，balance减少
-  - 当明细字段isshipped全部改为1，订单status改为1
+
+- 下单时，totalspent自动增加，balance减少
+- 当明细字段isshipped全部改为1，订单status改为1
 使用信用额度付款
-  - 下单时，totalspent自动增加，usedcredit自动增加
-  - 当明细字段isshipped全部改为1，订单status改为1
-2. 只能使用余额付款
+- 下单时，totalspent自动增加，usedcredit自动增加
+- 当明细字段isshipped全部改为1，订单status改为1
+
+1. 只能使用余额付款
+
 情况同1中
 3. 只能先使用全部余额，不足从信用额度扣款。
   下单时点击信用扣款会
-  - 下单时，totalspent自动增加，usedcredit自动增加，balance自动减少
-  - 其余同上
-4. 无论勾选哪种都会提示错误，无法下单
-5. 先使用全部余额再使用信用余额和直接使用信用余额付款都OK
+
+- 下单时，totalspent自动增加，usedcredit自动增加，balance自动减少
+- 其余同上
+
+1. 无论勾选哪种都会提示错误，无法下单
+2. 先使用全部余额再使用信用余额和直接使用信用余额付款都OK
+
 具体情况同上类似例子。
+
 #### 5.信用升级
+
 CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
 选择
 ISBN='978-7-302-51123-4', quantity=12, MinStockLimit=12
 ISBN='978-7-111-54425-7', quantity=10, MinStockLimit=12
 预期：
 totalamount=2181.10，等级由3升至4
+
 #### 6.我的订单
+
 所有的历史订单详情都可以在此查看，具体如下
 暂时无法在飞书文档外展示此内容
 未全额支付的订单可以在详情页选择全部还款。
 在收到货后可以确认订单以彻底完成整个订单。
+
 #### 7.我的主页
+
 可以修改密码，联系方式、地址
 可以充值。
 可以查看账户的完整信息——余额，信用等级，信用余额等。
 
 ## 管理员端
+
 对于订单，创建在顾客端，管理员端只能手动修改其状态为已下单、已发货，不允许创建订单。
+
 ### 1. 缺货登记和采购单
+
 - 当顾客端订单使得库存低于最小限制时，将在数据库中自动生成缺货登记和采购单
 - 当采购单状态为已到货入库时，缺货单要自动将status标记为1（已处理），且图书库存也自动补上
 - 可以手动添加采购记录和缺货登记
 - 可搜索
+
 ### 2. 订单
+
 - 可以修改订单状态为已发货、已完成和已取消
 - 可搜索
 - 禁止将已取消订单重新打开，否则抛出错误提示，不允许此类行为
+
 ### 3. 客户、图书、图书作者、信用等级规则、供应商图书对应信息和供应商信息管理
+
 均可实现增删改查
+
 1. 客户：包括客户名、密码、balance、levelid等详细信息的修改
 2. 图书主数据管理：除基础信息（书号、书名、出版社、价格）外，还需支持复杂的图书关系。
 3. 图书-作者表：通过“作者序位”字段管理最多四位有序作者；通过“丛书编号”关联同一丛书下的不同分册；
@@ -133,12 +177,14 @@ totalamount=2181.10，等级由3升至4
 
 修改 `mobile/app/src/main/java/com/example/bookwiseapp/data/api/ApiClient.kt` 中的 `SERVER_BASE`：
 
-| 场景 | SERVER_BASE |
-|---|---|
-| Android 模拟器 | `http://10.0.2.2:8000` |
-| 真机（同 Wi-Fi / USB 共享网络） | `http://电脑局域网IP:8000` |
-| **公网固定域名（推荐）** | `https://mybookwise.xyz` |
-| 临时穿透（快速隧道） | `https://xxxx.trycloudflare.com` |
+
+| 场景                     | SERVER_BASE                      |
+| ---------------------- | -------------------------------- |
+| Android 模拟器            | `http://10.0.2.2:8000`           |
+| 真机（同 Wi-Fi / USB 共享网络） | `http://电脑局域网IP:8000`            |
+| **公网固定域名（推荐）**         | `https://mybookwise.xyz`         |
+| 临时穿透（快速隧道）             | `https://xxxx.trycloudflare.com` |
+
 
 后端须以 `0.0.0.0:8000` 启动才能接受手机请求。
 
@@ -195,10 +241,12 @@ copy scripts\cloudflared-mybookwise.yml.example scripts\cloudflared-mybookwise.y
 
 **6. 项目内网络配置（已完成，核对即可）**
 
-| 位置 | 配置 |
-|------|------|
+
+| 位置                       | 配置                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------ |
 | `MyBookwise/settings.py` | `ALLOWED_HOSTS` 含 `mybookwise.xyz`；`CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz` |
-| `ApiClient.kt` | `SERVER_BASE = "https://mybookwise.xyz"` |
+| `ApiClient.kt`           | `SERVER_BASE = "https://mybookwise.xyz"`                                             |
+
 
 修改 settings 后需重启 Django。
 
@@ -217,16 +265,18 @@ python manage.py runserver 0.0.0.0:8000
 scripts\start_tunnel_named.cmd
 ```
 
-验证：浏览器打开 https://mybookwise.xyz ；手机 4G 打开 APP（Rebuild 后）。
+验证：浏览器打开 [https://mybookwise.xyz](https://mybookwise.xyz) ；手机 4G 打开 APP（Rebuild 后）。
 
 ### 常见问题
 
-| 现象 | 处理 |
-|------|------|
-| 域名无法访问 | 确认隧道终端在跑、DNS 已生效（可能需等待几分钟） |
-| `DisallowedHost` | 检查 `settings.py` 的 `ALLOWED_HOSTS`，重启 Django |
-| Web 登录 CSRF 403 | 确认 `CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz` |
-| APP 连不上 | `SERVER_BASE` 为 `https://mybookwise.xyz`（无末尾 `/`），Rebuild |
+
+| 现象               | 处理                                                        |
+| ---------------- | --------------------------------------------------------- |
+| 域名无法访问           | 确认隧道终端在跑、DNS 已生效（可能需等待几分钟）                                |
+| `DisallowedHost` | 检查 `settings.py` 的 `ALLOWED_HOSTS`，重启 Django              |
+| Web 登录 CSRF 403  | 确认 `CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz`      |
+| APP 连不上          | `SERVER_BASE` 为 `https://mybookwise.xyz`（无末尾 `/`），Rebuild |
+
 
 ---
 
@@ -262,8 +312,11 @@ scripts\start_tunnel.cmd
 
 ### 常见问题
 
-| 现象 | 处理 |
-|------|------|
+
+| 现象               | 处理                                             |
+| ---------------- | ---------------------------------------------- |
 | `DisallowedHost` | `settings.py` 含 `.trycloudflare.com`，重启 Django |
-| Web 登录 CSRF 403 | 设置 `$env:TUNNEL_ORIGIN` 并重启 runserver |
-| APP 网络错误 | `SERVER_BASE` 用 **https** 且与隧道地址一致 |
+| Web 登录 CSRF 403  | 设置 `$env:TUNNEL_ORIGIN` 并重启 runserver          |
+| APP 网络错误         | `SERVER_BASE` 用 **https** 且与隧道地址一致             |
+
+

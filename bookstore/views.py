@@ -193,50 +193,31 @@ def _build_book_data(book):
 def index(request: HttpRequest) -> HttpResponse:
     from django.conf import settings
     from urllib.parse import quote
-    
-    # 获取分页参数
-    page = int(request.GET.get("page", 1))
-    if page < 1:
-        page = 1
+
     page_size = 12
-    
-    # 根据用户是否登录获取不同的推荐
     customer_id = request.session.get("customer_id")
-    if customer_id:
-        from .recommendations import get_recommendations_for_user
-        all_books = get_recommendations_for_user(customer_id, limit=1000)
-    else:
-        from .recommendations import get_default_recommendations
-        all_books = get_default_recommendations(limit=1000)
-    
-    # 计算总页数
-    total_count = len(all_books)
-    total_pages = max(1, (total_count + page_size - 1) // page_size)
-    
-    # 确保页码在有效范围内
-    if page > total_pages:
-        page = total_pages
-    
-    # 获取当前页的数据
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    page_books = all_books[start_idx:end_idx]
-    
-    # 处理每本书的封面图片
+    feed_key = request.session.session_key or "default"
+
+    from .recommendations import RecommendationEngine, build_home_feed_isbns
+
+    isbn_list = build_home_feed_isbns(
+        customer_id=customer_id,
+        refresh=False,
+        feed_key=feed_key,
+    )
+    page_isbns = isbn_list[:page_size]
+    page_books = RecommendationEngine._books_from_ranked_isbns(page_isbns)
     books_with_covers = [_build_book_data(book) for book in page_books]
-    
-    # 计算默认封面 URL
+
     default_filename = getattr(settings, "DEFAULT_COVER_IMAGE_FILENAME", "Python编程从入门到实践.jpg")
     images_subdir = getattr(settings, "COVER_IMAGE_SUBDIR", "images")
     static_prefix = settings.STATIC_URL if settings.STATIC_URL.endswith('/') else settings.STATIC_URL + '/'
     default_cover_url = f"{static_prefix}{images_subdir}/{quote(default_filename)}"
-    
+
     return render(request, "bookstore/index.html", {
-        "books": books_with_covers, 
+        "books": books_with_covers,
         "DEFAULT_COVER_IMAGE_URL": default_cover_url,
-        "current_page": page,
-        "total_pages": total_pages,
-        "total_count": total_count,
+        "has_more_initial": len(isbn_list) > page_size,
     })
 
 

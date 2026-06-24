@@ -20,7 +20,9 @@ import com.example.bookwiseapp.viewmodel.AccountViewModel
 @Composable
 fun AccountScreen(
     viewModel: AccountViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onFavoritesClick: () -> Unit = {},
+    onOrdersClick: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
     val account = state.account
@@ -94,6 +96,16 @@ fun AccountScreen(
                                 onClick = { showRecharge = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("充值") }
+
+                            OutlinedButton(
+                                onClick = onOrdersClick,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("我的订单") }
+
+                            OutlinedButton(
+                                onClick = onFavoritesClick,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("我的收藏") }
 
                             if (account?.usedCredit?.let { it != "0.00" } == true) {
                                 OutlinedButton(

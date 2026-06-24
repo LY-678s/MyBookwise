@@ -2,17 +2,16 @@ package com.example.bookwiseapp
 
 import android.app.Application
 import com.example.bookwiseapp.data.local.TokenStore
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class BookwiseApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 初始化 TokenStore，并从 DataStore 恢复 Token 到内存
         TokenStore.init(this)
-        CoroutineScope(Dispatchers.IO).launch {
+        // 同步恢复 Token，避免 MainActivity 启动时尚未读完 DataStore
+        runBlocking(Dispatchers.IO) {
             TokenStore.instance.loadToken()
         }
     }

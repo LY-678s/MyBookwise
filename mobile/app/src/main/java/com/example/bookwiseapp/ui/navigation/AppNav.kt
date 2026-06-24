@@ -24,6 +24,9 @@ object Routes {
     const val CART = "cart"
     const val ORDER_LIST = "orders"
     const val ACCOUNT = "account"
+    const val CATEGORIES = "categories"
+    const val RANKINGS = "rankings"
+    const val FAVORITES = "favorites"
     const val BOOK_DETAIL = "book/{isbn}"
     const val ORDER_DETAIL = "order/{orderId}"
     const val CHECKOUT = "checkout"
@@ -43,7 +46,6 @@ val bottomNavItems = listOf(
     BottomNavItem(Routes.SEARCH, "搜索", Icons.Default.Search),
     BottomNavItem(Routes.AI, "AI", Icons.Default.SmartToy),
     BottomNavItem(Routes.CART, "购物车", Icons.Default.ShoppingCart),
-    BottomNavItem(Routes.ORDER_LIST, "订单", Icons.Default.List),
     BottomNavItem(Routes.ACCOUNT, "我的", Icons.Default.Person)
 )
 
@@ -56,6 +58,7 @@ fun AppNav(startLoggedIn: Boolean) {
     val orderVm: OrderViewModel = viewModel()
     val accountVm: AccountViewModel = viewModel()
     val aiVm: AiViewModel = viewModel()
+    val favoriteVm: FavoriteViewModel = viewModel()
 
     val startDest = if (startLoggedIn) Routes.HOME else Routes.LOGIN
 
@@ -131,7 +134,9 @@ fun AppNav(startLoggedIn: Boolean) {
                 SearchScreen(
                     viewModel = bookVm,
                     cartVm = cartVm,
-                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) }
+                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) },
+                    onCategoriesClick = { navController.navigate(Routes.CATEGORIES) },
+                    onRankingsClick = { navController.navigate(Routes.RANKINGS) }
                 )
             }
             composable(Routes.AI) {
@@ -143,15 +148,11 @@ fun AppNav(startLoggedIn: Boolean) {
                     onCheckout = { navController.navigate(Routes.CHECKOUT) }
                 )
             }
-            composable(Routes.ORDER_LIST) {
-                OrderListScreen(
-                    viewModel = orderVm,
-                    onOrderClick = { id -> navController.navigate(Routes.orderDetail(id)) }
-                )
-            }
             composable(Routes.ACCOUNT) {
                 AccountScreen(
                     viewModel = accountVm,
+                    onFavoritesClick = { navController.navigate(Routes.FAVORITES) },
+                    onOrdersClick = { navController.navigate(Routes.ORDER_LIST) },
                     onLogout = {
                         authVm.logout {
                             navController.navigate(Routes.LOGIN) {
@@ -159,6 +160,36 @@ fun AppNav(startLoggedIn: Boolean) {
                             }
                         }
                     }
+                )
+            }
+
+            composable(Routes.ORDER_LIST) {
+                OrderListScreen(
+                    viewModel = orderVm,
+                    onOrderClick = { id -> navController.navigate(Routes.orderDetail(id)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Routes.CATEGORIES) {
+                CategoriesScreen(
+                    viewModel = bookVm,
+                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Routes.RANKINGS) {
+                RankingsScreen(
+                    viewModel = bookVm,
+                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Routes.FAVORITES) {
+                FavoriteFoldersScreen(
+                    viewModel = favoriteVm,
+                    onBookClick = { isbn -> navController.navigate(Routes.bookDetail(isbn)) },
+                    onBack = { navController.popBackStack() }
                 )
             }
 

@@ -3,6 +3,8 @@ package com.example.bookwiseapp.ui.screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -19,14 +21,26 @@ import com.example.bookwiseapp.viewmodel.OrderViewModel
 @Composable
 fun OrderListScreen(
     viewModel: OrderViewModel,
-    onOrderClick: (Int) -> Unit
+    onOrderClick: (Int) -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     val state by viewModel.listState.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.loadOrders() }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("我的订单") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("我的订单") },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        }
+                    }
+                }
+            )
+        }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {

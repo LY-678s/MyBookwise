@@ -18,7 +18,9 @@ Performance notes:
 from collections import Counter
 from datetime import timedelta
 import math
+import random
 import re
+import time
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from django.core.cache import cache
@@ -34,6 +36,11 @@ GLOBAL_RANKING_CACHE_KEY = "recommendation_global_ranking"
 SALES_CACHE_TIMEOUT = 3600 * 6
 RECENCY_CACHE_TIMEOUT = 3600
 GLOBAL_RANKING_CACHE_TIMEOUT = 1800
+
+FEED_CACHE_TIMEOUT = 300
+FEED_RANKED_SIZE = 800
+FEED_EXPLORE_SIZE = 600
+FEED_SHUFFLE_HEAD = 36
 
 
 TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[A-Za-z0-9]+")
@@ -336,9 +343,83 @@ def get_default_recommendations(limit: int = 20) -> List[Book]:
     return books[:limit]
 
 
+def _feed_cache_key(customer_id: Optional[int], feed_key: str) -> str:
+    if customer_id:
+        return f"home_feed_user_{customer_id}"
+    return f"home_feed_guest_{feed_key or 'default'}"
+
+
+def invalidate_feed_cache(customer_id: Optional[int] = None, feed_key: Optional[str] = None) -> None:
+    if customer_id is not None:
+        cache.delete(_feed_cache_key(customer_id, ""))
+    if feed_key is not None:
+        cache.delete(_feed_cache_key(None, feed_key))
+
+
+def build_home_feed_isbns(
+    customer_id: Optional[int] = None,
+    *,
+    refresh: bool = False,
+    feed_key: str = "default",
+) -> List[str]:
+    """
+    首页 Feed：个性化/全局排序 + 随机探索，让长尾书也有机会出现。
+    结果缓存在 Django cache，refresh=True 时重算并打乱前几屏。
+    """
+    cache_key = _feed_cache_key(customer_id, feed_key)
+    if refresh:
+        cache.delete(cache_key)
+        if customer_id:
+            cache.delete(f"user_recommendations_{customer_id}")
+        else:
+            cache.delete("default_recommendations")
+
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    engine = RecommendationEngine(customer_id=customer_id)
+    ranked_isbns = [book.isbn for book in engine.get_recommendations(limit=FEED_RANKED_SIZE)]
+    ranked_set = set(ranked_isbns)
+
+    all_isbns = list(Book.objects.filter(stockqty__gt=0).values_list("isbn", flat=True))
+    remainder = [isbn for isbn in all_isbns if isbn not in ranked_set]
+
+    rng = random.Random(int(time.time()) if refresh else (hash(cache_key) % (2**32)))
+    explore_count = min(FEED_EXPLORE_SIZE, len(remainder))
+    explore_isbns = rng.sample(remainder, explore_count) if explore_count else []
+
+    feed: List[str] = []
+    ri, ei = 0, 0
+    while ri < len(ranked_isbns) or ei < len(explore_isbns):
+        for _ in range(3):
+            if ri < len(ranked_isbns):
+                feed.append(ranked_isbns[ri])
+                ri += 1
+        if ei < len(explore_isbns):
+            feed.append(explore_isbns[ei])
+            ei += 1
+
+    seen: Set[str] = set()
+    deduped: List[str] = []
+    for isbn in feed:
+        if isbn not in seen:
+            seen.add(isbn)
+            deduped.append(isbn)
+
+    if refresh and len(deduped) > 12:
+        head = deduped[:FEED_SHUFFLE_HEAD]
+        rng.shuffle(head)
+        deduped = head + deduped[FEED_SHUFFLE_HEAD:]
+
+    cache.set(cache_key, deduped, FEED_CACHE_TIMEOUT)
+    return deduped
+
+
 def invalidate_recommendation_cache(customer_id: Optional[int] = None):
     if customer_id:
         cache.delete(f"user_recommendations_{customer_id}")
+        invalidate_feed_cache(customer_id=customer_id)
         return
 
     cache.delete(SALES_CACHE_KEY)

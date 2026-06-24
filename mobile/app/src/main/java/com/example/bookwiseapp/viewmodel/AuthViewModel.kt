@@ -2,6 +2,7 @@ package com.example.bookwiseapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.bookwiseapp.data.api.ApiClient
 import com.example.bookwiseapp.data.api.model.CustomerData
 import com.example.bookwiseapp.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,5 +73,20 @@ class AuthViewModel : ViewModel() {
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    /** 启动时根据本地 Token 恢复登录；无效则清除。*/
+    suspend fun tryRestoreSession(): Boolean {
+        if (ApiClient.token.isNullOrBlank()) return false
+        val result = repo.me()
+        return if (result.isSuccess) {
+            val customer = result.getOrNull()?.customer
+            _state.value = _state.value.copy(customer = customer, isLoggedIn = true)
+            true
+        } else {
+            repo.clearLocalSession()
+            _state.value = AuthUiState()
+            false
+        }
     }
 }

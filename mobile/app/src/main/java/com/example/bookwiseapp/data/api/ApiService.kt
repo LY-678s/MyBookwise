@@ -21,13 +21,42 @@ interface ApiService {
 
     // ── 图书 ──────────────────────────────────────────────────────
     @GET("books/")
-    suspend fun listBooks(): Response<BooksResponse>
+    suspend fun listBooks(
+        @Query("page") page: Int? = null,
+        @Query("page_size") pageSize: Int? = null,
+        @Query("refresh") refresh: Int? = null
+    ): Response<BooksResponse>
 
     @GET("books/search/")
     suspend fun searchBooks(@Query("q") query: String): Response<SearchResponse>
 
     @GET("books/{isbn}/")
     suspend fun getBook(@Path("isbn") isbn: String): Response<BookDetailResponse>
+
+    @POST("books/{isbn}/favorite/")
+    suspend fun toggleFavorite(
+        @Path("isbn") isbn: String,
+        @Body request: FavoriteToggleRequest
+    ): Response<FavoriteToggleResponse>
+
+    @GET("categories/")
+    suspend fun getCategories(
+        @Query("category") category: String? = null,
+        @Query("sort") sort: String? = null,
+        @Query("page") page: Int? = null
+    ): Response<CategoriesResponse>
+
+    @GET("rankings/")
+    suspend fun getRankings(): Response<RankingsResponse>
+
+    @GET("favorites/folders/")
+    suspend fun getFavoriteFolders(): Response<FavoriteFoldersResponse>
+
+    @POST("favorites/folders/")
+    suspend fun createFavoriteFolder(@Body request: CreateFavoriteFolderRequest): Response<FavoriteFoldersResponse>
+
+    @DELETE("favorites/folders/{id}/")
+    suspend fun deleteFavoriteFolder(@Path("id") folderId: Int): Response<SimpleResponse>
 
     // ── 购物车 ──────────────────────────────────────────────────────
     @GET("cart/")
