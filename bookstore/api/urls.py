@@ -18,6 +18,7 @@ urlpatterns = [
     # 图书（无需登录）
     path("books/", views.BookListView.as_view(), name="book-list"),
     path("books/search/", views.BookSearchView.as_view(), name="book-search"),
+    path("books/search/history/", views.SearchHistoryClearView.as_view(), name="search-history-clear"),
     path("books/<str:isbn>/cover/", views.BookCoverView.as_view(), name="book-cover"),
     path("books/<str:isbn>/favorite/", views.BookFavoriteToggleView.as_view(), name="book-favorite-toggle"),
     path("books/<str:isbn>/", views.BookDetailView.as_view(), name="book-detail"),

@@ -65,6 +65,18 @@ def get_recent_search_keywords(customer_id: int, limit: int = 10) -> list[str]:
     return keywords
 
 
+def clear_search_history(customer_id: int) -> bool:
+    """清除用户全部搜索历史。"""
+    try:
+        SearchHistory.objects.filter(customer_id=customer_id).delete()
+        from .recommendations import invalidate_recommendation_cache
+        invalidate_recommendation_cache(customer_id=customer_id)
+        return True
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception(f"Error clearing search history for customer {customer_id}")
+        return False
+
+
 def get_recent_browsed_isbns(customer_id: int, limit: int = 24) -> list[str]:
     """最近浏览图书 ISBN（去重，保留时间顺序）。"""
     seen: set[str] = set()

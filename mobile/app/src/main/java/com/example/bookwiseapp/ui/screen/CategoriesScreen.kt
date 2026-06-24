@@ -35,7 +35,7 @@ fun CategoriesScreen(
     )
 
     LaunchedEffect(Unit) {
-        viewModel.loadCategories()
+        viewModel.ensureCategoriesLoaded()
     }
 
     Scaffold(

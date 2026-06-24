@@ -99,6 +99,15 @@ data class SearchResponse(
     val success: Boolean,
     val query: String? = null,
     val books: List<BookData>? = null,
+    @SerializedName("recent_searches") val recentSearches: List<String>? = null,
+    val message: String? = null,
+    val error: String? = null
+)
+
+data class SearchHistoryClearResponse(
+    val success: Boolean,
+    val message: String? = null,
+    @SerializedName("recent_searches") val recentSearches: List<String>? = null,
     val error: String? = null
 )
 

@@ -11,8 +11,14 @@ class BookRepository : BaseRepository() {
         successCheck = { it.success }
     )
 
-    suspend fun searchBooks(query: String): Result<SearchResponse> = safeCall(
+    suspend fun searchBooks(query: String = ""): Result<SearchResponse> = safeCall(
         call = { ApiClient.service.searchBooks(query) },
+        errorField = { it.error },
+        successCheck = { it.success }
+    )
+
+    suspend fun clearSearchHistory(): Result<SearchHistoryClearResponse> = safeCall(
+        call = { ApiClient.service.clearSearchHistory() },
         errorField = { it.error },
         successCheck = { it.success }
     )

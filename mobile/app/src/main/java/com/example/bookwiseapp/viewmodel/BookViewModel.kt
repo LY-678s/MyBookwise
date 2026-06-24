@@ -52,6 +52,15 @@ data class RankingsUiState(
     val error: String? = null
 )
 
+data class SearchUiState(
+    val isLoading: Boolean = false,
+    val inputQuery: String = "",
+    val activeQuery: String = "",
+    val books: List<BookData> = emptyList(),
+    val recentSearches: List<String> = emptyList(),
+    val error: String? = null
+)
+
 class BookViewModel : ViewModel() {
 
     private val repo = BookRepository()
@@ -62,8 +71,8 @@ class BookViewModel : ViewModel() {
     private val _homeState = MutableStateFlow(HomeUiState())
     val homeState: StateFlow<HomeUiState> = _homeState
 
-    private val _searchState = MutableStateFlow(HomeUiState())
-    val searchState: StateFlow<HomeUiState> = _searchState
+    private val _searchState = MutableStateFlow(SearchUiState())
+    val searchState: StateFlow<SearchUiState> = _searchState
 
     private val _detailState = MutableStateFlow(BookDetailUiState())
     val detailState: StateFlow<BookDetailUiState> = _detailState
@@ -73,6 +82,12 @@ class BookViewModel : ViewModel() {
 
     private val _rankingsState = MutableStateFlow(RankingsUiState())
     val rankingsState: StateFlow<RankingsUiState> = _rankingsState
+
+    fun ensureHomeFeedLoaded() {
+        val state = _homeState.value
+        if (state.books.isNotEmpty() || state.isLoading || state.isRefreshing) return
+        loadBooks()
+    }
 
     fun loadBooks() {
         viewModelScope.launch {
@@ -140,15 +155,81 @@ class BookViewModel : ViewModel() {
         }
     }
 
-    fun searchBooks(query: String) {
+    fun loadSearchLanding() {
+        val state = _searchState.value
+        if (state.isLoading || state.activeQuery.isNotBlank()) return
         viewModelScope.launch {
-            _searchState.value = _searchState.value.copy(isLoading = true, error = null)
-            val result = repo.searchBooks(query)
+            _searchState.value = state.copy(isLoading = true, error = null)
+            val result = repo.searchBooks("")
             if (result.isSuccess) {
                 val data = result.getOrNull()!!
-                _searchState.value = HomeUiState(books = data.books ?: emptyList())
+                _searchState.value = state.copy(
+                    isLoading = false,
+                    recentSearches = data.recentSearches ?: emptyList()
+                )
             } else {
-                _searchState.value = HomeUiState(error = result.exceptionOrNull()?.message)
+                _searchState.value = state.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.message
+                )
+            }
+        }
+    }
+
+    fun updateSearchInput(query: String) {
+        _searchState.value = _searchState.value.copy(inputQuery = query)
+    }
+
+    fun searchBooks(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            _searchState.value = _searchState.value.copy(
+                isLoading = true,
+                error = null,
+                inputQuery = trimmed,
+                activeQuery = trimmed
+            )
+            val result = repo.searchBooks(trimmed)
+            if (result.isSuccess) {
+                val data = result.getOrNull()!!
+                _searchState.value = SearchUiState(
+                    inputQuery = trimmed,
+                    activeQuery = trimmed,
+                    books = data.books ?: emptyList(),
+                    recentSearches = data.recentSearches ?: emptyList()
+                )
+            } else {
+                _searchState.value = _searchState.value.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.message
+                )
+            }
+        }
+    }
+
+    fun clearSearchInput() {
+        val state = _searchState.value
+        if (state.activeQuery.isNotBlank()) {
+            _searchState.value = SearchUiState(
+                inputQuery = "",
+                recentSearches = state.recentSearches
+            )
+            loadSearchLanding()
+            return
+        }
+        _searchState.value = state.copy(inputQuery = "")
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch {
+            val result = repo.clearSearchHistory()
+            if (result.isSuccess) {
+                _searchState.value = _searchState.value.copy(recentSearches = emptyList())
+            } else {
+                _searchState.value = _searchState.value.copy(
+                    error = result.exceptionOrNull()?.message
+                )
             }
         }
     }
@@ -222,6 +303,12 @@ class BookViewModel : ViewModel() {
                 )
             }
         }
+    }
+
+    fun ensureCategoriesLoaded() {
+        val state = _categoriesState.value
+        if (state.categories.isNotEmpty() || state.isLoading) return
+        loadCategories()
     }
 
     fun loadCategories(category: String? = null, sort: String = "title", page: Int = 1) {
