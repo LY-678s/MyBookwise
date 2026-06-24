@@ -36,20 +36,22 @@
 
     <div style="display: grid; gap: 1.5rem;">
         {% for card in folder_cards %}
-        <div class="card">
-            <div class="card-header" style="display: flex; justify-content: space-between; gap: 1rem; align-items: center;">
-                <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
-                    <span class="material-symbols-outlined" style="font-size: 1.25rem;">
+        <details class="card favorite-folder-card">
+            <summary class="card-header favorite-folder-summary">
+                <span class="favorite-folder-summary-main">
+                    <span class="material-symbols-outlined folder-chevron" aria-hidden="true">chevron_right</span>
+                    <span class="material-symbols-outlined" style="font-size: 1.25rem;" aria-hidden="true">
                         {% if card.folder.is_default %}folder_special{% else %}folder{% endif %}
                     </span>
-                    {{ card.folder.name }}
-                </h3>
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <span>{{ card.folder.name }}</span>
+                </span>
+                <span class="favorite-folder-summary-actions">
                     <span style="color: var(--text-secondary);">{{ card.count }} 本</span>
                     {% if not card.folder.is_default %}
                     <form method="post"
                           action="{% url 'bookstore:favorite_folder_delete' card.folder.id %}"
                           onsubmit="return confirm('确定删除收藏夹「{{ card.folder.name }}」吗？其中的收藏记录也会一起删除。');"
+                          onclick="event.stopPropagation();"
                           style="margin: 0;">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-danger" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">
@@ -57,11 +59,11 @@
                         </button>
                     </form>
                     {% endif %}
-                </div>
-            </div>
+                </span>
+            </summary>
             <div class="card-body">
                 {% if card.books %}
-                <div class="grid grid-3">
+                <div class="grid grid-books">
                     {% for book in card.books %}
                     <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
                         <a href="{% url 'bookstore:book_detail' book.isbn %}" style="display: block; color: inherit; text-decoration: none;">
@@ -98,8 +100,54 @@
                 </div>
                 {% endif %}
             </div>
-        </div>
+        </details>
         {% endfor %}
     </div>
 </div>
+
+<style>
+.favorite-folder-card {
+    overflow: hidden;
+}
+
+.favorite-folder-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.favorite-folder-summary::-webkit-details-marker {
+    display: none;
+}
+
+.favorite-folder-summary-main {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.favorite-folder-summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.folder-chevron {
+    transition: transform 0.2s ease;
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+}
+
+.favorite-folder-card[open] .folder-chevron {
+    transform: rotate(90deg);
+}
+</style>
 {% endblock %}

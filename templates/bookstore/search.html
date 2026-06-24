@@ -34,7 +34,7 @@
         <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
             找到 <strong>{{ books|length }}</strong> 本图书
         </p>
-        <div class="grid grid-3">
+        <div class="grid grid-books">
             {% for book in books %}
             <div class="card book-card animate-fade-in" data-isbn="{{ book.isbn }}">
                 <div style="position: relative; overflow: hidden;">

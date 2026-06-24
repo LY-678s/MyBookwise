@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -551,6 +551,27 @@ def favorite_toggle(request: HttpRequest, isbn: str) -> JsonResponse:
         "favorite_count": favorite_count,
         "folder_id": folder_id,
         "message": message,
+    })
+
+
+@customer_required
+@require_POST
+def favorite_folder_create(request: HttpRequest) -> JsonResponse:
+    customer_id = request.session["customer_id"]
+    _ensure_book_favorite_table()
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return JsonResponse({"success": False, "message": "收藏夹名称不能为空"}, status=400)
+    if len(name) > 60:
+        return JsonResponse({"success": False, "message": "收藏夹名称不能超过60个字符"}, status=400)
+    if FavoriteFolder.objects.filter(customer_id=customer_id, name=name).exists():
+        return JsonResponse({"success": False, "message": "该收藏夹名称已存在"}, status=400)
+
+    folder = FavoriteFolder.objects.create(customer_id=customer_id, name=name, is_default=0)
+    return JsonResponse({
+        "success": True,
+        "message": f"收藏夹「{name}」创建成功",
+        "folder": {"id": folder.id, "name": folder.name},
     })
 
 

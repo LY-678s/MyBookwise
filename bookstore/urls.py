@@ -37,6 +37,7 @@ urlpatterns = [
     path("account/edit/", views.account_edit, name="account_edit"),
     path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
     path("account/favorites/", views.favorite_folders, name="favorite_folders"),
+    path("account/favorites/create/", views.favorite_folder_create, name="favorite_folder_create"),
     path("account/favorites/<int:folder_id>/delete/", views.favorite_folder_delete, name="favorite_folder_delete"),
 
     path("api/books/", api_views.get_books_page, name="api_books"),

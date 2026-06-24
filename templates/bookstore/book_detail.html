@@ -118,6 +118,7 @@
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;">
                         {% if request.session.customer_id %}
                         <select id="favorite-folder-select" class="form-control"
+                                data-create-url="{% url 'bookstore:favorite_folder_create' %}"
                                 {% if is_favorited %}disabled{% endif %}
                                 style="width: 180px; height: 38px; padding: 0.35rem 0.75rem;">
                             {% for folder in favorite_folders %}
@@ -125,6 +126,7 @@
                                 {{ folder.name }}
                             </option>
                             {% endfor %}
+                            <option value="__new__">＋ 新建收藏夹…</option>
                         </select>
                         {% endif %}
                         <button id="favorite-button"
@@ -236,12 +238,68 @@ function setFavoriteButtonState(btn, isFavorited, count) {
     }
 }
 
+const CREATE_FOLDER_VALUE = '__new__';
+
+function rememberFavoriteFolderSelection(select) {
+    if (select.value !== CREATE_FOLDER_VALUE) {
+        select.dataset.lastValue = select.value;
+    }
+}
+
+async function handleFavoriteFolderChange(select) {
+    if (select.value !== CREATE_FOLDER_VALUE) {
+        rememberFavoriteFolderSelection(select);
+        return;
+    }
+
+    const previousValue = select.dataset.lastValue || select.querySelector(`option:not([value="${CREATE_FOLDER_VALUE}"])`).value;
+    const name = window.prompt('请输入新收藏夹名称：');
+    if (!name || !name.trim()) {
+        select.value = previousValue;
+        return;
+    }
+
+    select.disabled = true;
+    try {
+        const body = new URLSearchParams();
+        body.append('name', name.trim());
+        const response = await fetch(select.dataset.createUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            alert(data.message || '创建收藏夹失败，请稍后再试。');
+            select.value = previousValue;
+            return;
+        }
+
+        const option = document.createElement('option');
+        option.value = data.folder.id;
+        option.textContent = data.folder.name;
+        const createOption = select.querySelector(`option[value="${CREATE_FOLDER_VALUE}"]`);
+        select.insertBefore(option, createOption);
+        select.value = data.folder.id;
+        select.dataset.lastValue = data.folder.id;
+    } catch (error) {
+        alert('网络异常，创建收藏夹失败。');
+        select.value = previousValue;
+    } finally {
+        select.disabled = false;
+    }
+}
+
 async function toggleFavorite(btn) {
     btn.disabled = true;
     try {
         const body = new URLSearchParams();
         const folderSelect = document.getElementById('favorite-folder-select');
-        if (folderSelect && btn.dataset.isFavorited !== 'true') {
+        if (folderSelect && btn.dataset.isFavorited !== 'true' && folderSelect.value !== CREATE_FOLDER_VALUE) {
             body.append('folder_id', folderSelect.value);
         }
 
@@ -309,6 +367,14 @@ function toggleDetails(btn) {
 
 // 添加一些动态效果
 document.addEventListener('DOMContentLoaded', function() {
+    const folderSelect = document.getElementById('favorite-folder-select');
+    if (folderSelect) {
+        rememberFavoriteFolderSelection(folderSelect);
+        folderSelect.addEventListener('change', function() {
+            handleFavoriteFolderChange(this);
+        });
+    }
+
     // 为按钮添加悬浮效果
     const buttons = document.querySelectorAll('.btn');
     buttons.forEach(btn => {
