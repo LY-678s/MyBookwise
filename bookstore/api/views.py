@@ -113,6 +113,7 @@ class BookCoverView(APIView):
     permission_classes = []
 
     def get(self, request, isbn):
+        import base64
         import urllib.error
         import urllib.request
         from django.conf import settings as dj_settings
@@ -123,6 +124,13 @@ class BookCoverView(APIView):
         book = get_object_or_404(Book, pk=isbn)
         data = _build_book_data(book)
         external = data.get("cover_image_url")
+        cover_b64 = data.get("coverimage")
+
+        if external and external.startswith("/static/"):
+            rel = external[len("/static/") :]
+            local = dj_settings.BASE_DIR / "static" / rel
+            if local.exists():
+                return FileResponse(local.open("rb"), content_type="image/jpeg")
 
         if external and external.startswith(("http://", "https://")):
             try:
@@ -136,6 +144,14 @@ class BookCoverView(APIView):
                     if body:
                         return HttpResponse(body, content_type=ctype)
             except (urllib.error.URLError, TimeoutError, ValueError):
+                pass
+
+        if cover_b64:
+            try:
+                body = base64.b64decode(cover_b64)
+                if body:
+                    return HttpResponse(body, content_type="image/jpeg")
+            except (ValueError, TypeError):
                 pass
 
         static_path = get_book_cover_image(book.title)
@@ -254,7 +270,6 @@ def _books_payload_for_isbns(page_isbns: list) -> list:
         book_data["keywords"] = book_data["keywords"] or ""
         book_data["location"] = book_data["location"] or ""
         book_data["authors"] = authors_dict.get(isbn, [])
-        book_data["cover_image_url"] = _app_cover_url(isbn)
         books_data.append(book_data)
     return books_data
 

@@ -47,18 +47,20 @@ def _cover_base64(raw) -> str | None:
 
 def serialize_book(book: Book, *, include_authors: bool = False) -> dict:
     """图书 JSON；对应 Web index / book_detail。"""
-    cover_url = _cover_url_for_title(book.title)
+    from bookstore.views import _build_book_data
+
+    built = _build_book_data(book)
     data = {
-        "isbn": book.isbn,
-        "title": book.title,
-        "publisher": book.publisher,
-        "price": str(book.price),
-        "keywords": book.keywords,
-        "stockqty": book.stockqty,
-        "location": book.location,
-        "minstocklimit": book.minstocklimit,
-        "cover_image_url": cover_url,
-        "coverimage": None if cover_url else _cover_base64(book.coverimage),
+        "isbn": built["isbn"],
+        "title": built["title"],
+        "publisher": built["publisher"],
+        "price": str(built["price"]),
+        "keywords": built["keywords"],
+        "stockqty": built["stockqty"],
+        "location": built["location"],
+        "minstocklimit": built["minstocklimit"],
+        "cover_image_url": built.get("cover_image_url"),
+        "coverimage": built.get("coverimage"),
     }
     if include_authors:
         authors = (

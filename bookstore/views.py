@@ -146,9 +146,52 @@ def _default_cover_url() -> str:
     return get_book_cover_image("")
 
 
+def _cover_base64_from_raw(raw) -> str | None:
+    import base64
+    import re
+
+    if not raw:
+        return None
+    try:
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="ignore")
+        if not isinstance(raw, str):
+            return base64.b64encode(raw).decode("utf-8")
+        s = raw.strip()
+        if s.startswith("b'") and s.endswith("'"):
+            s = s[2:-1]
+        elif s.startswith('b"') and s.endswith('"'):
+            s = s[2:-1]
+        if s.startswith(("http://", "https://")):
+            return None
+        if re.fullmatch(r"[A-Za-z0-9+/=\s]+", s) and len(s) > 50:
+            return s.replace("\\n", "").replace("\\r", "")
+        return base64.b64encode(s.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _cover_image_url_from_raw(raw) -> str | None:
+    if not raw:
+        return None
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except Exception:
+            return None
+    if isinstance(raw, str):
+        cover_url = raw.strip()
+        if cover_url.startswith("b'") and cover_url.endswith("'"):
+            cover_url = cover_url[2:-1]
+        elif cover_url.startswith('b"') and cover_url.endswith('"'):
+            cover_url = cover_url[2:-1]
+        if cover_url.startswith(("http://", "https://")):
+            return cover_url
+    return None
+
+
 def _build_book_data(book):
     """构建书籍数据字典，包含封面图片处理"""
-    # 查询该书的作者，按序位排序后用 / 拼接
     authors = Bookauthor.objects.filter(isbn=book).order_by('authororder')
     author_names = ' / '.join([a.authorname for a in authors])
 
@@ -166,27 +209,12 @@ def _build_book_data(book):
         'authors': author_names,
     }
 
-    # 优先使用数据库中的URL封面
     if book.coverimage:
-        cover_url = book.coverimage
-        # 处理 bytes 格式 (b'...') 和字符串格式
-        if isinstance(cover_url, bytes):
-            try:
-                cover_url = cover_url.decode('utf-8')
-            except:
-                cover_url = None
-        elif isinstance(cover_url, str):
-            # 清理 bytes 格式字符串 b'...' 或 b"..."
-            if cover_url.startswith("b'") and cover_url.endswith("'"):
-                cover_url = cover_url[2:-1]
-            elif cover_url.startswith('b"') and cover_url.endswith('"'):
-                cover_url = cover_url[2:-1]
-        
-        # 验证是否为有效的URL
-        if cover_url and (cover_url.startswith('http://') or cover_url.startswith('https://')):
-            book_data['cover_image_url'] = cover_url
-    # 如果没有URL图片，则尝试使用静态图片文件
-    if not book_data['cover_image_url']:
+        book_data['cover_image_url'] = _cover_image_url_from_raw(book.coverimage)
+        if not book_data['cover_image_url']:
+            book_data['coverimage'] = _cover_base64_from_raw(book.coverimage)
+
+    if not book_data['cover_image_url'] and not book_data['coverimage']:
         static_image = get_book_cover_image(book.title)
         if static_image:
             book_data['cover_image_url'] = static_image
@@ -363,40 +391,8 @@ def book_detail(request: HttpRequest, isbn: str) -> HttpResponse:
         from .tracking import record_browse
         record_browse(request.session["customer_id"], isbn)
 
-    book_data = {
-        'isbn': book.isbn,
-        'title': book.title,
-        'publisher': book.publisher,
-        'price': book.price,
-        'keywords': book.keywords,
-        'stockqty': book.stockqty,
-        'location': book.location,
-        'minstocklimit': book.minstocklimit,
-        'description': book.description,
-        'coverimage': None,
-        'cover_image_url': None
-    }
-
-    # 优先使用数据库中的URL封面
-    if book.coverimage:
-        cover_url = book.coverimage
-        if isinstance(cover_url, bytes):
-            try:
-                cover_url = cover_url.decode('utf-8')
-            except:
-                cover_url = None
-        elif isinstance(cover_url, str):
-            import re
-            cover_url = re.sub(r"^b['\"]|['\"]$", "", cover_url)
-            if cover_url.startswith("b'") or cover_url.startswith('b"'):
-                cover_url = cover_url[2:-1]
-        
-        if cover_url and (cover_url.startswith('http://') or cover_url.startswith('https://')):
-            book_data['cover_image_url'] = cover_url
-    if not book_data['cover_image_url']:
-        static_image = get_book_cover_image(book.title)
-        if static_image:
-            book_data['cover_image_url'] = static_image
+    book_data = _build_book_data(book)
+    book_data["description"] = book.description
 
     from django.conf import settings
     from urllib.parse import quote
@@ -624,6 +620,24 @@ def favorite_folders(request: HttpRequest) -> HttpResponse:
         "customer": customer,
         "folder_cards": folder_cards,
         "total_count": total_count,
+    })
+
+
+@customer_required
+def browse_history(request: HttpRequest) -> HttpResponse:
+    customer_id = request.session["customer_id"]
+    from .tracking import get_recent_browsed_isbns
+
+    isbn_list = get_recent_browsed_isbns(customer_id)
+    books = []
+    for isbn in isbn_list:
+        book = Book.objects.filter(pk=isbn).first()
+        if book:
+            books.append(_build_book_data(book))
+
+    return render(request, "bookstore/browse_history.html", {
+        "books": books,
+        "DEFAULT_COVER_IMAGE_URL": _default_cover_url(),
     })
 
 
@@ -995,6 +1009,64 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
 
 
 @customer_required
+def account_home(request: HttpRequest) -> HttpResponse:
+    """我的 — 入口导航"""
+    return render(request, "bookstore/account.html")
+
+
+def _next_level_amount(customer: Customer):
+    level_thresholds = {
+        1: Decimal('1000'),
+        2: Decimal('2000'),
+        3: Decimal('5000'),
+        4: Decimal('10000'),
+        5: None,
+    }
+    next_threshold = level_thresholds.get(customer.levelid.levelid)
+    if next_threshold is None:
+        return None
+    amount = next_threshold - customer.totalspent
+    return amount if amount > 0 else Decimal('0')
+
+
+@customer_required
+def account_profile(request: HttpRequest) -> HttpResponse:
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    return render(request, "bookstore/account_profile.html", {"customer": customer})
+
+
+@customer_required
+def account_wallet(request: HttpRequest) -> HttpResponse:
+    """账户余额、信用与充值"""
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+
+    if request.method == "POST":
+        try:
+            amount = Decimal(request.POST.get("amount", "0"))
+            if amount <= 0:
+                messages.error(request, "充值金额必须大于0")
+            else:
+                with transaction.atomic():
+                    customer = Customer.objects.select_for_update().get(pk=customer.customerid)
+                    customer.balance += amount
+                    customer.save(update_fields=['balance'])
+                messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
+                return redirect("bookstore:account_wallet")
+        except (ValueError, TypeError):
+            messages.error(request, "请输入有效的金额")
+        except Exception as e:
+            messages.error(request, f"充值失败：{e}")
+
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
+    return render(request, "bookstore/account_wallet.html", {
+        "customer": customer,
+        "discount_percent": discount_percent,
+        "next_level_amount": _next_level_amount(customer),
+    })
+
+
+@customer_required
 def account_edit(request: HttpRequest) -> HttpResponse:
     """编辑账户信息"""
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
@@ -1010,26 +1082,26 @@ def account_edit(request: HttpRequest) -> HttpResponse:
         # 验证输入
         if not name or not email:
             messages.error(request, "姓名和邮箱不能为空")
-            return redirect("bookstore:account")
+            return redirect("bookstore:account_profile")
 
         # 检查邮箱是否已被其他用户使用
         if Customer.objects.filter(email=email).exclude(customerid=customer.customerid).exists():
             messages.error(request, "邮箱已被其他用户使用")
-            return redirect("bookstore:account")
+            return redirect("bookstore:account_profile")
 
         # 如果要修改密码
         if new_password:
             if customer.password != current_password:
                 messages.error(request, "当前密码不正确")
-                return redirect("bookstore:account")
+                return redirect("bookstore:account_profile")
 
             if new_password != confirm_password:
                 messages.error(request, "两次输入的新密码不一致")
-                return redirect("bookstore:account")
+                return redirect("bookstore:account_profile")
 
             if len(new_password) < 6:
                 messages.error(request, "新密码长度至少6位")
-                return redirect("bookstore:account")
+                return redirect("bookstore:account_profile")
 
             customer.password = new_password
 
@@ -1043,62 +1115,9 @@ def account_edit(request: HttpRequest) -> HttpResponse:
         request.session["customer_name"] = name
 
         messages.success(request, "账户信息更新成功")
-        return redirect("bookstore:account")
+        return redirect("bookstore:account_profile")
 
-    return redirect("bookstore:account")
-
-
-@customer_required
-def account_recharge(request: HttpRequest) -> HttpResponse:
-    """账户充值"""
-    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    
-    if request.method == "POST":
-        try:
-            amount = Decimal(request.POST.get("amount", "0"))
-            if amount <= 0:
-                messages.error(request, "充值金额必须大于0")
-            else:
-                with transaction.atomic():
-                    customer = Customer.objects.select_for_update().get(pk=customer.customerid)
-                    customer.balance += amount
-                    # 充值不影响UsedCredit，只更新余额
-                    customer.save(update_fields=['balance'])
-                messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
-                return redirect("bookstore:account")
-        except (ValueError, TypeError):
-            messages.error(request, "请输入有效的金额")
-        except Exception as e:
-            messages.error(request, f"充值失败：{e}")
-    
-    # 计算折扣百分比
-    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
-    
-    # 计算距离下一级还需多少
-    current_level = customer.levelid.levelid
-    current_spent = customer.totalspent
-    
-    level_thresholds = {
-        1: Decimal('1000'),    # 1级→2级需要1000
-        2: Decimal('2000'),    # 2级→3级需要2000
-        3: Decimal('5000'),    # 3级→4级需要5000
-        4: Decimal('10000'),   # 4级→5级需要10000
-        5: None,               # 5级是最高级
-    }
-    
-    next_threshold = level_thresholds.get(current_level)
-    if next_threshold:
-        next_level_amount = next_threshold - current_spent
-        if next_level_amount < 0:
-            next_level_amount = Decimal('0')
-    else:
-        next_level_amount = None  # 已是最高级
-    
-    return render(request, "bookstore/account.html", {
-        "customer": customer,
-        "discount_percent": discount_percent,
-        "next_level_amount": next_level_amount,
-    })
+    return redirect("bookstore:account_profile")
 
 
 @customer_required
@@ -1112,12 +1131,12 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
             
             if customer.usedcredit <= 0:
                 messages.info(request, "您当前没有未还款的订单")
-                return redirect("bookstore:account")
+                return redirect("bookstore:account_wallet")
             
             # 检查余额是否足够
             if customer.balance < customer.usedcredit:
                 messages.error(request, f"余额不足！需要¥{customer.usedcredit}，当前余额¥{customer.balance}，请先充值")
-                return redirect("bookstore:account")
+                return redirect("bookstore:account_wallet")
             
             # 1. 获取所有未全额支付的订单
             unpaid_orders = Orders.objects.filter(
@@ -1165,9 +1184,9 @@ def repay_overdraft(request: HttpRequest) -> HttpResponse:
                     f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
                     f"当前余额：¥{customer.balance}")
         
-        return redirect("bookstore:account")
+        return redirect("bookstore:account_wallet")
     
-    return redirect("bookstore:account")
+    return redirect("bookstore:account_wallet")
 
 
 @customer_required

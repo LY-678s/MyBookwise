@@ -1,0 +1,159 @@
+{% extends "bookstore/base.html" %}
+
+{% block title %}账户 - MyBookwise{% endblock %}
+
+{% block content %}
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+</head>
+
+<div class="page-content animate-fade-in">
+    <div class="page-header">
+        <div class="page-header-main">
+            <h1 class="page-title">
+                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">account_balance_wallet</span>
+                账户
+            </h1>
+            <p class="page-subtitle">余额、信用等级与充值</p>
+        </div>
+        <div class="page-header-actions">
+            <a href="{% url 'bookstore:account' %}" class="btn btn-secondary">返回我的</a>
+        </div>
+    </div>
+
+    <div class="stacked" style="display:flex; flex-direction:column; gap:1.5rem;">
+        <div class="card">
+            <div class="card-header">
+                <h3 style="margin:0; color:var(--text-primary);">
+                    <span class="material-symbols-outlined">money_bag</span>
+                    账户余额
+                </h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                    <div style="font-size:2.4rem; font-weight:300; color:{% if customer.balance < 0 %}var(--error){% else %}var(--success){% endif %};">
+                        ¥{{ customer.balance }}
+                    </div>
+                    <div style="color:var(--text-secondary);">
+                        {% if customer.balance < 0 %}欠款金额{% else %}可用余额{% endif %}
+                    </div>
+                    <form method="post" action="{% url 'bookstore:account_wallet' %}" style="margin-top:0.5rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        {% csrf_token %}
+                        <input type="number" name="amount" step="0.01" min="0.01" placeholder="充值金额" class="form-control" style="max-width:220px;">
+                        <button type="submit" class="btn btn-success">充值</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 style="margin:0; color:var(--text-primary);">
+                    <span class="material-symbols-outlined">bar_chart</span>
+                    信用信息
+                </h3>
+            </div>
+            <div class="card-body">
+                <div style="display:grid; gap:0.8rem;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">当前等级</span>
+                        <span style="font-weight:600; color:var(--accent);">{{ customer.levelid.levelid }}级</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">累计消费</span>
+                        <span style="font-weight:600;">¥{{ customer.totalspent }}</span>
+                    </div>
+                    {% if customer.levelid.canusecredit %}
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--text-secondary);">信用额度</span>
+                        <span style="font-weight:600;">
+                            <span style="{% if customer.usedcredit > 0 %}color:var(--warning);{% endif %}">¥{{ customer.usedcredit|floatformat:2 }}</span>
+                            <span style="color:var(--text-secondary);"> / </span>
+                            ¥{{ customer.creditlimit|floatformat:2 }}
+                        </span>
+                    </div>
+                    {% if customer.usedcredit > 0 %}
+                    <div style="padding:1rem; border-radius:8px; background: var(--secondary-bg); border: 1px solid rgba(212,197,185,0.35);">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="background: rgba(244,162,97,0.12); color:#8B5A2B; font-weight:600; padding:0.35rem 0.6rem; border-radius:6px;">待还款</span>
+                            <span style="color:#8B5A2B; font-weight:700;">¥{{ customer.usedcredit }}</span>
+                        </div>
+                        <form method="post" action="{% url 'bookstore:repay_overdraft' %}" style="margin-top:0.5rem;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning" style="width:100%;">全部还款</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div style="color:var(--text-secondary); font-style:italic;">继续购物提升等级，解锁信用支付功能</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 style="margin: 0; color: var(--text-primary);">
+                    <span class="material-symbols-outlined">info</span>
+                    信用等级说明
+                </h3>
+            </div>
+            <div class="card-body">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: var(--secondary-bg);">
+                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">等级</th>
+                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">消费要求</th>
+                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">折扣率</th>
+                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">信用额度</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr {% if customer.levelid.levelid == 1 %}style="background: var(--accent-light);"{% endif %}>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">1级</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">&lt; ¥1000</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">9折</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">不可透支</td>
+                            </tr>
+                            <tr {% if customer.levelid.levelid == 2 %}style="background: var(--accent-light);"{% endif %}>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">2级</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥1000</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8.5折</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">不可透支</td>
+                            </tr>
+                            <tr {% if customer.levelid.levelid == 3 %}style="background: var(--accent-light);"{% endif %}>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">3级</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥2000</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8.5折</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">¥500</td>
+                            </tr>
+                            <tr {% if customer.levelid.levelid == 4 %}style="background: var(--accent-light);"{% endif %}>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">4级</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥5000</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8折</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">¥1000</td>
+                            </tr>
+                            <tr {% if customer.levelid.levelid == 5 %}style="background: var(--accent-light);"{% endif %}>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">5级</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥10000</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">7.5折</td>
+                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">几乎无限</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
+                    <p style="margin: 0; color: var(--text-primary);">
+                        您当前是 <strong>{{ customer.levelid.levelid }}级会员</strong>，
+                        累计消费 <strong>¥{{ customer.totalspent }}</strong>
+                        {% if customer.levelid.levelid < 5 %}
+                            ，距离下一级还需 <strong>¥{{ next_level_amount|default:"计算中..." }}</strong>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

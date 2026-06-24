@@ -65,6 +65,25 @@ def get_recent_search_keywords(customer_id: int, limit: int = 10) -> list[str]:
     return keywords
 
 
+def get_recent_browsed_isbns(customer_id: int, limit: int = 24) -> list[str]:
+    """最近浏览图书 ISBN（去重，保留时间顺序）。"""
+    seen: set[str] = set()
+    isbns: list[str] = []
+    rows = (
+        BrowseHistory.objects.filter(customer_id=customer_id)
+        .order_by("-browse_time")
+        .values_list("isbn_id", flat=True)[:100]
+    )
+    for isbn in rows:
+        if not isbn or isbn in seen:
+            continue
+        seen.add(isbn)
+        isbns.append(isbn)
+        if len(isbns) >= limit:
+            break
+    return isbns
+
+
 def record_browse(customer_id: int, isbn: str) -> bool:
     """
     记录用户浏览图书行为

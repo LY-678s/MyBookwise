@@ -33,12 +33,15 @@ urlpatterns = [
     path("ai/chat/", views.ai_chat_api, name="ai_chat_api"),
     path("ai/clear/", views.ai_chat_clear, name="ai_chat_clear"),
 
-    path("account/", views.account_recharge, name="account"),
+    path("account/", views.account_home, name="account"),
+    path("account/profile/", views.account_profile, name="account_profile"),
+    path("account/wallet/", views.account_wallet, name="account_wallet"),
     path("account/edit/", views.account_edit, name="account_edit"),
     path("account/repay/", views.repay_overdraft, name="repay_overdraft"),
     path("account/favorites/", views.favorite_folders, name="favorite_folders"),
     path("account/favorites/create/", views.favorite_folder_create, name="favorite_folder_create"),
     path("account/favorites/<int:folder_id>/delete/", views.favorite_folder_delete, name="favorite_folder_delete"),
+    path("account/browse-history/", views.browse_history, name="browse_history"),
 
     path("api/books/", api_views.get_books_page, name="api_books"),
 ]

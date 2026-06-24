@@ -196,7 +196,7 @@ class TestLogoutAndDecorators:
 class TestAccountRecharge:
     def test_recharge_success(self, factory, test_customer):
         """等价类（有效）：输入合法的金额执行充值"""
-        from bookstore.views import account_recharge
+        from bookstore.views import account_wallet as account_recharge
         from decimal import Decimal
         request = make_request_with_messages(factory, 'POST', '/account/', {'amount': '100.00'}, session_data={
             'customer_id': test_customer.customerid,
@@ -209,7 +209,7 @@ class TestAccountRecharge:
 
     def test_recharge_invalid_amount(self, factory, test_customer):
         """等价类（无效）：输入的金额包含负数或非法字母"""
-        from bookstore.views import account_recharge
+        from bookstore.views import account_wallet as account_recharge
         from decimal import Decimal
         # 场景1：输入金额为负数
         req_negative = make_request_with_messages(factory, 'POST', '/account/', {'amount': '-50'}, session_data={
