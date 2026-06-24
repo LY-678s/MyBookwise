@@ -28,7 +28,10 @@ interface ApiService {
     ): Response<BooksResponse>
 
     @GET("books/search/")
-    suspend fun searchBooks(@Query("q") query: String): Response<SearchResponse>
+    suspend fun searchBooks(@Query("q") query: String = ""): Response<SearchResponse>
+
+    @DELETE("books/search/history/")
+    suspend fun clearSearchHistory(): Response<SearchHistoryClearResponse>
 
     @GET("books/{isbn}/")
     suspend fun getBook(@Path("isbn") isbn: String): Response<BookDetailResponse>

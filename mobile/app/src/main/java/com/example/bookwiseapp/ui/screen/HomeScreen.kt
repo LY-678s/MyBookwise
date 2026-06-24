@@ -46,7 +46,7 @@ fun HomeScreen(
         viewModel.refreshBooks()
     }
 
-    LaunchedEffect(Unit) { viewModel.loadBooks() }
+    LaunchedEffect(Unit) { viewModel.ensureHomeFeedLoaded() }
 
     LaunchedEffect(gridState, state.books.size, state.hasMore) {
         snapshotFlow {

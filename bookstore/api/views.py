@@ -342,12 +342,26 @@ class BookListView(APIView):
 class BookSearchView(APIView):
     """GET /api/books/search/?q=  ←→  views.search"""
 
-    authentication_classes = []
+    authentication_classes = [CustomerTokenAuthentication]
     permission_classes = []
 
     def get(self, request):
-        query = request.query_params.get("q", "")
+        query = request.query_params.get("q", "").strip()
+        customer = request.user if isinstance(request.user, Customer) else None
+
+        if not query:
+            recent_searches = []
+            if customer:
+                from bookstore.tracking import get_recent_search_keywords
+
+                recent_searches = get_recent_search_keywords(customer.customerid)
+            return _ok({"query": "", "books": [], "recent_searches": recent_searches})
+
         books = services.search_books(query)
+        if customer:
+            from bookstore.tracking import record_search
+
+            record_search(customer.customerid, query)
         books_data = []
         for book in books:
             item = serialize_book(book)
@@ -357,8 +371,22 @@ class BookSearchView(APIView):
             {
                 "query": query,
                 "books": books_data,
+                "recent_searches": [],
             }
         )
+
+
+class SearchHistoryClearView(APIView):
+    """DELETE /api/books/search/history/  — 清除最近搜索"""
+
+    permission_classes = [IsCustomer]
+
+    def delete(self, request):
+        customer = _customer_view(request)
+        from bookstore.tracking import clear_search_history
+
+        clear_search_history(customer.customerid)
+        return _ok({"message": "已清除搜索历史", "recent_searches": []})
 
 
 class BookDetailView(APIView):
