@@ -47,10 +47,9 @@ class Bookauthor(models.Model):
 
 
 class Creditlevel(models.Model):
+    """会员等级（积分制，已移除信用额度）。"""
     levelid = models.IntegerField(db_column='LevelID', primary_key=True)  # Field name made lowercase.
     discountrate = models.DecimalField(db_column='DiscountRate', max_digits=3, decimal_places=2)  # Field name made lowercase.
-    canusecredit = models.IntegerField(db_column='CanUseCredit')  # 是否可使用信用支付
-    creditlimit = models.DecimalField(db_column='CreditLimit', max_digits=10, decimal_places=2)  # 信用额度上限
 
     class Meta:
         managed = False
@@ -70,8 +69,6 @@ class Customer(models.Model):
     address = models.CharField(db_column='Address', max_length=200, blank=True, null=True)  # Field name made lowercase.
     email = models.CharField(db_column='Email', unique=True, max_length=100, blank=True, null=True)  # Field name made lowercase.
     levelid = models.ForeignKey(Creditlevel, models.DO_NOTHING, db_column='LevelID')  # Field name made lowercase.
-    creditlimit = models.DecimalField(db_column='CreditLimit', max_digits=10, decimal_places=2)  # 信用额度上限
-    usedcredit = models.DecimalField(db_column='UsedCredit', max_digits=10, decimal_places=2, default=0)  # 已使用信用额度
     registerdate = models.DateTimeField(db_column='RegisterDate')  # Field name made lowercase.
 
     class Meta:

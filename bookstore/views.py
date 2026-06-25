@@ -79,8 +79,6 @@ def customer_register(request: HttpRequest) -> HttpResponse:
                 email=email,
                 address=address,
                 levelid_id=0,
-                creditlimit=Decimal('0.00'),
-                usedcredit=Decimal('0.00'),
                 registerdate=timezone.now()
             )
 
@@ -1032,7 +1030,7 @@ def account_profile(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def account_wallet(request: HttpRequest) -> HttpResponse:
-    """会员与积分：免费开通会员、畅读卡、积分与信用额度。"""
+    """会员与积分：免费开通会员、畅读卡、积分。"""
     from bookstore.membership import get_profile, get_member_level_guide, serialize_membership
     from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, is_stripe_configured
 
@@ -1175,8 +1173,8 @@ def account_edit(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def repay_overdraft(request: HttpRequest) -> HttpResponse:
-    """信用购书模式下无需余额还款。"""
-    messages.info(request, "当前使用信用额度购书，无需余额还款。")
+    """当前不支持信用还款（已移除信用额度）。"""
+    messages.info(request, "当前不支持信用还款。")
     return redirect("bookstore:account_wallet")
 
 

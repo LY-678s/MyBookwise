@@ -1,10 +1,10 @@
 """
-支付与信用模块信号处理
+支付与订单模块信号处理
 
-本模块包含订单支付、退款、信用等级管理的核心业务逻辑：
+本模块包含订单支付、退款、会员等级管理的核心业务逻辑：
 - 缺货记录自动生成采购单
-- 信用等级计算
-- 支付处理
+- 会员等级计算（积分制）
+- Stripe 支付处理
 - 订单状态变更处理
 """
 # pylint: disable=no-name-in-module, import-error
@@ -25,7 +25,6 @@ from .models import (
     Procurementdetail,
     Orders,
     Customer,
-    Creditlevel,
 )
 
 
@@ -36,31 +35,6 @@ from .models import (
 # pylint: disable=no-member
 # pylint 无法识别 Django ORM 动态注入的 objects 管理器和 DoesNotExist 异常类，
 # 以下所有 .objects / .DoesNotExist 调用均通过 Django ORM 验证，添加此全局禁用。
-
-def _calculate_credit_level(totalspent):
-    """兼容旧调用：会员等级改由积分决定，见 membership.calculate_member_level。"""
-    from bookstore.membership import calculate_member_level
-    return calculate_member_level(int(totalspent or 0))
-
-
-def _determine_payment_plan(amount, usedcredit, creditlimit, canusecredit):
-    """信用购书（已移除余额支付）。"""
-    if not canusecredit:
-        return None
-    available_credit = creditlimit - usedcredit
-    if amount > available_credit:
-        return None
-    return {
-        "method": "credit",
-        "credit_deduct": amount,
-        "actual_paid": Decimal("0"),
-        "payment_status": 2,
-        "new_usedcredit": usedcredit + amount,
-        "message": (
-            f"信用购书成功！使用信用额度 ¥{amount}，"
-            f"剩余可用 ¥{creditlimit - usedcredit - amount}"
-        ),
-    }
 
 
 def complete_order_payment(order, customer) -> str:
@@ -108,7 +82,7 @@ def _handle_order_completion(_instance):  # pragma: no cover
 
 def _handle_order_cancel_refund(instance, customer, _old_level):
     """订单取消：已支付订单扣回积分（会员）。"""
-    if instance.paymentstatus in (1, 2) and (instance.actualpaid or Decimal("0")) > 0:
+    if instance.paymentstatus in (1,) and (instance.actualpaid or Decimal("0")) > 0:
         from bookstore.membership import get_profile, is_member, sync_member_level
 
         if is_member(customer.customerid):
@@ -118,12 +92,7 @@ def _handle_order_cancel_refund(instance, customer, _old_level):
                 profile.points = max(0, profile.points - deduct)
                 profile.save(update_fields=["points", "updated_at"])
             sync_member_level(customer, profile.points)
-            customer.save(update_fields=["levelid", "creditlimit"])
-
-    if instance.paymentstatus == 2:
-        credit_used = instance.totalamount - instance.actualpaid
-        customer.usedcredit = max(customer.usedcredit - credit_used, Decimal("0"))
-        customer.save(update_fields=["usedcredit"])
+            customer.save(update_fields=["levelid"])
 
     instance.paymentstatus = 3
 

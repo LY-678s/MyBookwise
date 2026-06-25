@@ -142,10 +142,10 @@ def build_bookstore_system_prompt(user_message: str | None = None) -> str:
         else:
             catalog_section = "【当前书店部分图书清单】\n（当前暂无图书数据）"
 
-    # 读取真实的会员等级规则（从数据库动态获取折扣率和信用额度）
+    # 读取真实的会员等级规则（从数据库动态获取折扣率）
     levels = Creditlevel.objects.all().order_by("levelid")
     level_rules = "\n".join([
-        f"  - {'非会员' if l.levelid == 0 else str(l.levelid)+'级'}：折扣率{l.discountrate*100:.0f}%，信用额度¥{l.creditlimit}，{'可使用信用支付' if l.canusecredit else '不可使用信用支付'}"
+        f"  - {'非会员' if l.levelid == 0 else str(l.levelid)+'级'}：折扣率{l.discountrate*100:.0f}%"
         for l in levels
     ])
 
@@ -161,17 +161,17 @@ def build_bookstore_system_prompt(user_message: str | None = None) -> str:
 
         "【会员体系】\n"
         "会员免费开通，开通后才能获得积分。积分与人民币 1:1（每消费 1 元获得 1 积分）。\n"
-        "未开通会员的用户为「非会员」，无折扣、不可使用信用支付、不累计积分。\n\n"
+        "未开通会员的用户为「非会员」，无折扣、不累计积分。\n\n"
 
         "【会员等级规则】\n"
         "会员等级由累计积分决定，达到最高档（5级）后积分显示为「max」：\n"
-        "  - 非会员（0级）：无折扣，不可信用支付\n"
+        "  - 非会员（0级）：无折扣\n"
         "  - 积分 0~999 → 1级\n"
         "  - 积分 ≥ 1000 → 2级\n"
         "  - 积分 ≥ 2000 → 3级\n"
         "  - 积分 ≥ 5000 → 4级\n"
         "  - 积分 ≥ 10000 → 5级（最高档，积分显示 max）\n\n"
-        "各等级具体权益（从数据库实时读取）：\n"
+        "各等级具体折扣（从数据库实时读取）：\n"
         f"{level_rules}\n\n"
 
         "【畅读卡】\n"
@@ -181,12 +181,11 @@ def build_bookstore_system_prompt(user_message: str | None = None) -> str:
 
         "【支付方式】\n"
         "购书使用在线支付（Stripe Checkout，支持银行卡等）。\n"
-        "会员等级 1-5 均可使用信用支付（先买后还），信用额度随等级提升。\n"
         "支付成功后，消费金额按 1:1 累计为会员积分。\n\n"
 
         "【订单状态】\n"
         "  - 待付款（0）→ 已付款/待发货（1）→ 已完成（2）\n"
-        "  - 任何状态 → 已取消（4），取消后信用额度会退回\n\n"
+        "  - 任何状态 → 已取消（4），取消后已付金额退回\n\n"
 
         "【缺货与采购】\n"
         "当图书库存低于最低库存限制（MinStockLimit）时，系统会自动生成缺货记录，\n"

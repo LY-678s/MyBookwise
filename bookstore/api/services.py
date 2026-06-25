@@ -410,8 +410,6 @@ def register_customer(data: dict) -> tuple[bool, dict]:
         email=email,
         address=address,
         levelid_id=0,
-        creditlimit=Decimal("0.00"),
-        usedcredit=Decimal("0.00"),
         registerdate=timezone.now(),
     )
     return True, {"customer": customer, "message": f"注册成功！欢迎加入，{customer.name}"}
@@ -457,7 +455,8 @@ def update_account(customer: Customer, data: dict) -> tuple[bool, dict]:
 
 
 def repay_all_overdraft(customer: Customer) -> tuple[bool, dict]:
-    return False, {"error": "当前不支持余额还款，取消未发货订单可释放信用额度。"}
+    """已移除信用额度，不支持信用还款。"""
+    return False, {"error": "当前不支持信用还款。"}
 
 
 def search_books(query: str):

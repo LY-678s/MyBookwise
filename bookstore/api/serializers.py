@@ -82,7 +82,6 @@ def serialize_customer(customer: Customer, *, include_private: bool = True) -> d
     from bookstore.membership import get_display_member_level, get_purchase_discount_rate, is_member
 
     level = customer.levelid
-    available_credit = customer.creditlimit - customer.usedcredit
     member = is_member(customer.customerid)
     rate = get_purchase_discount_rate(customer.customerid)
     discount_percent = (Decimal("1") - rate) * 100
@@ -94,13 +93,9 @@ def serialize_customer(customer: Customer, *, include_private: bool = True) -> d
         "name": customer.name,
         "email": customer.email,
         "address": customer.address,
-        "usedcredit": str(customer.usedcredit),
-        "creditlimit": str(customer.creditlimit),
-        "available_credit": str(available_credit),
         "levelid": display_level,
         "discount_rate": str(rate),
         "discount_percent": str(discount_percent.quantize(Decimal("0.01"))),
-        "can_use_credit": bool(level.canusecredit) if member else False,
         "registerdate": customer.registerdate.isoformat() if customer.registerdate else None,
     }
     if not include_private:
@@ -133,9 +128,7 @@ def serialize_order_detail_line(detail: Orderdetail, discount_rate: Decimal) -> 
 
 
 def _normalize_payment_status(paymentstatus: int) -> int:
-    """对外仅 0=未付、1=已付、3=已退款；2 为历史信用购书遗留。"""
-    if paymentstatus == 2:
-        return 1
+    """对外仅 0=未付、1=已付、3=已退款。"""
     return paymentstatus
 
 
