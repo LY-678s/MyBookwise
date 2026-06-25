@@ -1,18 +1,21 @@
 """
-AI 聊天服务：支持 Google Gemini 与 DeepSeek。
+AI 聊天服务：支持 Google Gemini 与 DeepSeek（含硅基流动等 OpenAI 兼容 API）。
 
 settings.py 中通过 AI_PROVIDER 选择：
   - "gemini"   → GEMINI_API_KEY（Google AI Studio）
-  - "deepseek" → DEEPSEEK_API_KEY（https://platform.deepseek.com/）
+  - "deepseek" → DEEPSEEK_API_KEY + DEEPSEEK_API_BASE（官方或硅基流动等）
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
+import ssl
 import urllib.error
 import urllib.request
 from typing import Any
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db.models import Q
@@ -97,7 +100,8 @@ def _get_deepseek_api_key() -> str:
     key = (key or "").strip()
     if not key:
         raise AIServiceError(
-            "尚未配置 DEEPSEEK_API_KEY。申请地址：https://platform.deepseek.com/"
+            "尚未配置 DEEPSEEK_API_KEY。"
+            "硅基流动：https://cloud.siliconflow.cn/ ；官方：https://platform.deepseek.com/"
         )
     return key
 
@@ -243,6 +247,74 @@ def _parse_http_error(exc: urllib.error.HTTPError) -> str:
         return body or str(exc)
 
 
+def _parse_api_error_body(status: int, text: str) -> str:
+    try:
+        err_json = json.loads(text)
+        err = err_json.get("error")
+        if isinstance(err, dict):
+            return err.get("message", text)
+        if isinstance(err, str):
+            return err
+    except json.JSONDecodeError:
+        pass
+    return text or f"HTTP {status}"
+
+
+def _post_json_https(
+    url: str,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    *,
+    timeout: int,
+    service_name: str = "DeepSeek",
+) -> dict[str, Any]:
+    """POST JSON over HTTPS。
+
+    Windows 上 urllib 访问部分 CDN（如硅基流动）会触发 SSL EOF，
+    改用 http.client 可正常通信。
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise AIServiceError(f"{service_name} 接口 URL 无效：{url}")
+
+    body = json.dumps(payload).encode("utf-8")
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+
+    req_headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "MyBookwise/1.0",
+        **headers,
+    }
+    conn = http.client.HTTPSConnection(
+        parsed.hostname,
+        parsed.port or 443,
+        context=ssl.create_default_context(),
+        timeout=timeout,
+    )
+    try:
+        conn.request("POST", path, body=body, headers=req_headers)
+        resp = conn.getresponse()
+        raw = resp.read()
+        text = raw.decode("utf-8", errors="replace")
+        if resp.status >= 400:
+            message = _parse_api_error_body(resp.status, text)
+            raise AIServiceError(f"{service_name} 服务返回错误（{resp.status}）：{message}")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise AIServiceError(f"{service_name} 返回了无效的 JSON。") from exc
+    except AIServiceError:
+        raise
+    except TimeoutError as exc:
+        raise AIServiceError(f"{service_name} 响应超时，请稍后再试。") from exc
+    except OSError as exc:
+        raise AIServiceError(f"无法连接 {service_name}：{exc}") from exc
+    finally:
+        conn.close()
+
+
 def _gemini_auth_hint(key: str) -> str:
     if key.startswith("AQ."):
         return (
@@ -364,26 +436,18 @@ def _chat_with_deepseek(history: list[dict[str, str]], user_message: str) -> str
         "stream": False,
     }
     url = f"{api_base}/chat/completions"
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        message = _parse_http_error(exc)
-        raise AIServiceError(f"DeepSeek 服务返回错误（{exc.code}）：{message}") from exc
-    except urllib.error.URLError as exc:
-        raise AIServiceError(f"无法连接 DeepSeek：{exc.reason}") from exc
-    except TimeoutError as exc:
-        raise AIServiceError("DeepSeek 响应超时，请稍后再试。") from exc
+        data = _post_json_https(
+            url,
+            payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=timeout,
+        )
+    except AIServiceError:
+        raise
+    except Exception as exc:
+        raise AIServiceError(f"DeepSeek 调用失败：{exc}") from exc
 
     reply = data["choices"][0]["message"]["content"].strip()
     if not reply:

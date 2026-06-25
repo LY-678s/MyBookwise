@@ -143,8 +143,10 @@ COVER_IMAGE_MAPPINGS = {
 
 AI_PROVIDER = "deepseek"
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"
+# 硅基流动 OpenAI 兼容接口（有免费额度；密钥：https://cloud.siliconflow.cn）
+DEEPSEEK_MODEL = "deepseek-ai/DeepSeek-V3"
 DEEPSEEK_API_BASE = "https://api.siliconflow.cn/v1"
+# 官方 DeepSeek（付费）：DEEPSEEK_MODEL = "deepseek-chat"  DEEPSEEK_API_BASE = "https://api.deepseek.com"
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
