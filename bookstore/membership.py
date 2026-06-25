@@ -194,6 +194,13 @@ def serialize_membership(customer_id: int) -> dict:
     nxt = next_level_points(profile.points) if member else None
     effective = get_effective_discount_rate(customer_id) if member else None
     display_level = get_display_member_level(customer_id)
+    level_discount_percent = None
+    if member:
+        customer = Customer.objects.select_related("levelid").get(pk=customer_id)
+        level_rate = customer.levelid.discountrate
+        level_discount_percent = str(
+            ((Decimal("1") - level_rate) * 100).quantize(Decimal("0.01"))
+        )
     return {
         "points": profile.points,
         "is_member": member,
@@ -206,6 +213,7 @@ def serialize_membership(customer_id: int) -> dict:
             else None
         ),
         "next_level_points": str(nxt) if nxt is not None else None,
+        "level_discount_percent": level_discount_percent,
         "effective_discount_rate": str(effective) if effective is not None else None,
         "effective_discount_percent": str(
             ((Decimal("1") - effective) * 100).quantize(Decimal("0.01"))

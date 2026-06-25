@@ -15,7 +15,9 @@ Android 模拟器常用 [http://10.0.2.2:8000](http://10.0.2.2:8000)
 
 ## 数据库
 
-数据文件：`SetDatabase/bookstoredb.sql`（完整库结构 + 英文图书 + 演示顾客/订单等初始数据）。
+**唯一数据文件**：`SetDatabase/bookstoredb.sql`
+
+已包含完整库结构、演示数据，以及会员体系 / Stripe 支付表 / 库存触发器修复等全部变更，**无需再执行其他 SQL**。
 
 ### 首次导入
 
@@ -23,18 +25,25 @@ Android 模拟器常用 [http://10.0.2.2:8000](http://10.0.2.2:8000)
 # 1. 创建数据库（MySQL 中执行一次即可）
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS bookstoredb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-# 2. 导入（在项目根目录执行；PowerShell 请用 cmd 重定向，不要用 <）
+# 2. 导入（在项目根目录；PowerShell 不要用 <，任选其一）
+
+# 方式 A：cmd 重定向
 cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
+
+# 方式 B：PowerShell 管道
+Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
 ```
 
 `settings.py` 中 `DATABASES` 的库名、用户名、密码需与上面一致。
 
 ### 重置数据库（测试后恢复初始状态）
 
-测试过程中若产生大量订单、积分变动等，可用同一 SQL **整库覆盖**恢复：
+测试过程中若产生大量订单、积分变动等，用同一 SQL **整库覆盖**即可：
 
 ```powershell
 cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
+# 或
+Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
 ```
 
 > 会清空并重建 `bookstoredb` 内所有表和数据，图书、顾客、订单等均回到 SQL 文件中的初始状态。

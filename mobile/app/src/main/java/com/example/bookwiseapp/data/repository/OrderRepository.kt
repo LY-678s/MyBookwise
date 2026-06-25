@@ -56,6 +56,12 @@ class OrderRepository : BaseRepository() {
         successCheck = { it.success }
     )
 
+    suspend fun syncOrderPayment(orderId: Int): Result<PaymentConfirmResponse> = safeCall(
+        call = { ApiClient.service.syncOrderPayment(orderId) },
+        errorField = { it.error },
+        successCheck = { it.success }
+    )
+
     suspend fun cancelOrder(orderId: Int): Result<OrderResponse> = safeCall(
         call = { ApiClient.service.cancelOrder(orderId) },
         errorField = { it.error },

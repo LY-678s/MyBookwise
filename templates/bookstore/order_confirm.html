@@ -33,7 +33,11 @@
                         {% if is_member %}{{ membership.member_level }}级{% else %}未开通{% endif %}
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                        {% if is_member %}{{ discount_percent|floatformat:0 }}% 优惠{% else %}无会员折扣{% endif %}
+                        {% if is_member %}
+                            等级优惠 {{ membership.level_discount_percent }}%
+                        {% else %}
+                            无会员折扣
+                        {% endif %}
                     </div>
                 </div>
 
@@ -49,6 +53,21 @@
                     </div>
                 </div>
 
+                <div style="text-align: center;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">畅读卡</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">
+                        {% if is_member and membership.has_reading_pass %}已开通{% elif is_member %}未开通{% else %}—{% endif %}
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        {% if is_member and membership.has_reading_pass %}
+                            购书享 7.2 折（乘算）
+                        {% elif is_member %}
+                            开通后 7.2 折（乘算）
+                        {% else %}
+                            需先开通会员
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -225,8 +244,10 @@
                 </div>
             {% else %}
                 <p style="margin: 0; color: var(--success);">
-                    已开通会员 · {{ membership.member_level }} 级 · 当前 {{ discount_percent|floatformat:1 }}% 优惠
-                    {% if membership.has_reading_pass %}（含畅读卡乘算）{% endif %}
+                    已开通会员 · {{ membership.member_level }} 级 · 等级优惠 {{ membership.level_discount_percent }}%
+                    {% if membership.has_reading_pass %}
+                        · 畅读卡 7.2 折乘算，合计 {{ membership.effective_discount_percent }}% 优惠
+                    {% endif %}
                 </p>
             {% endif %}
 

@@ -6,11 +6,15 @@
 <div class="page-content animate-fade-in">
     <div class="page-header">
         <div class="page-header-main">
-            <h1 class="page-title">会员与积分</h1>
+            <h1 class="page-title page-title-with-info">
+                会员与积分
+                <button type="button" class="info-icon-btn" onclick="openModal('level-guide-modal')" aria-label="会员等级说明" title="会员等级说明">
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                </button>
+            </h1>
             <p class="page-subtitle">开通会员后累计积分，畅读卡享额外折扣</p>
         </div>
         <div class="page-header-actions">
-            <button type="button" class="btn btn-secondary" onclick="openModal('level-guide-modal')">详情</button>
             <a href="{% url 'bookstore:account' %}" class="btn btn-secondary">返回我的</a>
         </div>
     </div>
@@ -69,15 +73,15 @@
     </div>
 </div>
 
-<div id="level-guide-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-content">
+<div id="level-guide-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="level-guide-title">
+    <div class="modal-content modal-content-sm">
         <div class="modal-header">
-            <h3 style="margin:0;">会员等级说明</h3>
-            <button type="button" class="modal-close" onclick="closeModal('level-guide-modal')">&times;</button>
+            <h3 id="level-guide-title" style="margin:0;">会员等级说明</h3>
+            <button type="button" class="modal-close" onclick="closeModal('level-guide-modal')" aria-label="关闭">&times;</button>
         </div>
         <div class="modal-body">
-            <p style="color:var(--text-secondary); margin:0 0 1rem;">开通会员后从 1 级起步；积分按消费 1:1 累计，达到阈值自动升级。</p>
-            <table class="data-table" style="width:100%;">
+            <p class="modal-intro">开通会员后从 1 级起步；积分按消费 1:1 累计，达到阈值自动升级。</p>
+            <table class="data-table level-guide-table">
                 <thead>
                     <tr>
                         <th>等级</th>
@@ -95,17 +99,148 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <p style="color:var(--text-secondary); margin:1rem 0 0; font-size:0.9rem;">畅读卡（¥{{ reading_pass_price|floatformat:0 }}/月）在等级折扣基础上再乘 7.2 折。</p>
+            <p class="modal-footnote">畅读卡（¥{{ reading_pass_price|floatformat:0 }}/月）在等级折扣基础上再乘 7.2 折。</p>
         </div>
     </div>
 </div>
 
 <script>
 function openModal(modalId) {
-    document.getElementById(modalId).style.display = 'flex';
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
 }
 function closeModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
 }
+document.addEventListener('click', function(event) {
+    if (event.target.classList.contains('modal-overlay')) {
+        event.target.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+});
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay').forEach(function(modal) {
+            if (modal.style.display === 'flex') {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+    }
+});
 </script>
+
+<style>
+.page-title-with-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.info-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.info-icon-btn .material-symbols-outlined {
+    font-size: 1.1rem;
+}
+.info-icon-btn:hover {
+    background: var(--accent-light);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+.modal-content-sm {
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px var(--shadow);
+    max-width: 400px;
+    width: 100%;
+    max-height: min(85vh, 520px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.35rem;
+    line-height: 1;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+}
+.modal-close:hover {
+    color: var(--text-primary);
+    background: var(--secondary-bg);
+}
+.modal-body {
+    padding: 1rem 1.25rem 1.25rem;
+    overflow-y: auto;
+}
+.modal-intro,
+.modal-footnote {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.5;
+}
+.modal-footnote {
+    margin-top: 0.875rem;
+}
+.level-guide-table {
+    width: 100%;
+    margin-top: 0.875rem;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.level-guide-table th,
+.level-guide-table td {
+    padding: 0.5rem 0.625rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+.level-guide-table th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    background: var(--secondary-bg);
+}
+.level-guide-table tbody tr:last-child td {
+    border-bottom: none;
+}
+</style>
 {% endblock %}

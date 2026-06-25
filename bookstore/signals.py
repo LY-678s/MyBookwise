@@ -39,12 +39,19 @@ from .models import (
 
 def complete_order_payment(order, customer) -> str:
     """Stripe 支付成功后标记订单已付；仅会员累计积分。"""
+    from bookstore.inventory import deduct_order_stock
     from bookstore.membership import award_order_points, is_member
 
+    order.refresh_from_db()
     amount = order.totalamount or Decimal("0")
-    order.actualpaid = amount
-    order.paymentstatus = 1
-    order.save(update_fields=["actualpaid", "paymentstatus"])
+    if amount <= 0:
+        amount = order.actualpaid or Decimal("0")
+    with transaction.atomic():
+        if order.paymentstatus != 1:
+            deduct_order_stock(order)
+        order.actualpaid = amount
+        order.paymentstatus = 1
+        order.save(update_fields=["actualpaid", "paymentstatus"])
 
     if is_member(customer.customerid):
         award_order_points(customer.customerid, amount)

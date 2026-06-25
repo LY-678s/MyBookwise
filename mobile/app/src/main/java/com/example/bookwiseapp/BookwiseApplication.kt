@@ -7,6 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.example.bookwiseapp.data.local.TokenStore
+import com.example.bookwiseapp.data.local.PendingPaymentStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -17,6 +18,7 @@ class BookwiseApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         TokenStore.init(this)
+        PendingPaymentStore.init(this)
         runBlocking(Dispatchers.IO) {
             TokenStore.instance.loadToken()
         }

@@ -93,6 +93,9 @@ interface ApiService {
     @POST("orders/{id}/abandon/")
     suspend fun abandonOrder(@Path("id") orderId: Int): Response<SimpleResponse>
 
+    @POST("orders/{id}/sync-payment/")
+    suspend fun syncOrderPayment(@Path("id") orderId: Int): Response<PaymentConfirmResponse>
+
     @POST("orders/{id}/cancel/")
     suspend fun cancelOrder(@Path("id") orderId: Int): Response<OrderResponse>
 

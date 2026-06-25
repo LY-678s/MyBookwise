@@ -254,6 +254,7 @@ data class OrderResponse(
     val message: String? = null,
     val order: OrderData? = null,
     @SerializedName("checkout_url") val checkoutUrl: String? = null,
+    @SerializedName("session_id") val sessionId: String? = null,
     val error: String? = null
 )
 
@@ -285,6 +286,7 @@ data class PaymentConfirmResponse(
     val success: Boolean,
     val message: String? = null,
     val account: CustomerData? = null,
+    val order: OrderData? = null,
     @SerializedName("order_id") val orderId: Int? = null,
     val error: String? = null
 )

@@ -146,6 +146,15 @@ class AccountViewModel : ViewModel() {
         }
     }
 
+    fun applyAccount(account: CustomerData, message: String? = null) {
+        _state.value = _state.value.copy(
+            account = account,
+            message = message,
+            isLoading = false,
+            error = null
+        )
+    }
+
     fun clearMessage() {
         _state.value = _state.value.copy(message = null, error = null)
     }

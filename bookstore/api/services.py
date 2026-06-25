@@ -59,6 +59,7 @@ def remove_from_cart(customer_id: int, isbn: str) -> dict:
 
 def build_cart_payload(customer_id: int) -> dict:
     """对应 views.cart_detail 的计算逻辑。"""
+    from bookstore.api.serializers import serialize_account_summary
     from bookstore.membership import get_purchase_discount_rate
 
     customer = Customer.objects.select_related("levelid").get(pk=customer_id)
@@ -91,7 +92,7 @@ def build_cart_payload(customer_id: int) -> dict:
         "discount_amount": str(original_total - discounted_total),
         "discount_rate": str(discount_rate),
         "discount_percent": str(discount_percent.quantize(Decimal("0.01"))),
-        "customer": serialize_customer(customer),
+        "customer": serialize_account_summary(customer),
     }
 
 
@@ -143,6 +144,10 @@ def _create_pending_order_from_cart(
     cart = get_cart(customer.customerid)
     if not cart:
         raise ValueError("购物车为空")
+
+    from bookstore.inventory import validate_cart_stock
+
+    validate_cart_stock(cart)
 
     customer = Customer.objects.select_for_update().select_related("levelid").get(pk=customer.customerid)
     now = timezone.now()
@@ -257,7 +262,7 @@ def create_order(
 
     try:
         customer_ref = Customer.objects.select_related("levelid").get(pk=customer.customerid)
-        checkout_url, _ = create_order_checkout(customer_ref, order, pay_success, pay_cancel)
+        checkout_url, session_id = create_order_checkout(customer_ref, order, pay_success, pay_cancel)
     except StripeServiceError as exc:
         order.status = 4
         order.save(update_fields=["status"])
@@ -267,6 +272,7 @@ def create_order(
         "message": "订单已创建，请完成支付",
         "order": serialize_order(order, customer=customer_ref),
         "checkout_url": checkout_url,
+        "session_id": session_id,
     }
 
 
@@ -319,14 +325,67 @@ def list_orders(customer: Customer) -> list[dict]:
 
 
 def get_order(customer: Customer, order_id: int) -> dict | None:
-    """对应 views.order_detail（未支付订单不对外展示）。"""
+    """对应 views.order_detail（含待支付订单，便于同步 Stripe 支付状态）。"""
     try:
         order = Orders.objects.get(pk=order_id, customerid=customer)
     except Orders.DoesNotExist:
         return None
-    if order.paymentstatus == 0:
-        return None
     return serialize_order(order, customer=customer)
+
+
+def sync_order_payment(customer: Customer, order_id: int) -> tuple[bool, dict]:
+    """Stripe 已扣款但客户端未收到回调时，按订单号补同步支付结果。"""
+    from bookstore.api.serializers import serialize_account_summary
+    from bookstore.models import StripePaymentRecord
+    from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, _stripe
+
+    try:
+        order = Orders.objects.get(pk=order_id, customerid=customer)
+    except Orders.DoesNotExist:
+        return False, {"error": "订单不存在"}
+
+    if order.paymentstatus == 1:
+        refreshed = Customer.objects.select_related("levelid").get(pk=customer.customerid)
+        return True, {
+            "message": "订单已支付",
+            "order": serialize_order(order, customer=refreshed),
+            "account": serialize_account_summary(refreshed),
+        }
+
+    records = StripePaymentRecord.objects.filter(
+        customer=customer,
+        purpose="order",
+        status="pending",
+    ).order_by("-created_at")
+    try:
+        stripe = _stripe()
+    except StripeServiceError as exc:
+        return False, {"error": str(exc)}
+
+    for record in records:
+        try:
+            session = stripe.checkout.Session.retrieve(record.session_id)
+        except Exception:
+            continue
+        if str((session.metadata or {}).get("order_id")) != str(order_id):
+            continue
+        if session.payment_status != "paid":
+            continue
+        ok, result = fulfill_checkout_session(record.session_id)
+        if not ok:
+            return False, result
+        order = Orders.objects.get(pk=order_id, customerid=customer)
+        refreshed = Customer.objects.select_related("levelid").get(pk=customer.customerid)
+        payload = {
+            "message": result.get("message", "支付已同步"),
+            "order": serialize_order(order, customer=refreshed),
+            "account": serialize_account_summary(refreshed),
+        }
+        if result.get("membership") is not None:
+            payload["membership"] = result.get("membership")
+        return True, payload
+
+    return False, {"error": "未检测到已完成支付，请确认扣款成功后再试"}
 
 
 def pay_order_remainder(customer: Customer, order_id: int) -> tuple[bool, dict]:

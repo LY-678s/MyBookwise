@@ -21,7 +21,7 @@ object StripeDeepLink {
 }
 
 sealed class PaymentDeepLink {
-    data class OrderSuccess(val sessionId: String, val orderId: Int) : PaymentDeepLink()
+    data class OrderSuccess(val sessionId: String, val orderId: Int? = null) : PaymentDeepLink()
     data class OrderCancel(val orderId: Int) : PaymentDeepLink()
     data class MembershipSuccess(val sessionId: String) : PaymentDeepLink()
     data object MembershipCancel : PaymentDeepLink()
@@ -36,7 +36,7 @@ fun parsePaymentDeepLink(uri: android.net.Uri?): PaymentDeepLink? {
     return when ("${segments[0]}/${segments[1]}") {
         "order/success" -> {
             val sessionId = uri.getQueryParameter("session_id") ?: return null
-            val orderId = uri.getQueryParameter("order_id")?.toIntOrNull() ?: return null
+            val orderId = uri.getQueryParameter("order_id")?.toIntOrNull()
             PaymentDeepLink.OrderSuccess(sessionId, orderId)
         }
         "order/cancel" -> {

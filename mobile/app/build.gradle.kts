@@ -79,6 +79,7 @@ dependencies {
     // Markdown 渲染 + 扩展图标
     implementation(libs.multiplatform.markdown.renderer.m3)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.androidx.browser)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

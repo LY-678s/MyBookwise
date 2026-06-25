@@ -8,14 +8,18 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.bookwiseapp.PaymentReturn
 import com.example.bookwiseapp.ui.screen.*
 import com.example.bookwiseapp.util.PaymentDeepLink
 import com.example.bookwiseapp.util.parsePaymentDeepLink
@@ -63,7 +67,7 @@ val bottomNavItems = listOf(
 @Composable
 fun AppNav(
     startLoggedIn: Boolean,
-    deepLinkUri: MutableState<Uri?>
+    paymentReturn: MutableState<PaymentReturn?>
 ) {
     val navController = rememberNavController()
     val authVm: AuthViewModel = viewModel()
@@ -106,31 +110,78 @@ fun AppNav(
 
     val showBottomBar = currentRoute in mainRoutes
 
-    LaunchedEffect(deepLinkUri.value) {
-        val uri = deepLinkUri.value ?: return@LaunchedEffect
-        deepLinkUri.value = null
-        val link = parsePaymentDeepLink(uri) ?: return@LaunchedEffect
+    val handleOrderPaid: (Int, String?, com.example.bookwiseapp.data.api.model.CustomerData?) -> Unit =
+        { orderId, message, account ->
+            cartVm.loadCart()
+            orderVm.loadOrders()
+            orderVm.clearCheckoutAfterPayment()
+            if (account != null) {
+                accountVm.applyAccount(account, message)
+            } else {
+                accountVm.loadAccount()
+            }
+            navController.popBackStack(Routes.CHECKOUT, inclusive = true)
+            navController.navigate(Routes.orderDetail(orderId)) {
+                popUpTo(Routes.HOME) { saveState = true }
+                launchSingleTop = true
+            }
+            if (account == null) {
+                message?.let { msg ->
+                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                }
+            }
+        }
+
+    LaunchedEffect(startLoggedIn) {
         if (!startLoggedIn) return@LaunchedEffect
+        orderVm.tryRecoverStoredPayment(
+            onSuccess = handleOrderPaid,
+            onSkip = {}
+        )
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, startLoggedIn) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && startLoggedIn) {
+                orderVm.tryRecoverStoredPayment(
+                    onSuccess = handleOrderPaid,
+                    onSkip = {}
+                )
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(paymentReturn.value?.nonce) {
+        val payload = paymentReturn.value ?: return@LaunchedEffect
+        val uri = payload.uri
+        if (!startLoggedIn) return@LaunchedEffect
+        val link = parsePaymentDeepLink(uri)
 
         when (link) {
             is PaymentDeepLink.OrderSuccess -> {
                 orderVm.confirmStripePayment(
                     sessionId = link.sessionId,
-                    onSuccess = { orderId, message ->
-                        cartVm.loadCart()
-                        orderVm.loadOrders()
-                        navController.navigate(Routes.orderDetail(orderId)) {
-                            popUpTo(Routes.HOME) { saveState = true }
-                            launchSingleTop = true
-                        }
-                        message?.let { msg ->
-                            scope.launch { snackbarHostState.showSnackbar(msg) }
-                        }
-                    },
+                    orderIdHint = link.orderId,
+                    onSuccess = handleOrderPaid,
                     onError = { msg ->
                         scope.launch { snackbarHostState.showSnackbar(msg) }
                     }
                 )
+            }
+            null -> {
+                val sessionId = uri.getQueryParameter("session_id")
+                if (!sessionId.isNullOrBlank()) {
+                    orderVm.confirmStripePayment(
+                        sessionId = sessionId,
+                        onSuccess = handleOrderPaid,
+                        onError = { msg ->
+                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                        }
+                    )
+                }
             }
             is PaymentDeepLink.OrderCancel -> {
                 orderVm.abandonCheckoutOrder(link.orderId) { message ->
@@ -185,6 +236,7 @@ fun AppNav(
                             selected = navBackStack?.destination?.hierarchy
                                 ?.any { it.route == item.route } == true,
                             onClick = {
+                                navController.popBackStack(Routes.CHECKOUT, inclusive = true)
                                 navController.navigate(item.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
@@ -264,7 +316,11 @@ fun AppNav(
             composable(Routes.CART) {
                 CartScreen(
                     viewModel = cartVm,
-                    onCheckout = { navController.navigate(Routes.CHECKOUT) },
+                    onCheckout = {
+                        navController.navigate(Routes.CHECKOUT) {
+                            launchSingleTop = true
+                        }
+                    },
                     onOrdersClick = { navController.navigate(Routes.ORDER_LIST) }
                 )
             }
@@ -291,7 +347,10 @@ fun AppNav(
                 )
             }
 
-            composable(Routes.ACCOUNT_WALLET) {
+            composable(Routes.ACCOUNT_WALLET) { backStackEntry ->
+                LaunchedEffect(backStackEntry) {
+                    accountVm.loadAccount()
+                }
                 AccountWalletScreen(
                     viewModel = accountVm,
                     onBack = { navController.popBackStack() }
@@ -356,15 +415,28 @@ fun AppNav(
                 val orderId = backStack.arguments?.getInt("orderId") ?: return@composable
                 OrderDetailScreen(
                     orderId = orderId,
-                    viewModel = orderVm,
-                    onBack = { navController.popBackStack() }
-                )
-            }
-            composable(Routes.CHECKOUT) {
-                CheckoutScreen(
                     orderVm = orderVm,
                     accountVm = accountVm,
                     onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Routes.CHECKOUT) { backStackEntry ->
+                LaunchedEffect(backStackEntry) {
+                    orderVm.beginCheckout(
+                        onEmptyCart = {
+                            navController.popBackStack(Routes.CHECKOUT, inclusive = true)
+                        }
+                    )
+                    accountVm.loadAccount()
+                }
+                CheckoutScreen(
+                    orderVm = orderVm,
+                    accountVm = accountVm,
+                    onBack = {
+                        orderVm.clearCheckoutAfterPayment()
+                        navController.popBackStack()
+                    },
+                    onOrderPaid = handleOrderPaid
                 )
             }
         }

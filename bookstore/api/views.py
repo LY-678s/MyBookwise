@@ -22,7 +22,7 @@ from django.db.models import F, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from bookstore.models import Book, BookFavorite, Customer, FavoriteFolder, Orderdetail
+from bookstore.models import Book, BookFavorite, Customer, FavoriteFolder, Orderdetail, Orders
 from bookstore.views import (
     _build_book_data,
     _category_stats,
@@ -42,6 +42,7 @@ from .serializers import (
     serialize_account_summary,
     serialize_book,
     serialize_customer,
+    serialize_order,
 )
 
 
@@ -546,6 +547,19 @@ class OrderAbandonView(APIView):
         return _ok(result)
 
 
+class OrderSyncPaymentView(APIView):
+    """POST /api/orders/<id>/sync-payment/  补同步 Stripe 支付结果。"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request, order_id):
+        customer = _customer_view(request)
+        ok, result = services.sync_order_payment(customer, order_id)
+        if not ok:
+            return _err(result.get("error", "同步失败"))
+        return _ok(result)
+
+
 class OrderPayView(APIView):
     """已废弃：请重新下单并完成在线支付。"""
 
@@ -714,6 +728,11 @@ class MembershipConfirmView(APIView):
         }
         if result.get("order_id") is not None:
             payload["order_id"] = result.get("order_id")
+            try:
+                order = Orders.objects.get(pk=result["order_id"], customerid=customer)
+                payload["order"] = serialize_order(order, customer=refreshed)
+            except Orders.DoesNotExist:
+                pass
         if result.get("membership") is not None:
             payload["membership"] = result.get("membership")
         return _ok(payload)

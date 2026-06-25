@@ -156,7 +156,7 @@ def fetch_external_cover_bytes(url: str) -> tuple[bytes, str] | None:
 
     candidates = [url]
     if url.startswith("http://"):
-        candidates.append("https://" + url[len("http://"):])
+        candidates.append("https://" + url[len("http://") :])
 
     header_sets = [
         {
@@ -833,9 +833,12 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
         try:
             ok, result = fulfill_checkout_session(session_id)
             if ok:
-                messages.success(request, result.get("message", "畅读卡开通成功"))
-            else:
-                messages.error(request, result.get("error", "支付确认失败"))
+                messages.success(request, result.get("message", "支付成功"))
+                order_id = result.get("order_id")
+                if order_id:
+                    return redirect("bookstore:order_detail", order_id=order_id)
+                return redirect("bookstore:account_wallet")
+            messages.error(request, result.get("error", "支付确认失败"))
         except StripeServiceError as exc:
             messages.error(request, str(exc))
         return redirect("bookstore:order_confirm")

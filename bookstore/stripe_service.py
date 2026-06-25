@@ -4,6 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .membership import activate_reading_pass, is_member
@@ -155,7 +156,10 @@ def _fulfill_order_payment(record: StripePaymentRecord, session) -> tuple[bool, 
         }
 
     customer = Customer.objects.select_related("levelid").get(pk=record.customer_id)
-    msg = complete_order_payment(order, customer)
+    try:
+        msg = complete_order_payment(order, customer)
+    except ValidationError as exc:
+        return False, {"error": str(exc.message if hasattr(exc, "message") else exc)}
     clear_cart(record.customer_id)
 
     record.status = "paid"
