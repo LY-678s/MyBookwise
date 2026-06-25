@@ -9,11 +9,13 @@ from .models import (
     Bookauthor,
     Creditlevel,
     Customer,
+    CustomerProfile,
     Orderdetail,
     Orders,
     Procurement,
     Procurementdetail,
     Shortagerecord,
+    StripePaymentRecord,
     Supplier,
     Supplierbook,
 )
@@ -33,13 +35,59 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    """顾客：方便管理员按用户名/姓名/等级管理顾客账户。"""
+    """顾客：用户名、等级、信用额度（legacy）；会员积分见「会员档案」。"""
 
-    list_display = ("customerid", "username", "name", "email", "usedcredit", "levelid")
+    list_display = ("customerid", "username", "name", "email", "levelid", "usedcredit")
     search_fields = ("username", "name", "email")
     list_filter = ("levelid",)
     ordering = ("customerid",)
     readonly_fields = ("usedcredit",)
+
+
+@admin.register(CustomerProfile)
+class CustomerProfileAdmin(admin.ModelAdmin):
+    """会员积分、开通时间与畅读卡有效期。"""
+
+    list_display = (
+        "customer",
+        "points",
+        "member_since",
+        "reading_pass_expires_at",
+        "updated_at",
+    )
+    search_fields = ("customer__username", "customer__name")
+    list_filter = ("member_since",)
+    raw_id_fields = ("customer",)
+    readonly_fields = ("updated_at",)
+
+
+@admin.register(StripePaymentRecord)
+class StripePaymentRecordAdmin(admin.ModelAdmin):
+    """Stripe Checkout 支付记录（订单 / 畅读卡）。"""
+
+    list_display = (
+        "id",
+        "customer",
+        "purpose",
+        "amount_cents",
+        "status",
+        "created_at",
+        "paid_at",
+    )
+    list_filter = ("purpose", "status", "created_at")
+    search_fields = ("session_id", "customer__username")
+    readonly_fields = (
+        "customer",
+        "session_id",
+        "amount_cents",
+        "currency",
+        "purpose",
+        "created_at",
+        "paid_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 class OrderdetailInline(admin.TabularInline):
@@ -507,7 +555,7 @@ class BookauthorAdmin(admin.ModelAdmin):
 
 @admin.register(Creditlevel)
 class CreditlevelAdmin(admin.ModelAdmin):
-    """会员等级与折扣。"""
+    """会员等级与折扣（0 级=非会员无折扣，1–5 级=已开通会员）。"""
 
     list_display = ("levelid", "discountrate", "canusecredit", "creditlimit")
 
