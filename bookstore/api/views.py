@@ -582,7 +582,7 @@ class OrderConfirmReceiptView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# 账户 — 对应 account_recharge / account_edit / repay_overdraft
+# 账户 / 会员 — 对应 account_wallet / account_edit
 # ---------------------------------------------------------------------------
 
 class AccountView(APIView):
@@ -595,7 +595,7 @@ class AccountView(APIView):
 
     def get(self, request):
         customer = _customer_view(request)
-        # 刷新以获取最新余额
+        # 刷新以获取最新会员与积分信息
         customer = Customer.objects.select_related("levelid").get(pk=customer.customerid)
         from bookstore.stripe_service import is_stripe_configured
 

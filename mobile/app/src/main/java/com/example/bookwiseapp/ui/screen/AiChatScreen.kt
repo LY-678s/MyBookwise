@@ -28,7 +28,7 @@ import com.mikepenz.markdown.m3.Markdown
 private val quickQuestions = listOf(
     "有什么 Python 相关的书？",
     "怎么下单和付款？",
-    "信用等级是什么意思？"
+    "会员等级和积分是怎么回事？"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)

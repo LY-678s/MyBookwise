@@ -180,7 +180,7 @@ def build_bookstore_system_prompt(user_message: str | None = None) -> str:
         "畅读卡有效期 30 天，到期后自动恢复为基础等级折扣。\n\n"
 
         "【支付方式】\n"
-        "购书使用在线支付（Stripe Checkout，支持银行卡等）。\n"
+        "购书使用在线支付（支持银行卡等）。\n"
         "支付成功后，消费金额按 1:1 累计为会员积分。\n\n"
 
         "【订单状态】\n"

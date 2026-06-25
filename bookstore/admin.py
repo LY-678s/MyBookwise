@@ -35,13 +35,12 @@ class BookAdmin(admin.ModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    """顾客：用户名、等级、信用额度（legacy）；会员积分见「会员档案」。"""
+    """顾客：用户名、等级；会员积分见「会员档案」。"""
 
-    list_display = ("customerid", "username", "name", "email", "levelid", "usedcredit")
+    list_display = ("customerid", "username", "name", "email", "levelid")
     search_fields = ("username", "name", "email")
     list_filter = ("levelid",)
     ordering = ("customerid",)
-    readonly_fields = ("usedcredit",)
 
 
 @admin.register(CustomerProfile)
@@ -557,7 +556,7 @@ class BookauthorAdmin(admin.ModelAdmin):
 class CreditlevelAdmin(admin.ModelAdmin):
     """会员等级与折扣（0 级=非会员无折扣，1–5 级=已开通会员）。"""
 
-    list_display = ("levelid", "discountrate", "canusecredit", "creditlimit")
+    list_display = ("levelid", "discountrate")
 
 
 @admin.register(Supplierbook)

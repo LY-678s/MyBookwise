@@ -107,7 +107,7 @@ class Orders(models.Model):
     shipaddress = models.CharField(db_column='ShipAddress', max_length=200)  # Field name made lowercase.
     totalamount = models.DecimalField(db_column='TotalAmount', max_digits=10, decimal_places=2, blank=True, null=True)  # 应付金额（折扣后）
     actualpaid = models.DecimalField(db_column='ActualPaid', max_digits=10, decimal_places=2, default=0)  # 实际已付金额
-    paymentstatus = models.IntegerField(db_column='PaymentStatus', default=0)  # 付款状态: 0=未付款, 1=已付款, 2=已退款
+    paymentstatus = models.IntegerField(db_column='PaymentStatus', default=0)  # 0=未付款, 1=已付款, 3=已退款（2=历史遗留，对外显示为已支付）
     status = models.IntegerField(db_column='Status')  # 订单状态
 
     class Meta:
