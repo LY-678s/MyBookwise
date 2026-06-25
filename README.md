@@ -1,23 +1,22 @@
-# 1. 启动后端（Web + API 同一个服务）
+# MyBookwise
 
-python manage.py runserver 0.0.0.0:8000
+MyBookwise 是一个面向数据库课程设计的网上书店系统，包含 Web 端、Android App、管理员后台和 Docker 部署方案。项目支持图书浏览、搜索、购物车、下单支付、订单管理、收藏夹、分类分区、排行榜、最近浏览、推荐系统和 AI 聊天等功能。
 
-# 2. Web：浏览器打开 [http://127.0.0.1:8000](http://127.0.0.1:8000)
+## 项目功能
 
-开启隧道后打开[https://mybookwise.xyz](https://mybookwise.xyz)
+### 顾客端
 
-# 3. APP：mobile/ 里单独 build/run，baseUrl 指向后端
-
-Android 模拟器常用 [http://10.0.2.2:8000](http://10.0.2.2:8000)
-真机演示用电脑局域网 IP，如 [http://192.168.x.x:8000](http://192.168.x.x:8000)
-
----
+- 账号注册、登录、个人信息修改
+- 图书浏览、搜索、分类分区、排行榜
+- 图书详情页、加入购物车、收藏、最近浏览
+- 下单、支付方式选择、订单列表、订单详情
+- 收藏夹管理、收藏内容查看
+- 余额、会员等级、账户信息查看
+- AI 聊天助手
 
 ## 数据库
 
-**唯一数据文件**：`SetDatabase/bookstoredb.sql`
-
-已包含完整库结构、演示数据，以及会员体系 / Stripe 支付表 / 库存触发器修复等全部变更，**无需再执行其他 SQL**。
+数据文件：`SetDatabase/bookstoredb.sql`（完整库结构 + 英文图书 + 演示顾客/订单等初始数据）。
 
 ### 首次导入
 
@@ -25,25 +24,18 @@ Android 模拟器常用 [http://10.0.2.2:8000](http://10.0.2.2:8000)
 # 1. 创建数据库（MySQL 中执行一次即可）
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS bookstoredb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-# 2. 导入（在项目根目录；PowerShell 不要用 <，任选其一）
-
-# 方式 A：cmd 重定向
+# 2. 导入（在项目根目录执行；PowerShell 请用 cmd 重定向，不要用 <）
 cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
-
-# 方式 B：PowerShell 管道
-Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
 ```
 
 `settings.py` 中 `DATABASES` 的库名、用户名、密码需与上面一致。
 
 ### 重置数据库（测试后恢复初始状态）
 
-测试过程中若产生大量订单、积分变动等，用同一 SQL **整库覆盖**即可：
+测试过程中若产生大量订单、余额变动等，可用同一 SQL **整库覆盖**恢复：
 
 ```powershell
 cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
-# 或
-Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-character-set=utf8mb4 -u root -p bookstoredb
 ```
 
 > 会清空并重建 `bookstoredb` 内所有表和数据，图书、顾客、订单等均回到 SQL 文件中的初始状态。
@@ -71,34 +63,86 @@ Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-ch
 可以调整数量，点击即可成功添加至购物车。
 当输入数量大于库存时，会提示需要输入<=库存的数
 
-### 4. 会员与积分
+### 4.下单与付款（不涉及缺货等特殊情况）
 
-- 注册后默认为**非会员**（0 级），无折扣、不累计积分
-- 在「会员与积分」页**免费开通会员**后，才按等级享受折扣并获得积分
-- 积分与人民币 1:1（每消费 1 元得 1 积分）
-- 等级由累计积分决定：1 级（0+）→ 2 级（1000+）→ 3 级（2000+）→ 4 级（5000+）→ 5 级（10000+，最高档积分显示 max）
-- 各等级折扣见「会员与积分」页「详情」按钮
-- 会员可购买 **¥20/月畅读卡**，在等级折扣基础上再享 7.2 折（叠加计算）
+（注意为了简单，我没有在有些新创建的账号里面补齐Totalspent应该有的历史订单）
+这里字段的显示，分别关注主页、购物车、动作消息提示以及个人账户
 
-### 5. 下单与在线支付
+#### 4.1 信用等级LevelID=1 OR 2，不享受先享后付，只能使用余额支付
 
-- 加购 → 订单确认页填写收货信息 → 提交后跳转 **Stripe 在线支付**
-- 支付成功后订单变为已付款，购物车清空；**会员**消费金额按 1:1 累计积分
-- **未支付订单**不在「我的订单」中展示；支付取消或放弃会自动作废
-- 非会员下单无折扣，仍可正常购书
-- 需在 `settings.py` 配置 Stripe 测试密钥后支付流程才可用
+设置：
+-- 客户数据
+CustomerID=1, TotalSpent=285.30, Balance=714.70, LevelID=1
+CustomerID=4, TotalSpent=1300.00, Balance=2000.00, LevelID=2
+-- 图书数据
+ISBN='978-7-115-48935-5', StockQty=40, MinStockLimit=10
+创建订单：
+ISBN='978-7-115-48935-5', quantity=5
+预期：
 
-### 6. 我的订单
+- 下单时，totalspent自动增加，balance减少
+- 当明细字段isshipped全部改为1，订单status改为1
 
-- 仅展示**已支付**及之后状态的订单
-- 待发货订单可取消（已付金额退回、扣回积分）
-- 已发货订单不可取消；收货后可「确认收货」完成订单
+#### 4.2 信用等级LevelID=3 OR 4 OR 5，享受先享后付，能选择使用余额支付或信用支付
 
-### 7. 我的主页 / 会员与积分
+CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
+CustomerID=2, TotalSpent=1300.00, Balance=2000.00, LevelID=4
+CustomerID=3, TotalSpent=285.30, Balance=714.70, LevelID=5
+这里建议自行根据用户额度和信用额度选择数据（因为前面customer数据可能后期会变动，这里确定哪个具体数据无意义。）
 
-- 修改密码、联系方式、地址
-- 查看会员等级、积分、畅读卡有效期
-- 免费开通会员、购买畅读卡（在线支付）
+1. 选择未超余额和信用余额的数据
+2. 选择不超过余额但完整金额超过信用余额的数据
+3. 选择超过余额但多出部分不超过信用余额的数据，且完整金额超过信用余额。
+4. 选择超过余额和多出部分超过信用余额的数据
+5. 选择超过余额但完整金额不超过信用余额的数据
+
+预期：
+
+
+
+使用余额付款
+
+- 下单时，totalspent自动增加，balance减少
+- 当明细字段isshipped全部改为1，订单status改为1
+使用信用额度付款
+- 下单时，totalspent自动增加，usedcredit自动增加
+- 当明细字段isshipped全部改为1，订单status改为1
+
+1. 只能使用余额付款
+
+情况同1中
+3. 只能先使用全部余额，不足从信用额度扣款。
+  下单时点击信用扣款会
+
+- 下单时，totalspent自动增加，usedcredit自动增加，balance自动减少
+- 其余同上
+
+1. 无论勾选哪种都会提示错误，无法下单
+2. 先使用全部余额再使用信用余额和直接使用信用余额付款都OK
+
+具体情况同上类似例子。
+
+#### 5.信用升级
+
+CustomerID=5, TotalSpent=2022.15, Balance=3000.00, LevelID=3
+选择
+ISBN='978-7-302-51123-4', quantity=12, MinStockLimit=12
+ISBN='978-7-111-54425-7', quantity=10, MinStockLimit=12
+预期：
+totalamount=2181.10，等级由3升至4
+
+#### 6.我的订单
+
+所有的历史订单详情都可以在此查看，具体如下
+暂时无法在飞书文档外展示此内容
+未全额支付的订单可以在详情页选择全部还款。
+在收到货后可以确认订单以彻底完成整个订单。
+
+#### 7.我的主页
+
+可以修改密码，联系方式、地址
+可以充值。
+可以查看账户的完整信息——余额，信用等级，信用余额等。
 
 ## 管理员端
 
@@ -120,7 +164,7 @@ Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-ch
 | 模块 | 管理员端能力 |
 |------|----------------|
 | **订单** | 仅查看与改状态（已下单 / 已发货 / 已完成 / 已取消）；**不可**在后台创建订单；`paymentstatus` 只读（Stripe 在线支付后自动更新） |
-| **顾客** | 维护账号、等级（`levelid`）；会员积分在「会员档案」中维护 |
+| **顾客** | 维护账号、等级（`levelid`）；`usedcredit` 只读（legacy 字段，已不再用于购书） |
 | **会员档案** | 查看/编辑积分、`member_since`、畅读卡到期时间（`customer_profile`） |
 | **Stripe 支付记录** | 只读查看 Checkout 会话（订单 / 畅读卡） |
 | **会员等级** | 维护 `creditlevel`（含 0 级非会员、1–5 级会员折扣） |
@@ -183,10 +227,10 @@ Get-Content SetDatabase\bookstoredb.sql -Raw -Encoding UTF8 | mysql --default-ch
 
 **2. 安装 cloudflared**
 
+
 ```powershell
 winget install Cloudflare.cloudflared
 ```
-
 **3. 登录并创建隧道**
 
 ```powershell
@@ -230,73 +274,87 @@ copy scripts\cloudflared-mybookwise.yml.example scripts\cloudflared-mybookwise.y
 
 修改 settings 后需重启 Django。
 
-### 每次演示（两个终端）
 
-**终端 1 — Django**
+## Docker 部署
+
+项目提供 Docker Compose 部署方案：
+
+- `web` 容器运行 Django + Gunicorn
+- `db` 容器运行 MySQL 8.0
+- 数据库首次启动时自动导入 `SetDatabase/bookstoredb.sql`
+
+常用命令：
 
 ```powershell
-cd d:\Engineering\MyBookwise
+docker compose up -d --build
+docker compose ps
+docker compose logs -f web
+docker compose down
+```
+
+如果要重新初始化数据库：
+
+```powershell
+docker compose down -v
+docker compose up -d --build
+```
+
+## 域名与内网穿透
+
+项目支持 Cloudflare Tunnel 访问。
+
+- 固定域名示例：`https://mybookwise.xyz`
+- 本地子域名示例：`https://ly.mybookwise.xyz`
+- 临时穿透示例：`https://xxxx.trycloudflare.com`
+
+Cloudflare 配置文件使用：
+
+- `scripts/cloudflared-mybookwise.yml`
+
+App 服务器地址通过：
+
+- `mobile/settings.properties`
+
+配置后重新构建 App 即可生效。
+
+## 本地开发
+
+### 后端
+
+```powershell
 python manage.py runserver 0.0.0.0:8000
 ```
 
-**终端 2 — 命名隧道**
+### App
 
 ```powershell
-scripts\start_tunnel_named.cmd
+cd mobile
+copy settings.properties.example settings.properties
 ```
 
-验证：浏览器打开 [https://mybookwise.xyz](https://mybookwise.xyz) ；手机 4G 打开 APP（Rebuild 后）。
+然后修改 `server_base`，再重新运行/构建 Android 项目。
 
-### 常见问题
+## 数据库
 
+数据库初始化文件位于：
 
-| 现象               | 处理                                                        |
-| ---------------- | --------------------------------------------------------- |
-| 域名无法访问           | 确认隧道终端在跑、DNS 已生效（可能需等待几分钟）                                |
-| `DisallowedHost` | 检查 `settings.py` 的 `ALLOWED_HOSTS`，重启 Django              |
-| Web 登录 CSRF 403  | 确认 `CSRF_TRUSTED_ORIGINS` 含 `https://mybookwise.xyz`      |
-| APP 连不上          | `SERVER_BASE` 为 `https://mybookwise.xyz`（无末尾 `/`），Rebuild |
+```text
+SetDatabase/bookstoredb.sql
+```
 
-
----
-
-## 跨网访问（临时快速隧道，备选）
-
-不想配固定域名、或隧道未就绪时，仍可用 **trycloudflare.com** 临时地址：
-
-### 一次性安装
+首次导入可以在 MySQL 中执行：
 
 ```powershell
-winget install Cloudflare.cloudflared
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS bookstoredb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+cmd /c "mysql --default-character-set=utf8mb4 -u root -p bookstoredb < SetDatabase\bookstoredb.sql"
 ```
 
-### 每次演示（两个终端）
+## 管理员后台
 
-**终端 1 — Django**
+访问：
 
-```powershell
-cd d:\Engineering\MyBookwise
-# 拿到隧道 URL 后设置（Web 登录需要）
-$env:TUNNEL_ORIGIN = "https://xxxx.trycloudflare.com"
-python manage.py runserver 0.0.0.0:8000
+```text
+http://127.0.0.1:8000/admin/
 ```
 
-**终端 2 — 隧道**
-
-```powershell
-scripts\start_tunnel.cmd
-# 或：cloudflared tunnel --url http://localhost:8000
-```
-
-复制终端 2 输出的 `https://....trycloudflare.com`，写入 `$env:TUNNEL_ORIGIN` 和 `ApiClient.kt` 的 `SERVER_BASE`，Rebuild APP。
-
-### 常见问题
-
-
-| 现象               | 处理                                             |
-| ---------------- | ---------------------------------------------- |
-| `DisallowedHost` | `settings.py` 含 `.trycloudflare.com`，重启 Django |
-| Web 登录 CSRF 403  | 设置 `$env:TUNNEL_ORIGIN` 并重启 runserver          |
-| APP 网络错误         | `SERVER_BASE` 用 **https** 且与隧道地址一致             |
-
-
+默认管理员账号请以导入的 SQL 或本地配置为准。管理员后台主要用于数据维护与业务状态管理。
