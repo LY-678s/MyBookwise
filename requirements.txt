@@ -5,4 +5,4 @@ django-jazzmin>=2.6
 pytest>=7.0
 pytest-django>=4.5
 google-genai>=1.0.0
-gunicorn>=21.2,<23.0
+stripe>=8.0,<12.0

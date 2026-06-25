@@ -30,35 +30,25 @@
                 <div style="text-align: center;">
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">会员等级</div>
                     <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">
-                        {{ customer.levelid.levelid }}级
+                        {% if is_member %}{{ membership.member_level }}级{% else %}未开通{% endif %}
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                        {{ discount_percent|floatformat:0 }}% 优惠
+                        {% if is_member %}{{ discount_percent|floatformat:0 }}% 优惠{% else %}无会员折扣{% endif %}
                     </div>
                 </div>
 
                 <div style="text-align: center;">
-                    <div style="color: var(--text-secondary); font-size: 0.9rem;">账户余额</div>
-                    <div style="font-size: 1.5rem; font-weight: 600;
-                         color: {% if customer.balance < 0 %}var(--error){% else %}var(--success){% endif %}">
-                        ¥{{ customer.balance }}
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">累计积分</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent);">
+                        {% if is_member and membership.next_level_points == "max" %}max{% elif is_member %}{{ membership.points }} 分{% else %}—{% endif %}
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                        {% if customer.balance < 0 %}欠款{% else %}可用{% endif %}
+                        {% if is_member %}
+                            {% if membership.next_level_points == "max" %}已达最高等级{% elif membership.next_level_points %}距下一级 {{ membership.next_level_points }} 分{% endif %}
+                        {% else %}开通会员后累计{% endif %}
                     </div>
                 </div>
 
-                {% if customer.levelid.canusecredit %}
-                <div style="text-align: center;">
-                    <div style="color: var(--text-secondary); font-size: 0.9rem;">信用额度</div>
-                    <div style="font-size: 1.5rem; font-weight: 600; color: var(--warning);">
-                        ¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}
-                    </div>
-                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                        可用额度
-                    </div>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -216,76 +206,79 @@
         </div>
     </div>
 
-    <!-- 支付方式选择 -->
+    <!-- 会员与畅读卡 -->
+    <div class="card" style="margin-bottom: 3rem;">
+        <div class="card-header">
+            <h3 style="margin: 0; color: var(--text-primary);">会员与优惠</h3>
+        </div>
+        <div class="card-body" style="display: flex; flex-direction: column; gap: 1rem;">
+            {% if not is_member %}
+                <div style="padding: 1rem; border: 1px dashed var(--border); border-radius: 8px;">
+                    <p style="margin: 0 0 0.75rem; color: var(--text-secondary);">
+                        免费开通会员后，购书可累计积分（1:1）。
+                    </p>
+                    <form method="post" action="{% url 'bookstore:activate_membership' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="redirect_to" value="{% url 'bookstore:order_confirm' %}">
+                        <button type="submit" class="btn btn-success">免费开通会员</button>
+                    </form>
+                </div>
+            {% else %}
+                <p style="margin: 0; color: var(--success);">
+                    已开通会员 · {{ membership.member_level }} 级 · 当前 {{ discount_percent|floatformat:1 }}% 优惠
+                    {% if membership.has_reading_pass %}（含畅读卡乘算）{% endif %}
+                </p>
+            {% endif %}
+
+            {% if is_member %}
+                <div style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px;">
+                    {% if membership.has_reading_pass %}
+                        <p style="margin: 0; color: var(--success);">畅读卡生效中 · 等级折扣 × 7.2 折</p>
+                    {% else %}
+                        <p style="margin: 0 0 0.75rem; color: var(--text-secondary);">
+                            购买畅读卡（¥{{ reading_pass_price|floatformat:0 }}/月）可在等级折扣基础上再享 7.2 折。
+                        </p>
+                        {% if stripe_configured %}
+                            <form method="post" action="{% url 'bookstore:membership_checkout' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="redirect_to" value="{% url 'bookstore:order_confirm' %}">
+                                <button type="submit" class="btn btn-primary">购买畅读卡</button>
+                            </form>
+                        {% else %}
+                            <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">在线支付暂不可用</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 支付方式 -->
     <div class="card" style="margin-bottom: 3rem;">
         <div class="card-header">
             <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                <span class="material-symbols-outlined">
-                    credit_card
-                </span>
-                选择支付方式
+                <span class="material-symbols-outlined">credit_card</span>
+                支付方式
             </h3>
         </div>
         <div class="card-body">
             <form method="post" id="order-form">
                 {% csrf_token %}
-
-                <!-- 余额支付选项 -->
-                <label class="payment-option" style="display: block; margin-bottom: 1rem;">
-                    <input type="radio" name="payment_choice" value="balance" checked style="margin-right: 0.5rem;">
-                    <div class="payment-card" style="border: 2px solid var(--success); background: linear-gradient(135deg, rgba(168, 218, 220, 0.1) 0%, rgba(184, 216, 216, 0.1) 100%);">
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div style="font-size: 2rem;">
-                                <span class="material-symbols-outlined">
-                                    money_bag
-                                </span>
-                            </div>
-                            <div>
-                                <h4 style="margin: 0 0 0.5rem 0; color: var(--success);">余额支付</h4>
-                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
-                                    支付金额：¥{{ discounted_total|floatformat:2 }}
-                                    {% if customer.balance >= discounted_total %}
-                                        <br><span style="color: var(--success);">✓ 余额充足，全部从余额扣款</span>
-                                    {% else %}
-                                        <br><span style="color: var(--warning);">⚠ 余额不足，</span>
-                                        {% if customer.levelid.canusecredit %}
-                                            <span style="color: var(--accent);">先用余额(¥{{ customer.balance }})，剩余使用信用额度</span>
-                                        {% else %}
-                                            <span style="color: var(--error);">该等级不支持信用，请充值</span>
-                                        {% endif %}
-                                    {% endif %}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </label>
-
-                <!-- 信用支付选项（仅3-5级） -->
-                {% if customer.levelid.canusecredit %}
-                <label class="payment-option" style="display: block;">
-                    <input type="radio" name="payment_choice" value="credit" style="margin-right: 0.5rem;">
-                    <div class="payment-card" style="border: 2px solid var(--accent); background: linear-gradient(135deg, rgba(212, 197, 185, 0.1) 0%, rgba(232, 224, 216, 0.1) 100%);">
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div style="font-size: 2rem;">
-                                <span class="material-symbols-outlined">
-                                    credit_card
-                                </span>
-                            </div>
-                            <div>
-                                <h4 style="margin: 0 0 0.5rem 0; color: var(--accent);">信用支付</h4>
-                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
-                                    不使用余额，全部使用信用额度 ¥{{ discounted_total|floatformat:2 }}
-                                    <br>
-                                    可用额度：¥{{ customer.creditlimit|add:"-"|add:customer.usedcredit|floatformat:2 }}，
-                                    已使用：¥{{ customer.usedcredit|floatformat:2 }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </label>
-                {% endif %}
-
-                <!-- 隐藏的发货地址字段 -->
+                <div class="payment-card" style="border: 2px solid var(--accent); padding: 1.5rem; border-radius: 12px;">
+                    <h4 style="margin: 0 0 0.5rem; color: var(--accent);">在线支付</h4>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                        应付 ¥{{ discounted_total|floatformat:2 }}，提交后跳转收银台（支持银行卡 / 支付宝）。
+                        {% if is_member %}
+                            <br>支付成功后累计等额积分。
+                        {% endif %}
+                        {% if membership.has_reading_pass %}
+                            <br><span style="color: var(--success);">畅读卡生效中（等级折扣 × 7.2 折）</span>
+                        {% endif %}
+                    </p>
+                    {% if not stripe_configured %}
+                        <p style="color: var(--error); margin: 0.75rem 0 0;">在线支付暂不可用，请联系管理员。</p>
+                    {% endif %}
+                </div>
                 <input type="hidden" name="shipping_name" value="{{ customer.name }}">
                 <input type="hidden" name="shipping_contact" value="{{ customer.email }}">
                 <input type="hidden" name="shipping_address" value="{{ customer.address }}">
@@ -297,26 +290,14 @@
     <div class="card">
         <div class="card-body">
             <div style="display: flex; gap: 1rem; justify-content: center;">
-                <button type="submit" form="order-form" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;">
-                    确认下单
+                <button type="submit" form="order-form" class="btn btn-primary" style="padding: 1rem 3rem; font-size: 1.1rem;" {% if not stripe_configured %}disabled{% endif %}>
+                    确认并支付
                 </button>
                 <a href="{% url 'bookstore:cart_detail' %}" class="btn btn-secondary" style="padding: 1rem 3rem;">
                     返回购物车
                 </a>
             </div>
 
-            <div style="margin-top: 2rem; padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
-                <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem; text-align: center;">
-                    <span class="material-symbols-outlined">
-                        emoji_objects
-                        </span>
-                    提示：
-                    {% if customer.levelid.canusecredit %}
-                        您是{{ customer.levelid.levelid }}级会员，支持信用支付。未全额支付的订单需在30天内完成支付。
-                    {% else %}
-                        您当前是{{ customer.levelid.levelid }}级会员，暂不支持信用支付功能，只能使用余额支付。
-                    {% endif %}
-                </p>
             </div>
         </div>
     </div>
@@ -441,16 +422,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 </style>
-
-<p style="color: #7f8c8d; margin-top: 1rem; font-size: 0.9rem;">
-    <span class="material-symbols-outlined">
-        emoji_objects
-        </span>
-    提示：
-    {% if customer.levelid.canusecredit %}
-        您是{{ customer.levelid.levelid }}级会员，支持信用支付。未全额支付的订单需在30天内完成支付。
-    {% else %}
-        您当前是{{ customer.levelid.levelid }}级会员，暂不支持信用支付功能，只能使用余额支付。
-    {% endif %}
-</p>
 {% endblock %}

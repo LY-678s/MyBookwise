@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.urls import reverse
@@ -73,16 +74,14 @@ def customer_register(request: HttpRequest) -> HttpResponse:
             # 创建新用户
             customer = Customer.objects.create(
                 username=username,
-                password=password,  # 注意：生产环境中应该加密密码
+                password=password,
                 name=name,
                 email=email,
                 address=address,
-                balance=Decimal('0.00'),
-                levelid_id=1,  # 默认1级会员
-                creditlimit=Decimal('0.00'),  # 1级无信用额度
+                levelid_id=0,
+                creditlimit=Decimal('0.00'),
                 usedcredit=Decimal('0.00'),
-                totalspent=Decimal('0.00'),
-                registerdate=timezone.now()  # 显式设置注册时间
+                registerdate=timezone.now()
             )
 
             # 自动登录新用户
@@ -786,9 +785,10 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
     items = []
     original_total = Decimal('0')
     
-    # 获取顾客的信用等级折扣率
+    from bookstore.membership import get_purchase_discount_rate
+
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    discount_rate = customer.levelid.discountrate
+    discount_rate = get_purchase_discount_rate(customer.customerid)
     discount_percent = (Decimal('1') - discount_rate) * 100  # 转换为百分比
 
     for isbn, data in cart.items():
@@ -821,137 +821,75 @@ def cart_detail(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def order_confirm(request: HttpRequest) -> HttpResponse:
+    from bookstore.membership import (
+        get_purchase_discount_rate,
+        is_member,
+        serialize_membership,
+    )
+    from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, is_stripe_configured
+
+    session_id = request.GET.get("session_id", "").strip()
+    if session_id:
+        try:
+            ok, result = fulfill_checkout_session(session_id)
+            if ok:
+                messages.success(request, result.get("message", "畅读卡开通成功"))
+            else:
+                messages.error(request, result.get("error", "支付确认失败"))
+        except StripeServiceError as exc:
+            messages.error(request, str(exc))
+        return redirect("bookstore:order_confirm")
+
+    canceled_order_id = request.GET.get("order_id", "").strip()
+    if request.GET.get("canceled") and canceled_order_id:
+        customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+        from bookstore.api import services as order_services
+
+        order_services.abandon_unpaid_order(customer, int(canceled_order_id))
+        messages.info(request, "已取消支付，商品仍在购物车")
+        return redirect("bookstore:cart_detail")
+
+    if request.GET.get("canceled"):
+        messages.info(request, "已取消畅读卡支付")
+
     cart = _get_cart(request)
     if not cart:
         messages.warning(request, "购物车为空")
         return redirect("bookstore:index")
 
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    discount_rate = customer.levelid.discountrate
+    member = is_member(customer.customerid)
+    discount_rate = get_purchase_discount_rate(customer.customerid)
     discount_percent = (Decimal('1') - discount_rate) * 100
+    membership = serialize_membership(customer.customerid)
 
     if request.method == "POST":
-        payment_choice = request.POST.get("payment_choice", "balance")
-
-        # 获取发货地址信息
         shipping_name = request.POST.get("shipping_name", customer.name)
         shipping_contact = request.POST.get("shipping_contact", customer.email)
         shipping_address = request.POST.get("shipping_address", customer.address)
 
-        # 验证发货地址
         if not shipping_address or not shipping_address.strip():
             messages.error(request, "请填写发货地址")
             return redirect("bookstore:order_confirm")
 
-        with transaction.atomic():
-            # 锁定客户记录
-            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
+        from bookstore.api import services as order_services
 
-            # 1. 创建订单
-            now = timezone.now()
-            # 生成订单号：YYYYMMDDNN（年月日+两位序号）
-            date_prefix = now.strftime('%Y%m%d')
-            # 查找今天已有的订单数量
-            today_orders_count = Orders.objects.filter(
-                orderno__startswith=date_prefix
-            ).count()
-            order_number = f"{date_prefix}{today_orders_count + 1:02d}"
+        ok, result = order_services.create_order(
+            customer,
+            shipping_name=shipping_name,
+            shipping_contact=shipping_contact,
+            shipping_address=shipping_address,
+        )
+        if ok:
+            checkout_url = result.get("checkout_url")
+            if checkout_url:
+                return redirect(checkout_url)
+            messages.error(request, "未获取到支付链接")
+            return redirect("bookstore:order_confirm")
 
-            # 组合发货地址信息
-            full_shipping_address = f"{shipping_name} ({shipping_contact}) - {shipping_address}"
+        messages.error(request, result.get("error", "下单失败"))
+        return redirect("bookstore:cart_detail")
 
-            order = Orders.objects.create(
-                orderno=order_number,
-                orderdate=now,
-                customerid=customer,
-                shipaddress=full_shipping_address,
-                totalamount=Decimal('0'),
-                actualpaid=Decimal('0'),
-                paymentstatus=0,  # 默认未付款
-                status=0,
-            )
-
-            # 2. 为购物车中每本书创建 Orderdetail（触发器会自动扣减库存）
-            created_details = []
-            for isbn, data in cart.items():
-                book = get_object_or_404(Book, pk=isbn)
-                quantity = data["quantity"]
-
-                detail = Orderdetail.objects.create(
-                    orderid=order,
-                    isbn=book,
-                    quantity=quantity,
-                    unitprice=book.price,
-                    isshipped=0,
-                )
-                created_details.append((book, quantity))
-
-            # 3. 刷新订单获取触发器计算的总金额
-            order.refresh_from_db()
-            total_amount = order.totalamount or Decimal('0')
-            
-            print(f"🔍 [DEBUG] Order created: OrderID={order.orderid}, TotalAmount={total_amount}")
-            
-            if total_amount == 0:
-                # TotalAmount为0说明触发器没有正确计算，可能是事务问题
-                # 手动计算总金额
-                from django.db.models import Sum
-                manual_total = Orderdetail.objects.filter(orderid=order).aggregate(
-                    total=Sum(F('quantity') * F('unitprice'))
-                )['total'] or Decimal('0')
-                # 应用折扣
-                total_amount = manual_total * customer.levelid.discountrate
-                order.totalamount = total_amount
-                order.save(update_fields=['totalamount'])
-                print(f"🔍 [DEBUG] Manual calculation: TotalAmount={total_amount}")
-            
-            # 4. 处理付款 (payment_choice已经在前面获取了)
-            
-            if payment_choice == "credit":
-                # 纯信用支付
-                from .signals import process_payment
-                success, result = process_payment(order, customer, use_credit_only=True)
-                
-                if success:
-                    msg, actual_paid, payment_status = result
-                    order.actualpaid = actual_paid
-                    order.paymentstatus = payment_status
-                    order.save(update_fields=['actualpaid', 'paymentstatus'])
-                    
-                    # 清空购物车（Web / APP 共用 cache）
-                    clear_cart(customer.customerid)
-                    messages.success(request, f"下单成功！{msg}")
-                    return redirect("bookstore:order_list")
-                else:
-                    # 失败，取消订单
-                    order.status = 4
-                    order.save(update_fields=['status'])
-                    messages.error(request, f"下单失败：{result}。订单已取消。")
-                    return redirect("bookstore:cart_detail")
-            
-            else:
-                # 立即支付（余额优先）
-                from .signals import process_payment
-                success, result = process_payment(order, customer, use_credit_only=False)
-                
-                if success:
-                    msg, actual_paid, payment_status = result
-                    order.actualpaid = actual_paid
-                    order.paymentstatus = payment_status
-                    order.save(update_fields=['actualpaid', 'paymentstatus'])
-                    
-                    clear_cart(customer.customerid)
-                    messages.success(request, f"下单成功！{msg}")
-                    return redirect("bookstore:order_list")
-                else:
-                    # 失败，取消订单
-                    order.status = 4
-                    order.save(update_fields=['status'])
-                    messages.error(request, f"下单失败：{result}。订单已取消。")
-                    return redirect("bookstore:cart_detail")
-            
-
-    # GET 请求：先展示确认页（显示折扣信息）
     items = []
     original_total = Decimal('0')
     for isbn, data in cart.items():
@@ -965,11 +903,13 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
             "quantity": quantity,
             "original_amount": original_amount,
             "discounted_amount": discounted_amount,
+            "discounted_price": book.price * discount_rate,
         })
 
     discounted_total = original_total * discount_rate
     discount_amount = original_total - discounted_total
 
+    reading_price = getattr(settings, "STRIPE_READING_PASS_AMOUNT_CENTS", 2000) / 100
     return render(request, "bookstore/order_confirm.html", {
         "items": items,
         "original_total": original_total,
@@ -978,12 +918,20 @@ def order_confirm(request: HttpRequest) -> HttpResponse:
         "discount_rate": discount_rate,
         "discount_percent": discount_percent,
         "customer": customer,
+        "membership": membership,
+        "is_member": member,
+        "stripe_configured": is_stripe_configured(),
+        "reading_pass_price": reading_price,
     })
 
 @customer_required
 def order_list(request: HttpRequest) -> HttpResponse:
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    orders = Orders.objects.filter(customerid=customer).order_by("-orderdate")
+    orders = (
+        Orders.objects.filter(customerid=customer)
+        .exclude(paymentstatus=0)
+        .order_by("-orderdate")
+    )
     
     # 为每个订单计算原始金额（用于显示折扣）
     orders_with_details = []
@@ -1004,14 +952,43 @@ def order_list(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
+    from bookstore.membership import get_purchase_discount_rate
+    from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, is_stripe_configured
+
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
     order = get_object_or_404(Orders, pk=order_id, customerid=customer)
+
+    session_id = request.GET.get("session_id", "").strip()
+    if session_id:
+        try:
+            ok, result = fulfill_checkout_session(session_id)
+            if ok:
+                messages.success(request, result.get("message", "支付成功"))
+                order.refresh_from_db()
+            else:
+                messages.error(request, result.get("error", "支付确认失败"))
+        except StripeServiceError as exc:
+            messages.error(request, str(exc))
+        return redirect("bookstore:order_detail", order_id=order_id)
+
+    if request.GET.get("canceled"):
+        if order.paymentstatus == 0 and order.status != 4:
+            from bookstore.api import services as order_services
+
+            order_services.abandon_unpaid_order(customer, order.orderid)
+        messages.info(request, "已取消支付，商品仍在购物车")
+        return redirect("bookstore:cart_detail")
+
+    if order.paymentstatus == 0:
+        messages.info(request, "该订单未完成支付")
+        return redirect("bookstore:cart_detail")
+
     details = Orderdetail.objects.filter(orderid=order)
     
     # 计算原始总金额和折扣信息
     original_amount = sum(detail.quantity * detail.unitprice for detail in details)
     discount_amount = original_amount - (order.totalamount or 0)
-    discount_rate = customer.levelid.discountrate
+    discount_rate = get_purchase_discount_rate(customer.customerid)
     discount_percent = (Decimal('1') - discount_rate) * 100
     
     # 为每个明细计算折扣后金额
@@ -1036,6 +1013,7 @@ def order_detail(request: HttpRequest, order_id: int) -> HttpResponse:
             "discount_rate": discount_rate,
             "discount_percent": discount_percent,
             "customer": customer,
+            "stripe_configured": is_stripe_configured(),
         },
     )
 
@@ -1046,21 +1024,6 @@ def account_home(request: HttpRequest) -> HttpResponse:
     return render(request, "bookstore/account.html")
 
 
-def _next_level_amount(customer: Customer):
-    level_thresholds = {
-        1: Decimal('1000'),
-        2: Decimal('2000'),
-        3: Decimal('5000'),
-        4: Decimal('10000'),
-        5: None,
-    }
-    next_threshold = level_thresholds.get(customer.levelid.levelid)
-    if next_threshold is None:
-        return None
-    amount = next_threshold - customer.totalspent
-    return amount if amount > 0 else Decimal('0')
-
-
 @customer_required
 def account_profile(request: HttpRequest) -> HttpResponse:
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
@@ -1069,33 +1032,91 @@ def account_profile(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def account_wallet(request: HttpRequest) -> HttpResponse:
-    """账户余额、信用与充值"""
+    """会员与积分：免费开通会员、畅读卡、积分与信用额度。"""
+    from bookstore.membership import get_profile, get_member_level_guide, serialize_membership
+    from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, is_stripe_configured
+
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
 
-    if request.method == "POST":
+    session_id = request.GET.get("session_id", "").strip()
+    if session_id:
         try:
-            amount = Decimal(request.POST.get("amount", "0"))
-            if amount <= 0:
-                messages.error(request, "充值金额必须大于0")
+            ok, result = fulfill_checkout_session(session_id)
+            if ok:
+                messages.success(request, result.get("message", "畅读卡开通成功"))
             else:
-                with transaction.atomic():
-                    customer = Customer.objects.select_for_update().get(pk=customer.customerid)
-                    customer.balance += amount
-                    customer.save(update_fields=['balance'])
-                messages.success(request, f"充值成功！充值金额：¥{amount}，当前余额：¥{customer.balance}")
-                return redirect("bookstore:account_wallet")
-        except (ValueError, TypeError):
-            messages.error(request, "请输入有效的金额")
-        except Exception as e:
-            messages.error(request, f"充值失败：{e}")
+                messages.error(request, result.get("error", "支付确认失败"))
+        except StripeServiceError as exc:
+            messages.error(request, str(exc))
+        return redirect("bookstore:account_wallet")
 
-    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    discount_percent = (Decimal('1') - customer.levelid.discountrate) * 100
+    if request.GET.get("canceled"):
+        messages.info(request, "已取消支付")
+
+    profile = get_profile(customer.customerid)
+    membership = serialize_membership(customer.customerid)
+    reading_price = getattr(settings, "STRIPE_READING_PASS_AMOUNT_CENTS", 2000) / 100
     return render(request, "bookstore/account_wallet.html", {
         "customer": customer,
-        "discount_percent": discount_percent,
-        "next_level_amount": _next_level_amount(customer),
+        "profile": profile,
+        "membership": membership,
+        "level_guide": get_member_level_guide(),
+        "stripe_configured": is_stripe_configured(),
+        "reading_pass_price": reading_price,
     })
+
+
+def _redirect_after_action(request: HttpRequest, default: str) -> HttpResponse:
+    target = (request.POST.get("redirect_to") or request.GET.get("redirect_to") or "").strip()
+    if target.startswith("/") and not target.startswith("//"):
+        return redirect(target)
+    return redirect(default)
+
+
+@customer_required
+def activate_membership(request: HttpRequest) -> HttpResponse:
+    from bookstore.membership import activate_free_membership, is_member
+
+    if request.method != "POST":
+        return redirect("bookstore:account_wallet")
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    if not is_member(customer.customerid):
+        activate_free_membership(customer.customerid)
+        messages.success(request, "会员开通成功！购物可累计积分（1 积分 = ¥1 消费）。")
+    else:
+        messages.info(request, "您已是会员。")
+    return _redirect_after_action(request, "bookstore:account_wallet")
+
+
+@customer_required
+def membership_checkout(request: HttpRequest) -> HttpResponse:
+    """Web：Stripe 购买畅读卡。"""
+    from bookstore.stripe_service import StripeServiceError, create_reading_pass_checkout, is_stripe_configured
+
+    if request.method != "POST":
+        return redirect("bookstore:account_wallet")
+
+    if not is_stripe_configured():
+        messages.error(request, "在线支付暂不可用")
+        return redirect("bookstore:account_wallet")
+
+    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
+    site = getattr(settings, "SITE_URL", request.build_absolute_uri("/")).rstrip("/")
+    redirect_path = (request.POST.get("redirect_to") or "").strip()
+    if redirect_path.startswith("/") and not redirect_path.startswith("//"):
+        wallet_path = redirect_path
+    else:
+        wallet_path = "/account/wallet/"
+    success_url = f"{site}{wallet_path}?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{site}{wallet_path}?canceled=1"
+
+    try:
+        checkout_url, _ = create_reading_pass_checkout(customer, success_url, cancel_url)
+    except StripeServiceError as exc:
+        messages.error(request, str(exc))
+        return _redirect_after_action(request, "bookstore:account_wallet")
+
+    return redirect(checkout_url)
 
 
 @customer_required
@@ -1154,127 +1175,24 @@ def account_edit(request: HttpRequest) -> HttpResponse:
 
 @customer_required
 def repay_overdraft(request: HttpRequest) -> HttpResponse:
-    """全部还款 - 还清所有未全额支付的订单"""
-    customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    
-    if request.method == "POST":
-        with transaction.atomic():
-            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
-            
-            if customer.usedcredit <= 0:
-                messages.info(request, "您当前没有未还款的订单")
-                return redirect("bookstore:account_wallet")
-            
-            # 检查余额是否足够
-            if customer.balance < customer.usedcredit:
-                messages.error(request, f"余额不足！需要¥{customer.usedcredit}，当前余额¥{customer.balance}，请先充值")
-                return redirect("bookstore:account_wallet")
-            
-            # 1. 获取所有未全额支付的订单
-            unpaid_orders = Orders.objects.filter(
-                customerid=customer,
-                paymentstatus=2,  # 未全额支付
-                status__in=[0, 1]  # 排除已取消和已完成
-            )
-            
-            total_repay = Decimal('0')
-            repay_count = 0
-            
-            # 2. 还款所有订单
-            for order in unpaid_orders:
-                unpaid_amount = order.totalamount - order.actualpaid
-                
-                # 从余额扣款
-                customer.balance -= unpaid_amount
-                customer.totalspent += unpaid_amount  # 还款计入累计消费
-                total_repay += unpaid_amount
-                
-                # 更新订单
-                order.actualpaid = order.totalamount
-                order.paymentstatus = 1  # 已全额支付
-                order.save(update_fields=['actualpaid', 'paymentstatus'])
-                repay_count += 1
-            
-            # 3. 清空已使用信用额度
-            customer.usedcredit = Decimal('0')
-            
-            # 4. 检查是否升级
-            from .signals import _calculate_credit_level
-            from .models import Creditlevel as CL
-            new_level_id = _calculate_credit_level(customer.totalspent)
-            old_level = customer.levelid.levelid
-            if new_level_id != old_level:
-                customer.levelid = CL.objects.get(levelid=new_level_id)
-                customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
-                messages.success(request, 
-                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
-                    f"当前余额：¥{customer.balance}，"
-                    f"信用等级已升级至{new_level_id}级！")
-            else:
-                customer.save(update_fields=['balance', 'usedcredit', 'totalspent'])
-                messages.success(request, 
-                    f"还款成功！还清了{repay_count}个订单，共¥{total_repay}，"
-                    f"当前余额：¥{customer.balance}")
-        
-        return redirect("bookstore:account_wallet")
-    
+    """信用购书模式下无需余额还款。"""
+    messages.info(request, "当前使用信用额度购书，无需余额还款。")
     return redirect("bookstore:account_wallet")
 
 
 @customer_required
 def pay_order(request: HttpRequest, order_id: int) -> HttpResponse:
-    """补足支付未全额支付的订单（只能用余额）"""
+    """未支付订单：跳转 Stripe Checkout。"""
+    from bookstore.api import services as order_services
+
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    order = get_object_or_404(Orders, pk=order_id, customerid=customer)
-    
-    if order.paymentstatus == 1:
-        messages.info(request, "该订单已全额支付")
+    if request.method != "POST":
         return redirect("bookstore:order_detail", order_id=order_id)
-    
-    if order.paymentstatus != 2:
-        messages.error(request, "该订单不需要补足支付")
-        return redirect("bookstore:order_detail", order_id=order_id)
-    
-    if request.method == "POST":
-        with transaction.atomic():
-            customer = Customer.objects.select_for_update().select_related('levelid').get(pk=customer.customerid)
-            order.refresh_from_db()
-            
-            # 计算未付金额
-            unpaid_amount = order.totalamount - order.actualpaid
-            
-            # 检查余额（只能用余额，不能用信用）
-            if customer.balance < unpaid_amount:
-                messages.error(request, f"余额不足！需要¥{unpaid_amount}，当前余额¥{customer.balance}，请先充值")
-                return redirect("bookstore:order_detail", order_id=order_id)
-            
-            # 从余额扣款
-            customer.balance -= unpaid_amount
-            customer.totalspent += unpaid_amount  # 补足部分计入累计消费
-            customer.usedcredit -= unpaid_amount  # 释放信用额度
-            
-            # 检查是否升级
-            from .signals import _calculate_credit_level
-            from .models import Creditlevel as CL
-            new_level_id = _calculate_credit_level(customer.totalspent)
-            old_level = customer.levelid.levelid
-            if new_level_id != old_level:
-                customer.levelid = CL.objects.get(levelid=new_level_id)
-            
-            customer.save(update_fields=['balance', 'usedcredit', 'totalspent', 'levelid'])
-            
-            # 更新订单
-            order.actualpaid = order.totalamount
-            order.paymentstatus = 1  # 已全额支付
-            order.save(update_fields=['actualpaid', 'paymentstatus'])
-            
-            if new_level_id != old_level:
-                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}，信用等级已升级至{new_level_id}级！")
-            else:
-                messages.success(request, f"补足支付成功！支付¥{unpaid_amount}，当前余额¥{customer.balance}")
-        
-        return redirect("bookstore:order_detail", order_id=order_id)
-    
+
+    ok, result = order_services.start_order_payment(customer, order_id)
+    if ok and result.get("checkout_url"):
+        return redirect(result["checkout_url"])
+    messages.error(request, result.get("error", "无法发起支付"))
     return redirect("bookstore:order_detail", order_id=order_id)
 
 

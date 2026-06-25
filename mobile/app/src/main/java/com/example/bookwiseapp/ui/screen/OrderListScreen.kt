@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.example.bookwiseapp.ui.component.ErrorMessage
 import com.example.bookwiseapp.ui.component.LoadingOverlay
 import com.example.bookwiseapp.ui.component.orderStatusText
+import com.example.bookwiseapp.ui.component.paymentStatusColor
 import com.example.bookwiseapp.ui.component.paymentStatusText
 import com.example.bookwiseapp.viewmodel.OrderViewModel
 
@@ -102,11 +103,14 @@ fun OrderListScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Text(paymentStatusText(order.paymentStatus),
+                                                Text(
+                                                    paymentStatusText(order.paymentStatus),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = if (order.paymentStatus == 1)
-                                                        MaterialTheme.colorScheme.secondary
-                                                    else MaterialTheme.colorScheme.error)
+                                                    color = paymentStatusColor(
+                                                        order.paymentStatus,
+                                                        MaterialTheme.colorScheme
+                                                    )
+                                                )
                                                 Text("¥${order.totalAmount}",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = MaterialTheme.colorScheme.primary)

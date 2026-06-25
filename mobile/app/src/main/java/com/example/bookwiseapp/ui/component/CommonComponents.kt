@@ -129,8 +129,14 @@ fun orderStatusText(status: Int) = when (status) {
 /** 付款状态文字（与网页端 order_detail.html 保持一致）*/
 fun paymentStatusText(ps: Int) = when (ps) {
     0 -> "未支付"
-    1 -> "已支付"
-    2 -> "待补款"
+    1, 2 -> "已支付"  // 2 为历史信用购书遗留，对外统一为已支付
     3 -> "已退款"
     else -> "未知"
 }
+
+fun paymentStatusColor(ps: Int, scheme: androidx.compose.material3.ColorScheme) =
+    when (ps) {
+        1, 2 -> scheme.secondary
+        3 -> scheme.outline
+        else -> scheme.error
+    }

@@ -2,6 +2,7 @@ package com.example.bookwiseapp.data.repository
 
 import com.example.bookwiseapp.data.api.ApiClient
 import com.example.bookwiseapp.data.api.model.*
+import com.example.bookwiseapp.util.StripeDeepLink
 
 class OrderRepository : BaseRepository() {
 
@@ -18,14 +19,19 @@ class OrderRepository : BaseRepository() {
     )
 
     suspend fun createOrder(
-        paymentChoice: String,
         shippingName: String,
         shippingContact: String,
         shippingAddress: String
     ): Result<OrderResponse> = safeCall(
         call = {
             ApiClient.service.createOrder(
-                CreateOrderRequest(paymentChoice, shippingName, shippingContact, shippingAddress)
+                CreateOrderRequest(
+                    shippingName = shippingName,
+                    shippingContact = shippingContact,
+                    shippingAddress = shippingAddress,
+                    successUrl = StripeDeepLink.orderSuccessUrl(),
+                    cancelUrl = StripeDeepLink.orderCancelUrl()
+                )
             )
         },
         errorField = { it.error },
@@ -38,8 +44,14 @@ class OrderRepository : BaseRepository() {
         successCheck = { it.success }
     )
 
-    suspend fun payOrder(orderId: Int): Result<OrderResponse> = safeCall(
-        call = { ApiClient.service.payOrder(orderId) },
+    suspend fun abandonOrder(orderId: Int): Result<SimpleResponse> = safeCall(
+        call = { ApiClient.service.abandonOrder(orderId) },
+        errorField = { it.error },
+        successCheck = { it.success }
+    )
+
+    suspend fun confirmPayment(sessionId: String): Result<PaymentConfirmResponse> = safeCall(
+        call = { ApiClient.service.confirmPayment(PaymentConfirmRequest(sessionId)) },
         errorField = { it.error },
         successCheck = { it.success }
     )

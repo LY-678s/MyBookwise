@@ -150,3 +150,16 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
 
 AI_REQUEST_TIMEOUT = 60
+
+# ---------- Stripe Test Mode（会员支付）----------
+#
+# 【在哪填】https://dashboard.stripe.com/test/apikeys （Test mode / 沙盒）
+#   STRIPE_SECRET_KEY      ← sk_test_... 私钥
+#   STRIPE_PUBLISHABLE_KEY ← pk_test_... 公钥
+#   STRIPE_WEBHOOK_SECRET  ← 可选 whsec_...
+#
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+STRIPE_MEMBERSHIP_AMOUNT_CENTS = 2999
+SITE_URL = os.environ.get("SITE_URL", "https://mybookwise.xyz")

@@ -38,6 +38,7 @@ urlpatterns = [
     path("orders/preview/", views.OrderPreviewView.as_view(), name="order-preview"),
     path("orders/", views.OrderListCreateView.as_view(), name="order-list"),
     path("orders/<int:order_id>/", views.OrderDetailView.as_view(), name="order-detail"),
+    path("orders/<int:order_id>/abandon/", views.OrderAbandonView.as_view(), name="order-abandon"),
     path("orders/<int:order_id>/pay/", views.OrderPayView.as_view(), name="order-pay"),
     path("orders/<int:order_id>/cancel/", views.OrderCancelView.as_view(), name="order-cancel"),
     path(
@@ -45,11 +46,14 @@ urlpatterns = [
         views.OrderConfirmReceiptView.as_view(),
         name="order-confirm-receipt",
     ),
-    # 账户
+    # 账户 / 会员
     path("account/", views.AccountView.as_view(), name="account"),
-    path("account/recharge/", views.AccountRechargeView.as_view(), name="account-recharge"),
     path("account/repay/", views.AccountRepayView.as_view(), name="account-repay"),
     path("account/browse-history/", views.BrowseHistoryView.as_view(), name="browse-history"),
+    path("membership/activate/", views.MembershipActivateView.as_view(), name="membership-activate"),
+    path("membership/checkout/", views.MembershipCheckoutView.as_view(), name="membership-checkout"),
+    path("membership/confirm/", views.MembershipConfirmView.as_view(), name="membership-confirm"),
+    path("payments/stripe/webhook/", views.StripeWebhookView.as_view(), name="stripe-webhook"),
     # AI 助手 — 对应 views.ai_chat / ai_chat_api / ai_chat_clear
     path("ai/", views.AiChatView.as_view(), name="ai-status"),
     path("ai/chat/", views.AiChatView.as_view(), name="ai-chat"),

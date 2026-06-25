@@ -202,38 +202,19 @@ class TestLogoutAndDecorators:
         resp = dummy_view(req)
         assert resp.status_code == 302  # 被定向到登录页
 
-# ===================== 账户充值模块测试 (account_recharge) =====================
+# ===================== 会员页测试 (account_wallet) =====================
 
 @pytest.mark.django_db
-class TestAccountRecharge:
-    def test_recharge_success(self, factory, test_customer):
-        """等价类（有效）：输入合法的金额执行充值"""
-        from bookstore.views import account_wallet as account_recharge
-        from decimal import Decimal
-        request = make_request_with_messages(factory, 'POST', '/account/', {'amount': '100.00'}, session_data={
-            'customer_id': test_customer.customerid,
-            'customer_name': test_customer.name
-        })
-        response = account_recharge(request)
-        test_customer.refresh_from_db()  # 必须从数据库重新读取以验证
-        assert test_customer.balance == Decimal('100.00')  # 测试初始为0，充值100必定为100
-        assert response.status_code == 302  # 成功应该重定向
+class TestAccountMembershipPage:
+    def test_membership_page_loads(self, factory, test_customer):
+        from bookstore.views import account_wallet
 
-    def test_recharge_invalid_amount(self, factory, test_customer):
-        """等价类（无效）：输入的金额包含负数或非法字母"""
-        from bookstore.views import account_wallet as account_recharge
-        from decimal import Decimal
-        # 场景1：输入金额为负数
-        req_negative = make_request_with_messages(factory, 'POST', '/account/', {'amount': '-50'}, session_data={
-            'customer_id': test_customer.customerid
+        request = make_request_with_messages(factory, "GET", "/account/wallet/", session_data={
+            "customer_id": test_customer.customerid,
+            "customer_name": test_customer.name,
         })
-        assert account_recharge(req_negative).status_code == 200  # 解析失败不跳转，停留在原页面展示错误信息
-
-        # 场景2：输入杂串字母
-        req_letter = make_request_with_messages(factory, 'POST', '/account/', {'amount': 'abc'}, session_data={
-            'customer_id': test_customer.customerid
-        })
-        assert account_recharge(req_letter).status_code == 200
+        response = account_wallet(request)
+        assert response.status_code == 200
 
 
 # ===================== 账户信息编辑测试 (account_edit) =====================

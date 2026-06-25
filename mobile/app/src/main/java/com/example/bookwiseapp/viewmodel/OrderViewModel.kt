@@ -79,19 +79,28 @@ class OrderViewModel : ViewModel() {
     }
 
     fun createOrder(
-        paymentChoice: String,
         shippingName: String,
         shippingContact: String,
         shippingAddress: String,
-        onSuccess: (Int) -> Unit
+        onStripeUrl: (String) -> Unit
     ) {
         viewModelScope.launch {
             _checkoutState.value = _checkoutState.value.copy(isLoading = true, error = null)
-            val result = repo.createOrder(paymentChoice, shippingName, shippingContact, shippingAddress)
+            val result = repo.createOrder(shippingName, shippingContact, shippingAddress)
             if (result.isSuccess) {
-                val order = result.getOrNull()?.order
-                _checkoutState.value = _checkoutState.value.copy(isLoading = false, orderCreated = order)
-                order?.let { onSuccess(it.orderId) }
+                val data = result.getOrNull()!!
+                val url = data.checkoutUrl
+                _checkoutState.value = _checkoutState.value.copy(
+                    isLoading = false,
+                    orderCreated = data.order
+                )
+                if (!url.isNullOrBlank()) {
+                    onStripeUrl(url)
+                } else {
+                    _checkoutState.value = _checkoutState.value.copy(
+                        error = "未获取到支付链接"
+                    )
+                }
             } else {
                 _checkoutState.value = _checkoutState.value.copy(
                     isLoading = false,
@@ -101,11 +110,34 @@ class OrderViewModel : ViewModel() {
         }
     }
 
-    fun payOrder(orderId: Int) {
+    fun confirmStripePayment(
+        sessionId: String,
+        onSuccess: (orderId: Int, message: String?) -> Unit,
+        onError: (String) -> Unit
+    ) {
         viewModelScope.launch {
-            _detailState.value = _detailState.value.copy(isLoading = true)
-            val result = repo.payOrder(orderId)
-            handleOrderAction(result)
+            val result = repo.confirmPayment(sessionId)
+            if (result.isSuccess) {
+                val data = result.getOrNull()!!
+                val orderId = data.orderId
+                if (orderId != null) {
+                    onSuccess(orderId, data.message)
+                } else {
+                    onError("支付成功但未返回订单号")
+                }
+            } else {
+                onError(result.exceptionOrNull()?.message ?: "支付确认失败")
+            }
+        }
+    }
+
+    fun abandonCheckoutOrder(
+        orderId: Int,
+        onDone: (String?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repo.abandonOrder(orderId)
+            onDone(if (result.isSuccess) result.getOrNull()?.message else result.exceptionOrNull()?.message)
         }
     }
 

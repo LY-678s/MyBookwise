@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import F, Sum
 from django.shortcuts import get_object_or_404
@@ -508,10 +509,11 @@ class OrderListCreateView(APIView):
         customer = _customer_view(request)
         ok, result = services.create_order(
             customer,
-            payment_choice=request.data.get("payment_choice", "balance"),
             shipping_name=request.data.get("shipping_name"),
             shipping_contact=request.data.get("shipping_contact"),
             shipping_address=request.data.get("shipping_address"),
+            success_url=request.data.get("success_url"),
+            cancel_url=request.data.get("cancel_url"),
         )
         if not ok:
             return _err(result.get("error", "下单失败"))
@@ -531,17 +533,26 @@ class OrderDetailView(APIView):
         return _ok({"order": order})
 
 
-class OrderPayView(APIView):
-    """POST /api/orders/<id>/pay/  ←→  views.pay_order"""
+class OrderAbandonView(APIView):
+    """POST /api/orders/<id>/abandon/  Stripe 支付取消，作废待支付订单。"""
 
     permission_classes = [IsCustomer]
 
     def post(self, request, order_id):
         customer = _customer_view(request)
-        ok, result = services.pay_order_remainder(customer, order_id)
+        ok, result = services.abandon_checkout_order(customer, order_id)
         if not ok:
-            return _err(result.get("error", "支付失败"))
+            return _err(result.get("error", "无法取消"))
         return _ok(result)
+
+
+class OrderPayView(APIView):
+    """已废弃：请重新下单并完成在线支付。"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request, order_id):
+        return _err("请返回购物车重新下单并完成支付", status.HTTP_410_GONE)
 
 
 class OrderCancelView(APIView):
@@ -586,7 +597,15 @@ class AccountView(APIView):
         customer = _customer_view(request)
         # 刷新以获取最新余额
         customer = Customer.objects.select_related("levelid").get(pk=customer.customerid)
-        return _ok({"account": serialize_account_summary(customer)})
+        from bookstore.stripe_service import is_stripe_configured
+
+        from bookstore.membership import get_member_level_guide
+
+        return _ok({
+            "account": serialize_account_summary(customer),
+            "stripe_configured": is_stripe_configured(),
+            "member_level_guide": get_member_level_guide(),
+        })
 
     def patch(self, request):
         customer = _customer_view(request)
@@ -602,43 +621,131 @@ class AccountView(APIView):
 
 
 class AccountRechargeView(APIView):
-    """POST /api/account/recharge/  body: {amount}  ←→  views.account_recharge POST"""
+    """已废弃：请使用 /api/membership/checkout/ 开通会员。"""
 
     permission_classes = [IsCustomer]
 
     def post(self, request):
+        return _err("账户充值已下线，请前往「会员与积分」购买畅读卡。", status.HTTP_410_GONE)
+
+
+class MembershipActivateView(APIView):
+    """POST /api/membership/activate/  免费开通会员。"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        from bookstore.membership import activate_free_membership, is_member, serialize_membership
+
+        customer = _customer_view(request)
+        if is_member(customer.customerid):
+            return _ok({
+                "message": "您已是会员",
+                "membership": serialize_membership(customer.customerid),
+                "account": serialize_account_summary(
+                    Customer.objects.select_related("levelid").get(pk=customer.customerid)
+                ),
+            })
+        activate_free_membership(customer.customerid)
+        refreshed = Customer.objects.select_related("levelid").get(pk=customer.customerid)
+        return _ok({
+            "message": "会员开通成功！购物可累计积分（与人民币 1:1）。",
+            "membership": serialize_membership(customer.customerid),
+            "account": serialize_account_summary(refreshed),
+        })
+
+
+class MembershipCheckoutView(APIView):
+    """POST /api/membership/checkout/  创建畅读卡 Stripe 支付会话（¥20/月）。"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        from bookstore.stripe_service import StripeServiceError, create_reading_pass_checkout, is_stripe_configured
+
+        if not is_stripe_configured():
+            return _err("尚未配置在线支付，请联系管理员。")
+
+        customer = _customer_view(request)
+        site = getattr(settings, "SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+        success_url = request.data.get("success_url") or f"{site}/account/wallet/?session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = request.data.get("cancel_url") or f"{site}/account/wallet/?canceled=1"
+
+        try:
+            checkout_url, session_id = create_reading_pass_checkout(customer, success_url, cancel_url)
+        except StripeServiceError as exc:
+            return _err(str(exc))
+
+        return _ok({
+            "checkout_url": checkout_url,
+            "session_id": session_id,
+            "publishable_key": getattr(settings, "STRIPE_PUBLISHABLE_KEY", ""),
+        })
+
+
+class MembershipConfirmView(APIView):
+    """POST /api/membership/confirm/  body: {session_id}  支付完成后确认到账。"""
+
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        from bookstore.stripe_service import StripeServiceError, fulfill_checkout_session, is_stripe_configured
+
+        if not is_stripe_configured():
+            return _err("尚未配置在线支付。")
+
+        session_id = (request.data.get("session_id") or "").strip()
+        if not session_id:
+            return _err("缺少 session_id")
+
         customer = _customer_view(request)
         try:
-            amount = Decimal(str(request.data.get("amount", "0")))
-        except (InvalidOperation, TypeError):
-            return _err("请输入有效的金额")
-        ok, result = services.recharge_account(customer, amount)
+            ok, result = fulfill_checkout_session(session_id)
+        except StripeServiceError as exc:
+            return _err(str(exc))
+
         if not ok:
-            return _err(result["error"])
-        return _ok(
-            {
-                "message": result["message"],
-                "account": serialize_account_summary(result["customer"]),
-            }
-        )
+            return _err(result.get("error", "确认失败"))
+
+        refreshed = Customer.objects.select_related("levelid").get(pk=customer.customerid)
+        payload = {
+            "message": result.get("message"),
+            "account": serialize_account_summary(refreshed),
+        }
+        if result.get("order_id") is not None:
+            payload["order_id"] = result.get("order_id")
+        if result.get("membership") is not None:
+            payload["membership"] = result.get("membership")
+        return _ok(payload)
+
+
+class StripeWebhookView(APIView):
+    """POST /api/payments/stripe/webhook/  Stripe Webhook（无登录）。"""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        from bookstore.stripe_service import StripeServiceError, handle_webhook_payload
+
+        sig = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+        try:
+            ok, result = handle_webhook_payload(request.body, sig)
+        except StripeServiceError as exc:
+            return _err(str(exc), status.HTTP_400_BAD_REQUEST)
+
+        if not ok:
+            return _err(result.get("error", "处理失败"), status.HTTP_400_BAD_REQUEST)
+        return _ok(result)
 
 
 class AccountRepayView(APIView):
-    """POST /api/account/repay/  ←→  views.repay_overdraft POST"""
+    """已废弃：当前不支持信用购书/还款。"""
 
     permission_classes = [IsCustomer]
 
     def post(self, request):
-        customer = _customer_view(request)
-        ok, result = services.repay_all_overdraft(customer)
-        if not ok:
-            return _err(result.get("error", "还款失败"))
-        return _ok(
-            {
-                "message": result["message"],
-                "account": serialize_account_summary(result["customer"]),
-            }
-        )
+        return _err("当前不支持还款操作", status.HTTP_410_GONE)
 
 
 # ---------------------------------------------------------------------------

@@ -62,10 +62,7 @@ fun OrderDetailScreen(
                                 InfoRow("订单状态", orderStatusText(order.status))
                                 InfoRow("付款状态", paymentStatusText(order.paymentStatus))
                                 InfoRow("应付金额", "¥${order.totalAmount}")
-                                InfoRow("已付金额", "¥${order.actualPaid}")
-                                if (order.unpaidAmount != "0.00") {
-                                    InfoRow("待付金额", "¥${order.unpaidAmount}")
-                                }
+                                InfoRow("实付金额", "¥${order.actualPaid}")
                                 if (order.discountAmount != "0.00") {
                                     InfoRow("已优惠", "¥${order.discountAmount}")
                                 }
@@ -103,14 +100,6 @@ fun OrderDetailScreen(
                                 style = MaterialTheme.typography.bodySmall)
                         }
 
-                        // 补足支付（部分信用支付）
-                        if (order.paymentStatus == 2 && order.status != 4) {
-                            Button(
-                                onClick = { viewModel.payOrder(orderId) },
-                                enabled = !state.isLoading,
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text("补足支付 ¥${order.unpaidAmount}") }
-                        }
                         // 取消订单
                         if (order.status == 0) {
                             OutlinedButton(

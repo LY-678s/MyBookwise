@@ -55,8 +55,8 @@ class Creditlevel(models.Model):
     class Meta:
         managed = False
         db_table = 'creditlevel'
-        verbose_name = '信用等级'
-        verbose_name_plural = '信用等级'
+        verbose_name = '会员等级'
+        verbose_name_plural = '会员等级'
 
     def __str__(self):
         return f"等级{self.levelid} ({self.discountrate*100:.0f}折)"
@@ -69,11 +69,9 @@ class Customer(models.Model):
     name = models.CharField(db_column='Name', max_length=50)  # Field name made lowercase.
     address = models.CharField(db_column='Address', max_length=200, blank=True, null=True)  # Field name made lowercase.
     email = models.CharField(db_column='Email', unique=True, max_length=100, blank=True, null=True)  # Field name made lowercase.
-    balance = models.DecimalField(db_column='Balance', max_digits=10, decimal_places=2)  # 账户余额（最低为0）
     levelid = models.ForeignKey(Creditlevel, models.DO_NOTHING, db_column='LevelID')  # Field name made lowercase.
     creditlimit = models.DecimalField(db_column='CreditLimit', max_digits=10, decimal_places=2)  # 信用额度上限
     usedcredit = models.DecimalField(db_column='UsedCredit', max_digits=10, decimal_places=2, default=0)  # 已使用信用额度
-    totalspent = models.DecimalField(db_column='TotalSpent', max_digits=12, decimal_places=2)  # 累计消费（从余额支付的总额）
     registerdate = models.DateTimeField(db_column='RegisterDate')  # Field name made lowercase.
 
     class Meta:
@@ -307,3 +305,47 @@ class BookFavorite(models.Model):
 
     def __str__(self):
         return f"{self.customer.username} 收藏了: {self.isbn.title}"
+
+
+class CustomerProfile(models.Model):
+    """会员积分与有效期（Django 托管表，Customer 表为 legacy SQL）。"""
+    customer = models.OneToOneField(
+        Customer,
+        db_column="customer_id",
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="profile",
+    )
+    points = models.IntegerField(default=0)
+    member_since = models.DateTimeField(null=True, blank=True)
+    reading_pass_expires_at = models.DateTimeField(null=True, blank=True)
+    membership_expires_at = models.DateTimeField(null=True, blank=True)  # legacy, unused
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = "customer_profile"
+        verbose_name = "会员档案"
+        verbose_name_plural = "会员档案"
+
+    def __str__(self):
+        return f"Profile({self.customer_id}, points={self.points})"
+
+
+class StripePaymentRecord(models.Model):
+    """Stripe Checkout 记录，用于幂等处理。"""
+    id = models.AutoField(primary_key=True)
+    customer = models.ForeignKey(Customer, db_column="customer_id", on_delete=models.CASCADE)
+    session_id = models.CharField(max_length=255, unique=True)
+    amount_cents = models.IntegerField()
+    currency = models.CharField(max_length=8, default="cny")
+    purpose = models.CharField(max_length=32, default="membership")
+    status = models.CharField(max_length=16, default="pending")  # pending | paid | failed
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "stripe_payment_record"
+        verbose_name = "Stripe 支付记录"
+        verbose_name_plural = "Stripe 支付记录"

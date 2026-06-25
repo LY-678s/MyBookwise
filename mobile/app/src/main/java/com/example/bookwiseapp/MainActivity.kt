@@ -1,5 +1,7 @@
 package com.example.bookwiseapp
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,8 +18,12 @@ import com.example.bookwiseapp.ui.theme.BookwiseAppTheme
 import com.example.bookwiseapp.viewmodel.AuthViewModel
 
 class MainActivity : ComponentActivity() {
+
+    private val pendingDeepLink = mutableStateOf<Uri?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingDeepLink.value = intent?.data
         enableEdgeToEdge()
         setContent {
             BookwiseAppTheme {
@@ -35,9 +41,18 @@ class MainActivity : ComponentActivity() {
                         CircularProgressIndicator()
                     }
                 } else {
-                    AppNav(startLoggedIn = startLoggedIn)
+                    AppNav(
+                        startLoggedIn = startLoggedIn,
+                        deepLinkUri = pendingDeepLink
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingDeepLink.value = intent.data
     }
 }

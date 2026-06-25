@@ -90,8 +90,8 @@ interface ApiService {
     @GET("orders/{id}/")
     suspend fun getOrder(@Path("id") orderId: Int): Response<OrderResponse>
 
-    @POST("orders/{id}/pay/")
-    suspend fun payOrder(@Path("id") orderId: Int): Response<OrderResponse>
+    @POST("orders/{id}/abandon/")
+    suspend fun abandonOrder(@Path("id") orderId: Int): Response<SimpleResponse>
 
     @POST("orders/{id}/cancel/")
     suspend fun cancelOrder(@Path("id") orderId: Int): Response<OrderResponse>
@@ -99,18 +99,23 @@ interface ApiService {
     @POST("orders/{id}/confirm-receipt/")
     suspend fun confirmReceipt(@Path("id") orderId: Int): Response<OrderResponse>
 
-    // ── 账户 ──────────────────────────────────────────────────────
+    // ── 账户 / 支付 ───────────────────────────────────────────────
     @GET("account/")
     suspend fun getAccount(): Response<AccountResponse>
 
     @PATCH("account/")
     suspend fun updateAccount(@Body request: UpdateAccountRequest): Response<AccountResponse>
 
-    @POST("account/recharge/")
-    suspend fun recharge(@Body request: RechargeRequest): Response<AccountResponse>
+    @POST("membership/activate/")
+    suspend fun activateMembership(): Response<AccountResponse>
 
-    @POST("account/repay/")
-    suspend fun repay(): Response<AccountResponse>
+    @POST("membership/checkout/")
+    suspend fun createMembershipCheckout(
+        @Body request: MembershipCheckoutRequest
+    ): Response<MembershipCheckoutResponse>
+
+    @POST("membership/confirm/")
+    suspend fun confirmPayment(@Body request: PaymentConfirmRequest): Response<PaymentConfirmResponse>
 
     @GET("account/browse-history/")
     suspend fun getBrowseHistory(): Response<BrowseHistoryResponse>

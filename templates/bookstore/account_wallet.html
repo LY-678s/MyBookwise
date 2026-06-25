@@ -1,159 +1,111 @@
 {% extends "bookstore/base.html" %}
 
-{% block title %}账户 - MyBookwise{% endblock %}
+{% block title %}会员与积分 - MyBookwise{% endblock %}
 
 {% block content %}
-<head>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
-</head>
-
 <div class="page-content animate-fade-in">
     <div class="page-header">
         <div class="page-header-main">
-            <h1 class="page-title">
-                <span class="material-symbols-outlined page-title-icon" aria-hidden="true">account_balance_wallet</span>
-                账户
-            </h1>
-            <p class="page-subtitle">余额、信用等级与充值</p>
+            <h1 class="page-title">会员与积分</h1>
+            <p class="page-subtitle">开通会员后累计积分，畅读卡享额外折扣</p>
         </div>
         <div class="page-header-actions">
+            <button type="button" class="btn btn-secondary" onclick="openModal('level-guide-modal')">详情</button>
             <a href="{% url 'bookstore:account' %}" class="btn btn-secondary">返回我的</a>
         </div>
     </div>
 
     <div class="stacked" style="display:flex; flex-direction:column; gap:1.5rem;">
         <div class="card">
-            <div class="card-header">
-                <h3 style="margin:0; color:var(--text-primary);">
-                    <span class="material-symbols-outlined">money_bag</span>
-                    账户余额
-                </h3>
-            </div>
             <div class="card-body">
-                <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                    <div style="font-size:2.4rem; font-weight:300; color:{% if customer.balance < 0 %}var(--error){% else %}var(--success){% endif %};">
-                        ¥{{ customer.balance }}
-                    </div>
-                    <div style="color:var(--text-secondary);">
-                        {% if customer.balance < 0 %}欠款金额{% else %}可用余额{% endif %}
-                    </div>
-                    <form method="post" action="{% url 'bookstore:account_wallet' %}" style="margin-top:0.5rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                        {% csrf_token %}
-                        <input type="number" name="amount" step="0.01" min="0.01" placeholder="充值金额" class="form-control" style="max-width:220px;">
-                        <button type="submit" class="btn btn-success">充值</button>
-                    </form>
+                <h3 style="margin:0 0 0.5rem;">累计积分</h3>
+                <div style="font-size:2.4rem; font-weight:300; color:var(--accent);">
+                    {% if membership.is_member and membership.next_level_points == "max" %}max{% else %}{{ membership.points }} 分{% endif %}
                 </div>
+                <p style="color:var(--text-secondary); margin:0.25rem 0 0;">
+                    {% if membership.is_member %}购物消费与人民币 1:1 累计{% else %}开通会员后购物才累计积分{% endif %}
+                </p>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <h3 style="margin:0; color:var(--text-primary);">
-                    <span class="material-symbols-outlined">bar_chart</span>
-                    信用信息
-                </h3>
-            </div>
             <div class="card-body">
-                <div style="display:grid; gap:0.8rem;">
-                    <div style="display:flex; justify-content:space-between;">
-                        <span style="color:var(--text-secondary);">当前等级</span>
-                        <span style="font-weight:600; color:var(--accent);">{{ customer.levelid.levelid }}级</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between;">
-                        <span style="color:var(--text-secondary);">累计消费</span>
-                        <span style="font-weight:600;">¥{{ customer.totalspent }}</span>
-                    </div>
-                    {% if customer.levelid.canusecredit %}
-                    <div style="display:flex; justify-content:space-between;">
-                        <span style="color:var(--text-secondary);">信用额度</span>
-                        <span style="font-weight:600;">
-                            <span style="{% if customer.usedcredit > 0 %}color:var(--warning);{% endif %}">¥{{ customer.usedcredit|floatformat:2 }}</span>
-                            <span style="color:var(--text-secondary);"> / </span>
-                            ¥{{ customer.creditlimit|floatformat:2 }}
-                        </span>
-                    </div>
-                    {% if customer.usedcredit > 0 %}
-                    <div style="padding:1rem; border-radius:8px; background: var(--secondary-bg); border: 1px solid rgba(212,197,185,0.35);">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="background: rgba(244,162,97,0.12); color:#8B5A2B; font-weight:600; padding:0.35rem 0.6rem; border-radius:6px;">待还款</span>
-                            <span style="color:#8B5A2B; font-weight:700;">¥{{ customer.usedcredit }}</span>
-                        </div>
-                        <form method="post" action="{% url 'bookstore:repay_overdraft' %}" style="margin-top:0.5rem;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-warning" style="width:100%;">全部还款</button>
-                        </form>
-                    </div>
-                    {% endif %}
-                    {% else %}
-                    <div style="color:var(--text-secondary); font-style:italic;">继续购物提升等级，解锁信用支付功能</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h3 style="margin: 0; color: var(--text-primary);">
-                    <span class="material-symbols-outlined">info</span>
-                    信用等级说明
-                </h3>
-            </div>
-            <div class="card-body">
-                <div style="overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead>
-                            <tr style="background: var(--secondary-bg);">
-                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">等级</th>
-                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">消费要求</th>
-                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">折扣率</th>
-                                <th style="padding: 1rem; text-align: left; border-bottom: 2px solid var(--border);">信用额度</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr {% if customer.levelid.levelid == 1 %}style="background: var(--accent-light);"{% endif %}>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">1级</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">&lt; ¥1000</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">9折</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">不可透支</td>
-                            </tr>
-                            <tr {% if customer.levelid.levelid == 2 %}style="background: var(--accent-light);"{% endif %}>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">2级</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥1000</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8.5折</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">不可透支</td>
-                            </tr>
-                            <tr {% if customer.levelid.levelid == 3 %}style="background: var(--accent-light);"{% endif %}>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">3级</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥2000</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8.5折</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">¥500</td>
-                            </tr>
-                            <tr {% if customer.levelid.levelid == 4 %}style="background: var(--accent-light);"{% endif %}>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">4级</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥5000</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">8折</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">¥1000</td>
-                            </tr>
-                            <tr {% if customer.levelid.levelid == 5 %}style="background: var(--accent-light);"{% endif %}>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">5级</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">≥ ¥10000</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">7.5折</td>
-                                <td style="padding: 1rem; border-bottom: 1px solid var(--border);">几乎无限</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div style="margin-top: 1.5rem; padding: 1rem; background: var(--secondary-bg); border-radius: 8px;">
-                    <p style="margin: 0; color: var(--text-primary);">
-                        您当前是 <strong>{{ customer.levelid.levelid }}级会员</strong>，
-                        累计消费 <strong>¥{{ customer.totalspent }}</strong>
-                        {% if customer.levelid.levelid < 5 %}
-                            ，距离下一级还需 <strong>¥{{ next_level_amount|default:"计算中..." }}</strong>
-                        {% endif %}
+                <h3 style="margin:0 0 0.75rem;">会员状态</h3>
+                {% if membership.is_member %}
+                    <p style="margin:0; color:var(--success); font-weight:600;">已开通会员</p>
+                    <p style="margin:0.5rem 0 0; color:var(--text-secondary);">
+                        会员等级 {{ membership.member_level }} 级 · 当前购书 {{ membership.effective_discount_percent }}% 优惠
                     </p>
-                </div>
+                    {% if membership.next_level_points == "max" %}
+                        <p style="margin:0.5rem 0 0;">已达最高会员等级 <strong>max</strong></p>
+                    {% elif membership.next_level_points is not None %}
+                        <p style="margin:0.5rem 0 0;">距下一级还需 <strong>{{ membership.next_level_points }}</strong> 积分</p>
+                    {% endif %}
+                {% else %}
+                    <p style="margin:0; color:var(--text-secondary);">尚未开通会员，无积分累计与等级折扣</p>
+                    <form method="post" action="{% url 'bookstore:activate_membership' %}" style="margin-top:1rem;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success">免费开通会员</button>
+                    </form>
+                {% endif %}
+
+                {% if membership.is_member %}
+                    <hr style="margin:1rem 0; border:none; border-top:1px solid var(--border);">
+                    <h4 style="margin:0 0 0.5rem;">畅读卡（¥{{ reading_pass_price|floatformat:0 }}/月）</h4>
+                    {% if membership.has_reading_pass %}
+                        <p style="color:var(--success);">畅读卡生效中，至 {{ profile.reading_pass_expires_at|date:"Y-m-d H:i" }} · 等级折扣 × 7.2 折</p>
+                    {% else %}
+                        <p style="color:var(--text-secondary);">开通后 30 天内再享 7.2 折（与等级折扣乘算）</p>
+                    {% endif %}
+                    {% if stripe_configured %}
+                        <form method="post" action="{% url 'bookstore:membership_checkout' %}" style="margin-top:0.75rem;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary">{% if membership.has_reading_pass %}续费畅读卡{% else %}购买畅读卡{% endif %}</button>
+                        </form>
+                    {% endif %}
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<div id="level-guide-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 style="margin:0;">会员等级说明</h3>
+            <button type="button" class="modal-close" onclick="closeModal('level-guide-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="color:var(--text-secondary); margin:0 0 1rem;">开通会员后从 1 级起步；积分按消费 1:1 累计，达到阈值自动升级。</p>
+            <table class="data-table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>等级</th>
+                        <th>所需累计积分</th>
+                        <th>购书优惠</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in level_guide %}
+                    <tr>
+                        <td>{{ row.level }} 级</td>
+                        <td>{{ row.points_required }}</td>
+                        <td>{{ row.discount_percent }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p style="color:var(--text-secondary); margin:1rem 0 0; font-size:0.9rem;">畅读卡（¥{{ reading_pass_price|floatformat:0 }}/月）在等级折扣基础上再乘 7.2 折。</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function openModal(modalId) {
+    document.getElementById(modalId).style.display = 'flex';
+}
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+</script>
 {% endblock %}

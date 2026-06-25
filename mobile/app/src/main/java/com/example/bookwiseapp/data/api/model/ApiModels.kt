@@ -18,17 +18,17 @@ data class CustomerData(
     val name: String,
     val email: String?,
     val address: String?,
-    val balance: String,
-    @SerializedName("totalspent") val totalSpent: String,
-    @SerializedName("usedcredit") val usedCredit: String,
-    @SerializedName("creditlimit") val creditLimit: String,
-    @SerializedName("available_credit") val availableCredit: String,
-    @SerializedName("levelid") val levelId: Int,
+    @SerializedName("levelid") val levelId: Int? = null,
+    @SerializedName("member_level") val memberLevel: Int? = null,
     @SerializedName("discount_rate") val discountRate: String,
     @SerializedName("discount_percent") val discountPercent: String,
-    @SerializedName("can_use_credit") val canUseCredit: Boolean,
     @SerializedName("registerdate") val registerDate: String?,
-    @SerializedName("next_level_amount") val nextLevelAmount: String?
+    val points: Int? = null,
+    @SerializedName("is_member") val isMember: Boolean? = null,
+    @SerializedName("has_reading_pass") val hasReadingPass: Boolean? = null,
+    @SerializedName("reading_pass_expires_at") val readingPassExpiresAt: String? = null,
+    @SerializedName("next_level_points") val nextLevelPoints: String? = null,
+    @SerializedName("effective_discount_percent") val effectiveDiscountPercent: String? = null
 )
 
 // ────────────────── 认证 ──────────────────
@@ -239,7 +239,7 @@ data class OrderData(
     @SerializedName("shipaddress") val shipAddress: String,
     @SerializedName("totalamount") val totalAmount: String,
     @SerializedName("actualpaid") val actualPaid: String,
-    @SerializedName("unpaid_amount") val unpaidAmount: String,
+    /** 0=未付 1=已付 3=已退款 */
     @SerializedName("paymentstatus") val paymentStatus: Int,
     val status: Int,
     @SerializedName("original_amount") val originalAmount: String,
@@ -253,6 +253,7 @@ data class OrderResponse(
     val success: Boolean,
     val message: String? = null,
     val order: OrderData? = null,
+    @SerializedName("checkout_url") val checkoutUrl: String? = null,
     val error: String? = null
 )
 
@@ -269,18 +270,47 @@ data class PreviewResponse(
 )
 
 data class CreateOrderRequest(
-    @SerializedName("payment_choice") val paymentChoice: String,      // "balance" | "credit"
     @SerializedName("shipping_name") val shippingName: String,
     @SerializedName("shipping_contact") val shippingContact: String,
-    @SerializedName("shipping_address") val shippingAddress: String
+    @SerializedName("shipping_address") val shippingAddress: String,
+    @SerializedName("success_url") val successUrl: String? = null,
+    @SerializedName("cancel_url") val cancelUrl: String? = null
+)
+
+data class PaymentConfirmRequest(
+    @SerializedName("session_id") val sessionId: String
+)
+
+data class PaymentConfirmResponse(
+    val success: Boolean,
+    val message: String? = null,
+    val account: CustomerData? = null,
+    @SerializedName("order_id") val orderId: Int? = null,
+    val error: String? = null
 )
 
 // ────────────────── 账户 ──────────────────
+
+data class MemberLevelGuideItem(
+    val level: Int,
+    @SerializedName("points_required") val pointsRequired: Int,
+    @SerializedName("discount_percent") val discountPercent: String
+)
 
 data class AccountResponse(
     val success: Boolean,
     val message: String? = null,
     val account: CustomerData? = null,
+    @SerializedName("stripe_configured") val stripeConfigured: Boolean? = null,
+    @SerializedName("member_level_guide") val memberLevelGuide: List<MemberLevelGuideItem>? = null,
+    val error: String? = null
+)
+
+data class MembershipCheckoutResponse(
+    val success: Boolean,
+    @SerializedName("checkout_url") val checkoutUrl: String? = null,
+    @SerializedName("session_id") val sessionId: String? = null,
+    @SerializedName("publishable_key") val publishableKey: String? = null,
     val error: String? = null
 )
 
@@ -297,8 +327,9 @@ data class MeResponse(
     val error: String? = null
 )
 
-data class RechargeRequest(
-    val amount: String
+data class MembershipCheckoutRequest(
+    @SerializedName("success_url") val successUrl: String? = null,
+    @SerializedName("cancel_url") val cancelUrl: String? = null
 )
 
 data class UpdateAccountRequest(

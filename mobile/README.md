@@ -21,8 +21,8 @@ mobile/app/src/main/java/com/example/bookwiseapp/
         ├── CartScreen.kt          # 购物车 + 数量调节
         ├── CheckoutScreen.kt      # 确认订单 + 收货信息 + 付款方式
         ├── OrderListScreen.kt     # 订单列表
-        ├── OrderDetailScreen.kt   # 订单详情 + 操作（补款/取消/确认收货）
-        └── AccountScreen.kt       # 账户 + 充值 + 还款 + 编辑资料
+        ├── OrderDetailScreen.kt   # 订单详情 + 操作（取消/确认收货）
+        └── AccountScreen.kt       # 我的 + 会员与积分入口
 
 服务器地址在 **`mobile/settings.properties`**（勿提交 Git）：
 

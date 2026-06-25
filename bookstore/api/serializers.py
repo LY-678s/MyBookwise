@@ -78,10 +78,15 @@ def default_cover_url() -> str:
 
 
 def serialize_customer(customer: Customer, *, include_private: bool = True) -> dict:
-    """顾客信息 JSON；对应 Web account 页展示字段。"""
+    """顾客信息 JSON。"""
+    from bookstore.membership import get_display_member_level, get_purchase_discount_rate, is_member
+
     level = customer.levelid
-    discount_percent = (Decimal("1") - level.discountrate) * 100
     available_credit = customer.creditlimit - customer.usedcredit
+    member = is_member(customer.customerid)
+    rate = get_purchase_discount_rate(customer.customerid)
+    discount_percent = (Decimal("1") - rate) * 100
+    display_level = get_display_member_level(customer.customerid)
 
     data = {
         "customerid": customer.customerid,
@@ -89,15 +94,13 @@ def serialize_customer(customer: Customer, *, include_private: bool = True) -> d
         "name": customer.name,
         "email": customer.email,
         "address": customer.address,
-        "balance": str(customer.balance),
-        "totalspent": str(customer.totalspent),
         "usedcredit": str(customer.usedcredit),
         "creditlimit": str(customer.creditlimit),
         "available_credit": str(available_credit),
-        "levelid": level.levelid,
-        "discount_rate": str(level.discountrate),
+        "levelid": display_level,
+        "discount_rate": str(rate),
         "discount_percent": str(discount_percent.quantize(Decimal("0.01"))),
-        "can_use_credit": bool(level.canusecredit),
+        "can_use_credit": bool(level.canusecredit) if member else False,
         "registerdate": customer.registerdate.isoformat() if customer.registerdate else None,
     }
     if not include_private:
@@ -105,28 +108,12 @@ def serialize_customer(customer: Customer, *, include_private: bool = True) -> d
     return data
 
 
-def _next_level_amount(customer: Customer) -> str | None:
-    """距离下一信用等级还需消费多少（与 views.account_recharge 一致）。"""
-    thresholds = {
-        1: Decimal("1000"),
-        2: Decimal("2000"),
-        3: Decimal("5000"),
-        4: Decimal("10000"),
-        5: None,
-    }
-    nxt = thresholds.get(customer.levelid.levelid)
-    if nxt is None:
-        return None
-    remaining = nxt - customer.totalspent
-    if remaining < 0:
-        remaining = Decimal("0")
-    return str(remaining)
-
-
 def serialize_account_summary(customer: Customer) -> dict:
-    """账户页完整摘要（含升级提示）。"""
+    """会员页完整摘要。"""
+    from bookstore.membership import serialize_membership
+
     data = serialize_customer(customer)
-    data["next_level_amount"] = _next_level_amount(customer)
+    data.update(serialize_membership(customer.customerid))
     return data
 
 
@@ -145,11 +132,24 @@ def serialize_order_detail_line(detail: Orderdetail, discount_rate: Decimal) -> 
     }
 
 
+def _normalize_payment_status(paymentstatus: int) -> int:
+    """对外仅 0=未付、1=已付、3=已退款；2 为历史信用购书遗留。"""
+    if paymentstatus == 2:
+        return 1
+    return paymentstatus
+
+
 def serialize_order(order: Orders, *, customer: Customer | None = None) -> dict:
     """订单 JSON；customer 传入时附带明细与折扣信息。"""
     details = Orderdetail.objects.filter(orderid=order).select_related("isbn")
     original_amount = sum(d.quantity * d.unitprice for d in details)
     total = order.totalamount or Decimal("0")
+    payment_status = _normalize_payment_status(order.paymentstatus)
+    actual_paid = order.actualpaid or Decimal("0")
+    if payment_status == 1:
+        unpaid = Decimal("0")
+    else:
+        unpaid = max(total - actual_paid, Decimal("0"))
 
     data = {
         "orderid": order.orderid,
@@ -157,16 +157,18 @@ def serialize_order(order: Orders, *, customer: Customer | None = None) -> dict:
         "orderdate": order.orderdate.isoformat() if order.orderdate else None,
         "shipaddress": order.shipaddress,
         "totalamount": str(total),
-        "actualpaid": str(order.actualpaid or 0),
-        "unpaid_amount": str(max(total - (order.actualpaid or 0), Decimal("0"))),
-        "paymentstatus": order.paymentstatus,
+        "actualpaid": str(actual_paid),
+        "unpaid_amount": str(unpaid),
+        "paymentstatus": payment_status,
         "status": order.status,
         "original_amount": str(original_amount),
         "discount_amount": str(original_amount - total),
     }
 
     if customer is not None:
-        rate = customer.levelid.discountrate
+        from bookstore.membership import get_purchase_discount_rate
+
+        rate = get_purchase_discount_rate(customer.customerid)
         data["details"] = [serialize_order_detail_line(d, rate) for d in details]
         data["discount_rate"] = str(rate)
         data["discount_percent"] = str(((Decimal("1") - rate) * 100).quantize(Decimal("0.01")))

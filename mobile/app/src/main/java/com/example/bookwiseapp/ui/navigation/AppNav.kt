@@ -16,7 +16,11 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.example.bookwiseapp.ui.screen.*
+import com.example.bookwiseapp.util.PaymentDeepLink
+import com.example.bookwiseapp.util.parsePaymentDeepLink
 import com.example.bookwiseapp.viewmodel.*
+import android.net.Uri
+import kotlinx.coroutines.launch
 
 object Routes {
     const val LOGIN = "login"
@@ -56,7 +60,10 @@ val bottomNavItems = listOf(
 )
 
 @Composable
-fun AppNav(startLoggedIn: Boolean) {
+fun AppNav(
+    startLoggedIn: Boolean,
+    deepLinkUri: MutableState<Uri?>
+) {
     val navController = rememberNavController()
     val authVm: AuthViewModel = viewModel()
     val bookVm: BookViewModel = viewModel()
@@ -65,6 +72,8 @@ fun AppNav(startLoggedIn: Boolean) {
     val accountVm: AccountViewModel = viewModel()
     val aiVm: AiViewModel = viewModel()
     val favoriteVm: FavoriteViewModel = viewModel()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     val startDest = if (startLoggedIn) Routes.HOME else Routes.LOGIN
 
@@ -74,12 +83,75 @@ fun AppNav(startLoggedIn: Boolean) {
 
     val showBottomBar = currentRoute in mainRoutes
 
+    LaunchedEffect(deepLinkUri.value) {
+        val uri = deepLinkUri.value ?: return@LaunchedEffect
+        deepLinkUri.value = null
+        val link = parsePaymentDeepLink(uri) ?: return@LaunchedEffect
+        if (!startLoggedIn) return@LaunchedEffect
+
+        when (link) {
+            is PaymentDeepLink.OrderSuccess -> {
+                orderVm.confirmStripePayment(
+                    sessionId = link.sessionId,
+                    onSuccess = { orderId, message ->
+                        cartVm.loadCart()
+                        orderVm.loadOrders()
+                        navController.navigate(Routes.orderDetail(orderId)) {
+                            popUpTo(Routes.HOME) { saveState = true }
+                            launchSingleTop = true
+                        }
+                        message?.let { msg ->
+                            scope.launch { snackbarHostState.showSnackbar(msg) }
+                        }
+                    },
+                    onError = { msg ->
+                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                    }
+                )
+            }
+            is PaymentDeepLink.OrderCancel -> {
+                orderVm.abandonCheckoutOrder(link.orderId) { message ->
+                    cartVm.loadCart()
+                    navController.navigate(Routes.CART) {
+                        popUpTo(Routes.HOME) { saveState = true }
+                        launchSingleTop = true
+                    }
+                    scope.launch {
+                        snackbarHostState.showSnackbar(message ?: "已取消支付")
+                    }
+                }
+            }
+            is PaymentDeepLink.MembershipSuccess -> {
+                accountVm.confirmStripePayment(
+                    sessionId = link.sessionId,
+                    onSuccess = {
+                        navController.navigate(Routes.ACCOUNT_WALLET) {
+                            popUpTo(Routes.HOME) { saveState = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onError = { msg ->
+                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                    }
+                )
+            }
+            PaymentDeepLink.MembershipCancel -> {
+                navController.navigate(Routes.ACCOUNT_WALLET) {
+                    popUpTo(Routes.HOME) { saveState = true }
+                    launchSingleTop = true
+                }
+                snackbarHostState.showSnackbar("已取消畅读卡支付")
+            }
+        }
+    }
+
     // 记住底部导航高度：进入详情页隐藏底栏时仍保留相同 bottom padding，
     // 避免返回首页时列表区域高度突变导致滚动位置跳动。
     var stableBottomPadding by remember { mutableStateOf(Dp.Unspecified) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -268,11 +340,6 @@ fun AppNav(startLoggedIn: Boolean) {
                 CheckoutScreen(
                     orderVm = orderVm,
                     accountVm = accountVm,
-                    onOrderCreated = { orderId ->
-                        navController.navigate(Routes.orderDetail(orderId)) {
-                            popUpTo(Routes.CHECKOUT) { inclusive = true }
-                        }
-                    },
                     onBack = { navController.popBackStack() }
                 )
             }

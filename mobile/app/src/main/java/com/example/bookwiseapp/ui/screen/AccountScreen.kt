@@ -39,8 +39,8 @@ fun AccountScreen(
                     )
                     HorizontalDivider()
                     AccountMenuItem(
-                        icon = Icons.Default.AccountBalanceWallet,
-                        label = "账户",
+                        icon = Icons.Default.WorkspacePremium,
+                        label = "会员与积分",
                         onClick = onWalletClick
                     )
                     HorizontalDivider()

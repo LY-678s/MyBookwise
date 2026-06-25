@@ -122,9 +122,13 @@ fun CartScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(Modifier.weight(1f)) {
-                                        Text("折扣 ${cart.discountPercent}%",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.outline)
+                                        if (cart.discountAmount != "0.00") {
+                                            Text(
+                                                "折扣 ${cart.discountPercent}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
+                                        }
                                         Row {
                                             Text("合计 ", style = MaterialTheme.typography.bodyMedium)
                                             Text("¥${cart.discountedTotal}",

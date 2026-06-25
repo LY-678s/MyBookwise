@@ -38,167 +38,52 @@ from .models import (
 # 以下所有 .objects / .DoesNotExist 调用均通过 Django ORM 验证，添加此全局禁用。
 
 def _calculate_credit_level(totalspent):
-    """
-    根据累计消费金额计算信用等级
-
-    规则：
-    - TotalSpent >= 10000 → 5级
-    - TotalSpent >= 5000  → 4级
-    - TotalSpent >= 2000  → 3级
-    - TotalSpent >= 1000  → 2级
-    - 否则               → 1级
-    """
-    totalspent = Decimal(str(totalspent)) if totalspent else Decimal('0')
-
-    if totalspent >= Decimal('10000'):
-        return 5
-    if totalspent >= Decimal('5000'):
-        return 4
-    if totalspent >= Decimal('2000'):
-        return 3
-    if totalspent >= Decimal('1000'):
-        return 2
-    return 1
+    """兼容旧调用：会员等级改由积分决定，见 membership.calculate_member_level。"""
+    from bookstore.membership import calculate_member_level
+    return calculate_member_level(int(totalspent or 0))
 
 
-def _get_available_credit(customer):
-    """计算客户当前可用信用额度"""
-    return customer.creditlimit - customer.usedcredit
-
-
-def _determine_payment_plan(balance, amount, usedcredit, creditlimit, canusecredit):
-    """
-    确定支付方案
-
-    Returns:
-        dict: {
-            'method': 'balance' | 'credit' | 'mixed' | None,
-            'balance_deduct': Decimal,
-            'credit_deduct': Decimal,
-            'actual_paid': Decimal,
-            'payment_status': int,
-            'new_balance': Decimal,
-            'new_usedcredit': Decimal,
-            'new_totalspent': Decimal,
-            'message': str
-        }
-        或 None 表示支付失败
-    """
-    if balance >= amount:
-        return {
-            'method': 'balance',
-            'balance_deduct': amount,
-            'credit_deduct': Decimal('0'),
-            'actual_paid': amount,
-            'payment_status': 1,
-            'new_balance': balance - amount,
-            'new_usedcredit': usedcredit,
-            'new_totalspent': amount,
-            'message': f"支付成功！余额：¥{balance - amount}",
-        }
-
-    # 余额不足
-    credit_needed = amount - balance
-
+def _determine_payment_plan(amount, usedcredit, creditlimit, canusecredit):
+    """信用购书（已移除余额支付）。"""
     if not canusecredit:
         return None
-
     available_credit = creditlimit - usedcredit
-    if credit_needed > available_credit:
+    if amount > available_credit:
         return None
-
     return {
-        'method': 'mixed',
-        'balance_deduct': balance,
-        'credit_deduct': credit_needed,
-        'actual_paid': balance,
-        'payment_status': 2,
-        'new_balance': Decimal('0'),
-        'new_usedcredit': usedcredit + credit_needed,
-        'new_totalspent': balance,
-        'message': (
-            f"支付成功！使用余额¥{balance}，"
-            f"使用信用¥{credit_needed}，当前余额：¥0"
+        "method": "credit",
+        "credit_deduct": amount,
+        "actual_paid": Decimal("0"),
+        "payment_status": 2,
+        "new_usedcredit": usedcredit + amount,
+        "message": (
+            f"信用购书成功！使用信用额度 ¥{amount}，"
+            f"剩余可用 ¥{creditlimit - usedcredit - amount}"
         ),
     }
 
 
+def complete_order_payment(order, customer) -> str:
+    """Stripe 支付成功后标记订单已付；仅会员累计积分。"""
+    from bookstore.membership import award_order_points, is_member
+
+    amount = order.totalamount or Decimal("0")
+    order.actualpaid = amount
+    order.paymentstatus = 1
+    order.save(update_fields=["actualpaid", "paymentstatus"])
+
+    if is_member(customer.customerid):
+        award_order_points(customer.customerid, amount)
+        return f"支付成功！已支付 ¥{amount}，积分已累计。"
+    return f"支付成功！已支付 ¥{amount}。"
+
+
 def process_payment(order, customer, use_credit_only=False):
     """
-    处理订单支付
-
-    Args:
-        order: Orders对象
-        customer: Customer对象（需要已select_for_update锁定）
-        use_credit_only: 是否只使用信用支付（不用余额）
-
-    Returns:
-        (success, message): (True, "成功消息") 或 (False, "错误消息")
-        成功时 message 为 (msg_str, actual_paid, payment_status) 三元组
+    已废弃：购书请使用 Stripe 直接支付（complete_order_payment）。
+    保留函数签名以兼容旧测试/调用。
     """
-    creditlevel = customer.levelid
-    amount = order.totalamount or Decimal('0')
-    balance = customer.balance
-    usedcredit = customer.usedcredit
-    creditlimit = customer.creditlimit
-
-    old_level = creditlevel.levelid
-
-    if use_credit_only:
-        if creditlevel.canusecredit == 0:
-            return False, "您的信用等级不支持信用支付"
-
-        available_credit = creditlimit - usedcredit
-        if usedcredit + amount > creditlimit:
-            return False, (
-                f"信用额度不足，需要{amount}元，"
-                f"可用额度{available_credit}元"
-            )
-
-        plan = {
-            'method': 'credit',
-            'credit_deduct': amount,
-            'actual_paid': Decimal('0'),
-            'payment_status': 2,
-            'new_usedcredit': usedcredit + amount,
-            'new_totalspent': Decimal('0'),
-            'message': (
-                f"信用支付成功！使用信用额度：¥{amount}，"
-                f"剩余可用：¥{creditlimit - usedcredit - amount}"
-            ),
-        }
-        customer.usedcredit = plan['new_usedcredit']
-    else:
-        plan = _determine_payment_plan(
-            balance, amount, usedcredit, creditlimit,
-            creditlevel.canusecredit
-        )
-        if plan is None:
-            if creditlevel.canusecredit == 0:
-                msg = f"余额不足（{balance}元），该信用等级不支持信用支付，请充值"
-            else:
-                available_credit = creditlimit - usedcredit
-                credit_needed = amount - balance
-                msg = (
-                    f"余额不足，需要信用{credit_needed}元，"
-                    f"但可用信用额度只有{available_credit}元，请充值"
-                )
-            return False, msg
-
-        customer.balance = plan['new_balance']
-        customer.totalspent += plan['new_totalspent']
-        customer.usedcredit = plan['new_usedcredit']
-
-    new_level_id = _calculate_credit_level(customer.totalspent)
-
-    fields = ['balance', 'usedcredit', 'totalspent']
-    if new_level_id != old_level:
-        customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
-        fields.append('levelid')
-
-    customer.save(update_fields=fields)
-
-    return True, (plan['message'], plan['actual_paid'], plan['payment_status'])
+    return False, "请完成在线支付"
 
 
 def _get_old_order_values(instance):
@@ -221,34 +106,26 @@ def _handle_order_completion(_instance):  # pragma: no cover
     """处理订单完成（status=2），无需额外操作（TotalSpent已在支付时更新）"""
 
 
-def _handle_order_cancel_refund(instance, customer, old_level):
-    """
-    处理订单取消退款。
+def _handle_order_cancel_refund(instance, customer, _old_level):
+    """订单取消：已支付订单扣回积分（会员）。"""
+    if instance.paymentstatus in (1, 2) and (instance.actualpaid or Decimal("0")) > 0:
+        from bookstore.membership import get_profile, is_member, sync_member_level
 
-    - 实付金额退回余额，累计消费等额扣减
-    - 已用信用额度释放
-    - 支付状态置为3（已取消退款）
-    """
-    if instance.actualpaid > 0:
-        customer.balance += instance.actualpaid
-        customer.totalspent = max(
-            customer.totalspent - instance.actualpaid, Decimal('0'))
+        if is_member(customer.customerid):
+            profile = get_profile(customer.customerid)
+            deduct = int(instance.totalamount or 0)
+            if deduct > 0:
+                profile.points = max(0, profile.points - deduct)
+                profile.save(update_fields=["points", "updated_at"])
+            sync_member_level(customer, profile.points)
+            customer.save(update_fields=["levelid", "creditlimit"])
 
     if instance.paymentstatus == 2:
         credit_used = instance.totalamount - instance.actualpaid
-        customer.usedcredit = max(
-            customer.usedcredit - credit_used, Decimal('0'))
+        customer.usedcredit = max(customer.usedcredit - credit_used, Decimal("0"))
+        customer.save(update_fields=["usedcredit"])
 
     instance.paymentstatus = 3
-
-    new_level_id = _calculate_credit_level(customer.totalspent)
-    fields = ['balance', 'usedcredit', 'totalspent']
-
-    if new_level_id != old_level:
-        customer.levelid = Creditlevel.objects.get(levelid=new_level_id)
-        fields.append('levelid')
-
-    customer.save(update_fields=fields)
 
 
 def _handle_deduct_or_refund(instance, old_status, _old_totalamount=None):

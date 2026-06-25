@@ -2,6 +2,7 @@ package com.example.bookwiseapp.data.repository
 
 import com.example.bookwiseapp.data.api.ApiClient
 import com.example.bookwiseapp.data.api.model.*
+import com.example.bookwiseapp.util.StripeDeepLink
 
 class AccountRepository : BaseRepository() {
 
@@ -26,14 +27,27 @@ class AccountRepository : BaseRepository() {
         successCheck = { it.success }
     )
 
-    suspend fun recharge(amount: String): Result<AccountResponse> = safeCall(
-        call = { ApiClient.service.recharge(RechargeRequest(amount)) },
+    suspend fun createMembershipCheckout(): Result<MembershipCheckoutResponse> = safeCall(
+        call = {
+            ApiClient.service.createMembershipCheckout(
+                MembershipCheckoutRequest(
+                    successUrl = StripeDeepLink.membershipSuccessUrl(),
+                    cancelUrl = StripeDeepLink.membershipCancelUrl()
+                )
+            )
+        },
         errorField = { it.error },
         successCheck = { it.success }
     )
 
-    suspend fun repay(): Result<AccountResponse> = safeCall(
-        call = { ApiClient.service.repay() },
+    suspend fun activateMembership(): Result<AccountResponse> = safeCall(
+        call = { ApiClient.service.activateMembership() },
+        errorField = { it.error },
+        successCheck = { it.success }
+    )
+
+    suspend fun confirmPayment(sessionId: String): Result<PaymentConfirmResponse> = safeCall(
+        call = { ApiClient.service.confirmPayment(PaymentConfirmRequest(sessionId)) },
         errorField = { it.error },
         successCheck = { it.success }
     )

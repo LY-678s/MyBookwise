@@ -42,10 +42,8 @@
                                   <span style="color: var(--text-secondary);">已退款</span>
                                 {% elif item.order.paymentstatus == 0 %}
                                   <span style="color: var(--error);">未支付</span>
-                                {% elif item.order.paymentstatus == 1 %}
+                                {% elif item.order.paymentstatus == 1 or item.order.paymentstatus == 2 %}
                                   <span style="color: var(--success);">已支付</span>
-                                {% elif item.order.paymentstatus == 2 %}
-                                  <span style="color: var(--warning);">待补款</span>
                                 {% elif item.order.paymentstatus == 3 %}
                                   <span style="color: var(--text-secondary);">已退款</span>
                                 {% endif %}
@@ -63,9 +61,6 @@
                             </td>
                             <td style="padding:1rem; text-align:center;">
                                 <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-secondary" style="padding:0.4rem 0.8rem;">查看详情</a>
-                                {% if item.order.paymentstatus == 0 and item.order.status != 4 %}
-                                  <a href="{% url 'bookstore:order_detail' item.order.orderid %}" class="btn btn-primary" style="padding:0.4rem 0.8rem; margin-left:0.5rem;">去支付</a>
-                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
