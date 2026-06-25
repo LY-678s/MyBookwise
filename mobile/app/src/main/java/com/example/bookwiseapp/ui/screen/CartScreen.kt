@@ -20,14 +20,24 @@ import com.example.bookwiseapp.viewmodel.CartViewModel
 @Composable
 fun CartScreen(
     viewModel: CartViewModel,
-    onCheckout: () -> Unit
+    onCheckout: () -> Unit,
+    onOrdersClick: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.loadCart() }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("购物车") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("购物车") },
+                actions = {
+                    TextButton(onClick = onOrdersClick) {
+                        Text("我的订单")
+                    }
+                }
+            )
+        }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {

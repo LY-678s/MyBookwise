@@ -36,14 +36,19 @@ class CartViewModel : ViewModel() {
 
     fun addToCart(isbn: String, quantity: Int = 1) {
         viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, error = null, message = null)
             val result = repo.addToCart(isbn, quantity)
             if (result.isSuccess) {
-                _state.value = CartUiState(
+                _state.value = _state.value.copy(
+                    isLoading = false,
                     cart = result.getOrNull()?.cart,
-                    message = result.getOrNull()?.message
+                    message = result.getOrNull()?.message ?: "已加入购物车"
                 )
             } else {
-                _state.value = _state.value.copy(error = result.exceptionOrNull()?.message)
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    error = result.exceptionOrNull()?.message ?: "加入购物车失败"
+                )
             }
         }
     }

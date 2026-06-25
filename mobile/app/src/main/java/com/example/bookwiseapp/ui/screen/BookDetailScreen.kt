@@ -34,19 +34,11 @@ fun BookDetailScreen(
     val cartState by cartVm.state.collectAsState()
 
     var quantity by remember { mutableIntStateOf(1) }
-    var showSnack by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
     var showCreateFolder by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
 
     LaunchedEffect(isbn) { viewModel.loadBookDetail(isbn) }
-
-    if (showSnack && cartState.message != null) {
-        LaunchedEffect(cartState.message) {
-            showSnack = false
-            cartVm.clearMessage()
-        }
-    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -161,27 +153,21 @@ fun BookDetailScreen(
 
                             Spacer(Modifier.height(12.dp))
                             Button(
-                                onClick = {
-                                    cartVm.addToCart(isbn, quantity)
-                                    showSnack = true
-                                },
+                                onClick = { cartVm.addToCart(isbn, quantity) },
                                 enabled = book.stockQty > 0 && !cartState.isLoading,
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Icon(Icons.Default.ShoppingCart, null)
-                                Spacer(Modifier.width(8.dp))
-                                Text(if (book.stockQty == 0) "暂无库存" else "加入购物车")
-                            }
-
-                            cartState.message?.let {
-                                Spacer(Modifier.height(8.dp))
-                                Text(it, color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodySmall)
-                            }
-                            cartState.error?.let {
-                                Spacer(Modifier.height(8.dp))
-                                Text(it, color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall)
+                                if (cartState.isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Icon(Icons.Default.ShoppingCart, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if (book.stockQty == 0) "暂无库存" else "加入购物车")
+                                }
                             }
                         }
                     }
@@ -256,4 +242,4 @@ fun BookDetailScreen(
         )
     }
 }
-
+

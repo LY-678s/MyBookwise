@@ -44,9 +44,7 @@ fun AccountWalletScreen(
 
     viewModel: AccountViewModel,
 
-    onBack: () -> Unit,
-
-    onOrdersClick: () -> Unit = {}
+    onBack: () -> Unit
 
 ) {
 
@@ -327,14 +325,6 @@ fun AccountWalletScreen(
                     }
 
 
-
-                    OutlinedButton(
-
-                        onClick = onOrdersClick,
-
-                        modifier = Modifier.fillMaxWidth()
-
-                    ) { Text("我的订单") }
 
                 }
 

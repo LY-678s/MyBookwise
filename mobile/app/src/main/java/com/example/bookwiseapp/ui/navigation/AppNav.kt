@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -74,10 +75,32 @@ fun AppNav(
     val favoriteVm: FavoriteViewModel = viewModel()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val cartState by cartVm.state.collectAsState()
+
+    LaunchedEffect(cartState.message) {
+        cartState.message?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            cartVm.clearMessage()
+        }
+    }
+    LaunchedEffect(cartState.error) {
+        cartState.error?.let { err ->
+            snackbarHostState.showSnackbar(err)
+            cartVm.clearMessage()
+        }
+    }
 
     val startDest = if (startLoggedIn) Routes.HOME else Routes.LOGIN
 
     val mainRoutes = bottomNavItems.map { it.route }
+    /** 自带底栏或需贴底的页面，不保留 Tab 栏占位 padding */
+    val fullBleedBottomRoutes = setOf(
+        Routes.CATEGORIES,
+        Routes.RANKINGS,
+        Routes.FAVORITES,
+        Routes.BROWSE_HISTORY,
+        Routes.ORDER_LIST,
+    )
     val navBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStack?.destination?.route
 
@@ -182,8 +205,9 @@ fun AppNav(
         }
         val navHostBottomPadding = when {
             showBottomBar -> liveBottomPadding
+            currentRoute in fullBleedBottomRoutes -> 0.dp
             stableBottomPadding != Dp.Unspecified -> stableBottomPadding
-            else -> liveBottomPadding
+            else -> 0.dp
         }
 
         NavHost(
@@ -240,7 +264,8 @@ fun AppNav(
             composable(Routes.CART) {
                 CartScreen(
                     viewModel = cartVm,
-                    onCheckout = { navController.navigate(Routes.CHECKOUT) }
+                    onCheckout = { navController.navigate(Routes.CHECKOUT) },
+                    onOrdersClick = { navController.navigate(Routes.ORDER_LIST) }
                 )
             }
             composable(Routes.ACCOUNT) {
@@ -269,8 +294,7 @@ fun AppNav(
             composable(Routes.ACCOUNT_WALLET) {
                 AccountWalletScreen(
                     viewModel = accountVm,
-                    onBack = { navController.popBackStack() },
-                    onOrdersClick = { navController.navigate(Routes.ORDER_LIST) }
+                    onBack = { navController.popBackStack() }
                 )
             }
 
