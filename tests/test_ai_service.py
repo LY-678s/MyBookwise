@@ -83,18 +83,18 @@ class TestBuildSystemPrompt:
         assert book.title in prompt
         assert book.isbn in prompt
 
-    def test_prompt_contains_credit_rules(self, creditlevels):
-        """场景：提示词包含信用等级规则。"""
+    def test_prompt_contains_member_rules(self, creditlevels):
+        """场景：提示词包含会员等级规则。"""
         prompt = build_bookstore_system_prompt()
-        assert "信用等级" in prompt
+        assert "会员等级" in prompt
         assert "1级" in prompt
         assert "5级" in prompt
 
     def test_prompt_contains_payment_methods(self):
         """场景：提示词包含支付方式说明。"""
         prompt = build_bookstore_system_prompt()
-        assert "余额支付" in prompt
-        assert "信用支付" in prompt
+        assert "Stripe" in prompt
+        assert "在线支付" in prompt
 
     def test_prompt_no_books(self, db):
         """边界值：无图书 → 显示默认提示。"""

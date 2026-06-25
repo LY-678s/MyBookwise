@@ -2,14 +2,11 @@
 
 覆盖视图：order_confirm、order_list、order_detail、cancel_order、confirm_receipt
 
-支付部分 (process_payment) 属于成员 C 的信用/支付模块，
-本文件通过 pytest-mock 对其进行 mock，以保持订单模块测试的独立性。
-
 测试方法分布：
 - 等价类：各状态合法取值
 - 边界值：订单号序号递增（第 1 / 第 2 单）
-- 场景法：下单主成功路径、支付失败回滚
-- 独立路径：cancel_order 4 条路径 + confirm_receipt 2 条路径
+- 场景法：下单主成功路径
+- 独立路径：cancel_order 路径 + confirm_receipt 路径
 """
 from __future__ import annotations
 
@@ -140,71 +137,6 @@ class TestOrderConfirm:
         assert Orders.objects.count() == 2
         latest = Orders.objects.exclude(orderno=f"{date_prefix}01").get()
         assert latest.orderno == f"{date_prefix}02"
-
-    def test_post_credit_payment_success(self, logged_client_l3, customer_l3, book, mocker):
-        """TC-ORD-014 独立路径：纯信用支付成功分支。"""
-        from bookstore.models import Orders
-
-        mocker.patch(
-            "bookstore.signals.process_payment",
-            return_value=(True, ("信用支付成功", Decimal("68"), 1)),
-        )
-        _seed_cart(logged_client_l3, book.isbn, 1)
-
-        url = reverse("bookstore:order_confirm")
-        resp = logged_client_l3.post(url, {
-            "payment_choice": "credit",
-            "shipping_name": customer_l3.name,
-            "shipping_contact": customer_l3.email,
-            "shipping_address": "武汉",
-        })
-        assert resp.status_code == 302
-        assert Orders.objects.count() == 1
-        assert Orders.objects.get().paymentstatus == 1
-
-    def test_post_payment_failure_cancels_order(self, logged_client, customer, book, mocker):
-        """TC-ORD-015 独立路径：余额支付失败 → 订单 status=4（已取消）。"""
-        from bookstore.models import Orders
-
-        mocker.patch(
-            "bookstore.signals.process_payment",
-            return_value=(False, "余额不足且不能使用信用"),
-        )
-        _seed_cart(logged_client, book.isbn, 1)
-
-        url = reverse("bookstore:order_confirm")
-        resp = logged_client.post(url, {
-            "payment_choice": "balance",
-            "shipping_name": customer.name,
-            "shipping_contact": customer.email,
-            "shipping_address": "武汉",
-        })
-        assert resp.status_code == 302
-        assert reverse("bookstore:cart_detail") in resp["Location"]
-        assert Orders.objects.count() == 1
-        assert Orders.objects.get().status == 4
-
-    def test_post_credit_payment_failure_cancels_order(self, logged_client_l3, customer_l3, book, mocker):
-        """TC-ORD-016 独立路径：信用支付失败分支 → 订单 status=4。"""
-        from bookstore.models import Orders
-
-        mocker.patch(
-            "bookstore.signals.process_payment",
-            return_value=(False, "信用额度不足"),
-        )
-        _seed_cart(logged_client_l3, book.isbn, 1)
-
-        url = reverse("bookstore:order_confirm")
-        resp = logged_client_l3.post(url, {
-            "payment_choice": "credit",
-            "shipping_name": customer_l3.name,
-            "shipping_contact": customer_l3.email,
-            "shipping_address": "武汉",
-        })
-        assert resp.status_code == 302
-        assert reverse("bookstore:cart_detail") in resp["Location"]
-        assert Orders.objects.count() == 1
-        assert Orders.objects.get().status == 4
 
 
 # =============================================================

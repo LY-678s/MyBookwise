@@ -42,8 +42,7 @@ def ensure_non_member_level(customer: Customer) -> int:
         return NON_MEMBER_LEVEL_ID
     level = Creditlevel.objects.get(levelid=NON_MEMBER_LEVEL_ID)
     customer.levelid = level
-    customer.creditlimit = level.creditlimit
-    customer.save(update_fields=["levelid", "creditlimit"])
+    customer.save(update_fields=["levelid"])
     return NON_MEMBER_LEVEL_ID
 
 
@@ -116,8 +115,7 @@ def sync_member_level(customer: Customer, points: int | None = None) -> int:
     level_id = calculate_member_level(points)
     level = Creditlevel.objects.get(levelid=level_id)
     customer.levelid = level
-    customer.creditlimit = level.creditlimit
-    customer.save(update_fields=["levelid", "creditlimit"])
+    customer.save(update_fields=["levelid"])
     return level_id
 
 

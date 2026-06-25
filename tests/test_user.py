@@ -18,9 +18,7 @@ def create_tables(django_db_setup, django_db_blocker):
             cursor.execute("""
             CREATE TABLE creditlevel (
                 LevelID INTEGER PRIMARY KEY,
-                DiscountRate DECIMAL(3,2),
-                CanUseCredit INTEGER,
-                CreditLimit DECIMAL(10,2)
+                DiscountRate DECIMAL(3,2)
             )
             """)
             cursor.execute("""
@@ -31,11 +29,7 @@ def create_tables(django_db_setup, django_db_blocker):
                 Name VARCHAR(50),
                 Address VARCHAR(200),
                 Email VARCHAR(100) UNIQUE,
-                Balance DECIMAL(10,2),
                 LevelID INTEGER,
-                CreditLimit DECIMAL(10,2),
-                UsedCredit DECIMAL(10,2),
-                TotalSpent DECIMAL(12,2),
                 RegisterDate DATETIME,
                 FOREIGN KEY (LevelID) REFERENCES creditlevel(LevelID)
             )
@@ -72,7 +66,7 @@ def factory():
 def credit_level_1(db):
     """为新注册用户提供默认的等级1数据"""
     return Creditlevel.objects.create(
-        levelid=1, discountrate=Decimal('1.00'), canusecredit=0, creditlimit=Decimal('0.00')
+        levelid=1, discountrate=Decimal('1.00')
     )
 
 @pytest.fixture
@@ -81,9 +75,8 @@ def test_customer(db, credit_level_1):
     from django.utils import timezone
     return Customer.objects.create(
         username='testuser', password='password123', name='测试用户',
-        email='test@example.com', address='地址', balance=Decimal('0.00'),
-        levelid=credit_level_1, creditlimit=Decimal('0.00'),
-        usedcredit=Decimal('0.00'), totalspent=Decimal('0.00'), registerdate=timezone.now()
+        email='test@example.com', address='地址',
+        levelid=credit_level_1, registerdate=timezone.now()
     )
 
 # ===================== 登录模块测试 (customer_login) =====================

@@ -48,21 +48,22 @@ def _clear_cache_each_test():
 
 @pytest.fixture
 def creditlevels(db):
-    """创建 5 个信用等级（与真实业务一致）。"""
+    """创建 0-5 级会员等级（积分制，无信用额度）。"""
     from bookstore.models import Creditlevel
 
     data = [
-        (1, Decimal("0.90"), 0, Decimal("0")),      # 10% 折扣，不可透支
-        (2, Decimal("0.85"), 0, Decimal("0")),      # 15% 折扣，不可透支
-        (3, Decimal("0.85"), 1, Decimal("500")),    # 15% 折扣，可透支 500
-        (4, Decimal("0.80"), 1, Decimal("2000")),   # 20% 折扣，可透支 2000
-        (5, Decimal("0.75"), 1, Decimal("999999")), # 25% 折扣，无额度限制
+        (0, Decimal("1.00")),   # 非会员
+        (1, Decimal("0.95")),
+        (2, Decimal("0.93")),
+        (3, Decimal("0.90")),
+        (4, Decimal("0.88")),
+        (5, Decimal("0.85")),
     ]
     levels = {}
-    for lid, rate, can, limit in data:
+    for lid, rate in data:
         obj, _ = Creditlevel.objects.get_or_create(
             levelid=lid,
-            defaults={"discountrate": rate, "canusecredit": can, "creditlimit": limit},
+            defaults={"discountrate": rate},
         )
         levels[lid] = obj
     return levels
@@ -70,7 +71,7 @@ def creditlevels(db):
 
 @pytest.fixture
 def customer(db, creditlevels):
-    """默认 1 级客户，余额 1000，无欠款。"""
+    """默认 1 级客户。"""
     from django.utils import timezone
     from bookstore.models import Customer
 
@@ -80,18 +81,14 @@ def customer(db, creditlevels):
         name="Alice",
         address="武汉市洪山区",
         email="alice@example.com",
-        balance=Decimal("1000.00"),
         levelid=creditlevels[1],
-        creditlimit=Decimal("0"),
-        usedcredit=Decimal("0"),
-        totalspent=Decimal("0"),
         registerdate=timezone.now(),
     )
 
 
 @pytest.fixture
 def customer_l3(db, creditlevels):
-    """3 级客户，可透支 500。"""
+    """3 级客户。"""
     from django.utils import timezone
     from bookstore.models import Customer
 
@@ -101,11 +98,7 @@ def customer_l3(db, creditlevels):
         name="Bob",
         address="武汉市东湖",
         email="bob@example.com",
-        balance=Decimal("300.00"),
         levelid=creditlevels[3],
-        creditlimit=Decimal("500"),
-        usedcredit=Decimal("0"),
-        totalspent=Decimal("2500"),
         registerdate=timezone.now(),
     )
 
