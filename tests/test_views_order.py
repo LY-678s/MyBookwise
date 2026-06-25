@@ -20,8 +20,21 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from bookstore.cart_store import get_cart, save_cart, clear_cart
+
 
 pytestmark = pytest.mark.django_db
+
+
+def _get_customer_id(client_):
+    """从已登录 client 的 session 中提取 customer_id。"""
+    return client_.session["customer_id"]
+
+
+def _seed_cart(client_, isbn, qty):
+    """通过 cache 预填购物车数据。"""
+    cid = _get_customer_id(client_)
+    save_cart(cid, {isbn: {"quantity": qty}})
 
 
 # =============================================================
@@ -29,11 +42,6 @@ pytestmark = pytest.mark.django_db
 # =============================================================
 
 class TestOrderConfirm:
-
-    def _seed_cart(self, client_, isbn, qty):
-        session = client_.session
-        session["cart"] = {isbn: {"quantity": qty}}
-        session.save()
 
     def test_empty_cart_get_redirects_index(self, logged_client):
         """TC-ORD-010 场景：空购物车 GET 确认页 → 重定向首页。"""
@@ -44,7 +52,7 @@ class TestOrderConfirm:
 
     def test_get_with_cart_renders_confirm_page(self, logged_client, book):
         """GET 含购物车 → 200 渲染确认页，上下文含 items 和折扣信息。"""
-        self._seed_cart(logged_client, book.isbn, 2)
+        _seed_cart(logged_client, book.isbn, 2)
         url = reverse("bookstore:order_confirm")
         resp = logged_client.get(url)
         assert resp.status_code == 200
@@ -56,7 +64,7 @@ class TestOrderConfirm:
         """TC-ORD-011 异常：POST 地址为空 → 重定向 + error 提示，订单不生成。"""
         from bookstore.models import Orders
 
-        self._seed_cart(logged_client, book.isbn, 1)
+        _seed_cart(logged_client, book.isbn, 1)
         url = reverse("bookstore:order_confirm")
         resp = logged_client.post(url, {
             "payment_choice": "balance",
@@ -76,7 +84,7 @@ class TestOrderConfirm:
             "bookstore.signals.process_payment",
             return_value=(True, ("支付成功", Decimal("144"), 1)),
         )
-        self._seed_cart(logged_client, book.isbn, 2)
+        _seed_cart(logged_client, book.isbn, 2)
 
         url = reverse("bookstore:order_confirm")
         resp = logged_client.post(url, {
@@ -98,7 +106,8 @@ class TestOrderConfirm:
         assert order.paymentstatus == 1
         assert order.actualpaid == Decimal("144")
         # 购物车已清空
-        assert logged_client.session["cart"] == {}
+        cart = get_cart(_get_customer_id(logged_client))
+        assert cart == {}
 
     def test_post_orderno_increments_on_second_order(self, logged_client, customer, book, mocker):
         """TC-ORD-013 边界：同一天第 2 单，序号应为 02。"""
@@ -119,7 +128,7 @@ class TestOrderConfirm:
             "bookstore.signals.process_payment",
             return_value=(True, ("OK", Decimal("72"), 1)),
         )
-        self._seed_cart(logged_client, book.isbn, 1)
+        _seed_cart(logged_client, book.isbn, 1)
 
         url = reverse("bookstore:order_confirm")
         logged_client.post(url, {
@@ -140,9 +149,7 @@ class TestOrderConfirm:
             "bookstore.signals.process_payment",
             return_value=(True, ("信用支付成功", Decimal("68"), 1)),
         )
-        session = logged_client_l3.session
-        session["cart"] = {book.isbn: {"quantity": 1}}
-        session.save()
+        _seed_cart(logged_client_l3, book.isbn, 1)
 
         url = reverse("bookstore:order_confirm")
         resp = logged_client_l3.post(url, {
@@ -163,7 +170,7 @@ class TestOrderConfirm:
             "bookstore.signals.process_payment",
             return_value=(False, "余额不足且不能使用信用"),
         )
-        self._seed_cart(logged_client, book.isbn, 1)
+        _seed_cart(logged_client, book.isbn, 1)
 
         url = reverse("bookstore:order_confirm")
         resp = logged_client.post(url, {
@@ -185,9 +192,7 @@ class TestOrderConfirm:
             "bookstore.signals.process_payment",
             return_value=(False, "信用额度不足"),
         )
-        session = logged_client_l3.session
-        session["cart"] = {book.isbn: {"quantity": 1}}
-        session.save()
+        _seed_cart(logged_client_l3, book.isbn, 1)
 
         url = reverse("bookstore:order_confirm")
         resp = logged_client_l3.post(url, {

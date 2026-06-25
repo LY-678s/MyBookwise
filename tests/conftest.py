@@ -35,6 +35,15 @@ def django_db_setup(django_db_blocker):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _clear_cache_each_test():
+    """每个测试前清空 Django 缓存（购物车、AI 历史等），避免测试间数据累积。"""
+    from django.core.cache import cache
+    cache.clear()
+    yield
+    cache.clear()
+
+
 # -------- 核心业务 fixture --------
 
 @pytest.fixture

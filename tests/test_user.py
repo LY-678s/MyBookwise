@@ -44,10 +44,22 @@ def create_tables(django_db_setup, django_db_blocker):
 
 # ===================== 测试工具与Fixture =====================
 
+class _FakeSession(dict):
+    """模拟 Django Session 对象，支持 .modified 属性。"""
+    modified = False
+
+    def pop(self, key, *args):
+        try:
+            return super().pop(key, *args)
+        except (KeyError, TypeError):
+            return args[0] if args else None
+
+
 def make_request_with_messages(factory, method, path, data=None, session_data=None):
     """创建带有 messages 和 session 的 Request 对象"""
     request = factory.get(path) if method == 'GET' else factory.post(path, data or {})
-    request.session = session_data or {}
+    sess = _FakeSession(session_data or {})
+    request.session = sess
     messages = FallbackStorage(request)
     request._messages = messages
     return request
