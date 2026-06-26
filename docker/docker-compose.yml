@@ -5,6 +5,8 @@ services:
     image: mysql:8.0
     container_name: mybookwise-db
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-yl15924}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-bookstoredb}
@@ -32,6 +34,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - ../.env
     environment:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-docker-demo-change-me}
@@ -45,16 +49,6 @@ services:
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
       GUNICORN_THREADS: ${GUNICORN_THREADS:-25}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
-      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-ai/DeepSeek-R1-0528-Qwen3-8B}
-      DEEPSEEK_API_BASE: ${DEEPSEEK_API_BASE:-https://api.siliconflow.cn/v1}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      SITE_URL: ${SITE_URL:-https://ly.mybookwise.xyz}
     ports:
       - "8000:8000"
 
