@@ -28,7 +28,7 @@ fun AccountProfileScreen(
     var showEdit by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        if (account == null) viewModel.loadAccount()
+        viewModel.loadAccount()
     }
 
     val snackbarHost = remember { SnackbarHostState() }

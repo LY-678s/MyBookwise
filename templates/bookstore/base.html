@@ -209,12 +209,16 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
         
         nav h1 {
             font-size: 1.5rem;
             font-weight: 700;
             margin: 0;
+            flex-shrink: 0;
+            white-space: nowrap;
             background: linear-gradient(135deg, var(--accent) 0%, var(--text-primary) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -228,8 +232,18 @@
 
         nav .nav-links {
             display: flex;
-            gap: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem 1.5rem;
             align-items: center;
+            justify-content: flex-end;
+            flex: 1;
+            min-width: 0;
+        }
+
+        nav .nav-links a,
+        nav .nav-links .user-info {
+            white-space: nowrap;
+            flex-shrink: 0;
         }
 
         nav a {

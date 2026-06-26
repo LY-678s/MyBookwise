@@ -352,4 +352,13 @@ class OrderViewModel : ViewModel() {
     fun clearDetailMessage() {
         _detailState.value = _detailState.value.copy(message = null, error = null)
     }
+
+    fun resetSession() {
+        viewModelScope.launch {
+            pendingStore.clear()
+        }
+        _listState.value = OrderListUiState()
+        _detailState.value = OrderDetailUiState()
+        _checkoutState.value = CheckoutUiState()
+    }
 }

@@ -78,4 +78,8 @@ class CartViewModel : ViewModel() {
     fun clearMessage() {
         _state.value = _state.value.copy(message = null, error = null)
     }
+
+    fun resetSession() {
+        _state.value = CartUiState()
+    }
 }
