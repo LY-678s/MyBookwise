@@ -83,8 +83,10 @@ scripts/cloudflared-mybookwise.yml
 .env
 /scripts/cloudflared-mybookwise.yml
 
-# Local Docker overrides. Keep Dockerfile/docker-compose.yml tracked.
+# Local Docker overrides. Keep docker/Dockerfile and docker/docker-compose.yml tracked.
 docker-compose.override.yml
 docker-compose*.local.yml
+docker/docker-compose.override.yml
+docker/docker-compose*.local.yml
 .docker/
 staticfiles/

@@ -1,3 +1,5 @@
+name: mybookwise
+
 services:
   db:
     image: mysql:8.0
@@ -13,7 +15,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./SetDatabase/bookstoredb.sql:/docker-entrypoint-initdb.d/01-bookstoredb.sql:ro
+      - ../SetDatabase/bookstoredb.sql:/docker-entrypoint-initdb.d/01-bookstoredb.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-yl15924}"]
       interval: 5s
@@ -22,7 +24,8 @@ services:
 
   web:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       pull: false
     container_name: mybookwise-web
     restart: unless-stopped
@@ -42,8 +45,12 @@ services:
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
       GUNICORN_THREADS: ${GUNICORN_THREADS:-25}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
+      AI_PROVIDER: ${AI_PROVIDER:-deepseek}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-ai/DeepSeek-R1-0528-Qwen3-8B}
+      DEEPSEEK_API_BASE: ${DEEPSEEK_API_BASE:-https://api.siliconflow.cn/v1}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}

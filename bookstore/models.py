@@ -304,6 +304,28 @@ class BookFavorite(models.Model):
         return f"{self.customer.username} 收藏了: {self.isbn.title}"
 
 
+class CartItem(models.Model):
+    """持久化购物车项，供 Web 和 App 在多进程部署下共享。"""
+    id = models.AutoField(primary_key=True)
+    customer_id = models.IntegerField(db_index=True)
+    isbn = models.CharField(max_length=20)
+    quantity = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = "cart_item"
+        unique_together = (("customer_id", "isbn"),)
+        indexes = [
+            models.Index(fields=["customer_id"], name="cart_item_customer_idx"),
+        ]
+        verbose_name = "购物车项"
+        verbose_name_plural = "购物车项"
+
+    def __str__(self):
+        return f"CartItem({self.customer_id}, {self.isbn}, x{self.quantity})"
+
+
 class CustomerProfile(models.Model):
     """会员积分与有效期（Django 托管表，Customer 表为 legacy SQL）。"""
     customer = models.OneToOneField(

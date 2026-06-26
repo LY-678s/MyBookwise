@@ -257,7 +257,7 @@ def create_order(
     except ValueError as exc:
         return False, {"error": str(exc)}
 
-    site = getattr(settings, "SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+    site = getattr(settings, "SITE_URL", "https://ly.mybookwise.xyz").rstrip("/")
     pay_success, pay_cancel = _resolve_checkout_urls(success_url, cancel_url, order.orderid, site=site)
 
     try:
@@ -299,7 +299,7 @@ def start_order_payment(
     if order.paymentstatus != 0 or order.status == 4:
         return False, {"error": "该订单无需支付"}
 
-    site = getattr(settings, "SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+    site = getattr(settings, "SITE_URL", "https://ly.mybookwise.xyz").rstrip("/")
     pay_success, pay_cancel = _resolve_checkout_urls(success_url, cancel_url, order.orderid, site=site)
 
     try:

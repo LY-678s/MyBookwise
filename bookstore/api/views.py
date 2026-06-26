@@ -681,7 +681,7 @@ class MembershipCheckoutView(APIView):
             return _err("尚未配置在线支付，请联系管理员。")
 
         customer = _customer_view(request)
-        site = getattr(settings, "SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+        site = getattr(settings, "SITE_URL", "https://ly.mybookwise.xyz").rstrip("/")
         success_url = request.data.get("success_url") or f"{site}/account/wallet/?session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = request.data.get("cancel_url") or f"{site}/account/wallet/?canceled=1"
 

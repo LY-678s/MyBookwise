@@ -46,6 +46,16 @@ def _clear_cache_each_test():
 
 # -------- 核心业务 fixture --------
 
+@pytest.fixture(autouse=True)
+def _clear_cart_items_each_test(db):
+    """购物车已持久化到数据库，每个测试前后清理 cart_item。"""
+    from bookstore.models import CartItem
+
+    CartItem.objects.all().delete()
+    yield
+    CartItem.objects.all().delete()
+
+
 @pytest.fixture
 def creditlevels(db):
     """创建 0-5 级会员等级（积分制，无信用额度）。"""

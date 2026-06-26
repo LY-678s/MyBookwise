@@ -15,6 +15,9 @@ import pytest
 from bookstore.cart_store import get_cart, save_cart, clear_cart
 
 
+pytestmark = pytest.mark.django_db
+
+
 class TestGetCart:
     """get_cart 函数测试。"""
 

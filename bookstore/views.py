@@ -1104,7 +1104,7 @@ def membership_checkout(request: HttpRequest) -> HttpResponse:
         return redirect("bookstore:account_wallet")
 
     customer = get_object_or_404(Customer, pk=request.session["customer_id"])
-    site = getattr(settings, "SITE_URL", request.build_absolute_uri("/")).rstrip("/")
+    site = getattr(settings, "SITE_URL", "https://ly.mybookwise.xyz").rstrip("/")
     redirect_path = (request.POST.get("redirect_to") or "").strip()
     if redirect_path.startswith("/") and not redirect_path.startswith("//"):
         wallet_path = redirect_path
