@@ -34,4 +34,4 @@ Write-Host "Using config: $Config" -ForegroundColor DarkGray
 Write-Host "Press Ctrl+C to stop the tunnel." -ForegroundColor DarkGray
 Write-Host ""
 
-cloudflared tunnel --config $Config run
+cloudflared tunnel --config $Config --protocol http2 run
