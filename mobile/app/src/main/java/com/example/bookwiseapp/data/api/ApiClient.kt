@@ -6,6 +6,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
@@ -46,15 +47,30 @@ object ApiClient {
         level = HttpLoggingInterceptor.Level.BODY
     }
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
-        .addInterceptor(loggingInterceptor)
-        .build()
+    private fun buildHttpClient(readTimeoutSec: Long): OkHttpClient =
+        OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSec, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(readTimeoutSec + 15, TimeUnit.SECONDS)
+            .build()
 
-    val service: ApiService = Retrofit.Builder()
-        .baseUrl(BASE_URL)
-        .client(okHttpClient)
-        .addConverterFactory(GsonConverterFactory.create())
-        .build()
-        .create(ApiService::class.java)
+    /** 常规 API（默认读超时 45s，避免 OkHttp 默认 10s 过短）。 */
+    private val okHttpClient = buildHttpClient(readTimeoutSec = 45)
+
+    /** AI 对话：服务端调用大模型较慢，单独放宽读超时。 */
+    private val aiHttpClient = buildHttpClient(readTimeoutSec = 120)
+
+    private fun buildRetrofit(client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+    val service: ApiService = buildRetrofit(okHttpClient).create(ApiService::class.java)
+
+    val aiService: ApiService = buildRetrofit(aiHttpClient).create(ApiService::class.java)
 }
