@@ -12,7 +12,7 @@ class AiRepository : BaseRepository() {
     )
 
     suspend fun sendMessage(message: String): Result<AiChatResponse> = safeCall(
-        call = { ApiClient.service.sendAiMessage(AiChatRequest(message)) },
+        call = { ApiClient.aiService.sendAiMessage(AiChatRequest(message)) },
         errorField = { it.error },
         successCheck = { it.success }
     )

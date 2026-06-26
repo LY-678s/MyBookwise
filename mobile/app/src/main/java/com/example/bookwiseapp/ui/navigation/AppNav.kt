@@ -110,6 +110,22 @@ fun AppNav(
 
     val showBottomBar = currentRoute in mainRoutes
 
+    fun clearUserSession() {
+        accountVm.resetSession()
+        cartVm.resetSession()
+        orderVm.resetSession()
+        favoriteVm.resetSession()
+        bookVm.resetSession()
+        aiVm.resetSession()
+    }
+
+    fun onAuthSuccess() {
+        clearUserSession()
+        accountVm.loadAccount()
+        cartVm.loadCart()
+        bookVm.refreshBooks()
+    }
+
     val handleOrderPaid: (Int, String?, com.example.bookwiseapp.data.api.model.CustomerData?) -> Unit =
         { orderId, message, account ->
             cartVm.loadCart()
@@ -274,6 +290,7 @@ fun AppNav(
                 LoginScreen(
                     viewModel = authVm,
                     onLoginSuccess = {
+                        onAuthSuccess()
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
@@ -285,6 +302,7 @@ fun AppNav(
                 RegisterScreen(
                     viewModel = authVm,
                     onRegisterSuccess = {
+                        onAuthSuccess()
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
@@ -332,6 +350,7 @@ fun AppNav(
                     onBrowseHistoryClick = { navController.navigate(Routes.BROWSE_HISTORY) },
                     onLogout = {
                         authVm.logout {
+                            clearUserSession()
                             navController.navigate(Routes.LOGIN) {
                                 popUpTo(0) { inclusive = true }
                             }

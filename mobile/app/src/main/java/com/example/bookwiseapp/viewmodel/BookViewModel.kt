@@ -343,4 +343,13 @@ class BookViewModel : ViewModel() {
             }
         }
     }
+
+    fun resetSession() {
+        nextPage = 1
+        _homeState.value = HomeUiState()
+        _searchState.value = SearchUiState()
+        _detailState.value = BookDetailUiState()
+        _categoriesState.value = CategoriesUiState()
+        _rankingsState.value = RankingsUiState()
+    }
 }

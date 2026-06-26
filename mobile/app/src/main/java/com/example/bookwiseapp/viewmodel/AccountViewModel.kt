@@ -159,6 +159,11 @@ class AccountViewModel : ViewModel() {
         _state.value = _state.value.copy(message = null, error = null)
     }
 
+    fun resetSession() {
+        _state.value = AccountUiState()
+        _browseHistoryState.value = BrowseHistoryUiState()
+    }
+
     fun loadBrowseHistory() {
         viewModelScope.launch {
             _browseHistoryState.value = _browseHistoryState.value.copy(isLoading = true, error = null)
