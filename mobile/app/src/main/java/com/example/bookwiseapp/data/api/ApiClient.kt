@@ -1,6 +1,11 @@
 package com.example.bookwiseapp.data.api
 
 import com.example.bookwiseapp.BuildConfig
+import com.example.bookwiseapp.data.local.TokenStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -17,6 +22,7 @@ object ApiClient {
     val BASE_URL: String = "$SERVER_BASE/api/"
 
     var token: String? = null
+    private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** 将相对路径拼成完整 URL；封面请走 bookCoverUrl()。 */
     fun fullImageUrl(relativePath: String?): String? {
@@ -36,10 +42,18 @@ object ApiClient {
     }
 
     private val authInterceptor = Interceptor { chain ->
+        val currentToken = token
         val req = chain.request().newBuilder().apply {
-            token?.let { addHeader("Authorization", "Token $it") }
+            currentToken?.let { addHeader("Authorization", "Token $it") }
         }.build()
-        chain.proceed(req)
+        val response = chain.proceed(req)
+        if (currentToken != null && response.code in listOf(401, 403)) {
+            token = null
+            authScope.launch {
+                runCatching { TokenStore.instance.clearToken() }
+            }
+        }
+        response
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {

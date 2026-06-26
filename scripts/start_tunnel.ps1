@@ -26,4 +26,8 @@ if (-not $cf) {
     exit 1
 }
 
-cloudflared tunnel --url http://localhost:8000
+cloudflared tunnel `
+    --url http://localhost:8000 `
+    --protocol http2 `
+    --edge-ip-version 4 `
+    --retries 20

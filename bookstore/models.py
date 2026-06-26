@@ -326,6 +326,26 @@ class CartItem(models.Model):
         return f"CartItem({self.customer_id}, {self.isbn}, x{self.quantity})"
 
 
+class CustomerAuthToken(models.Model):
+    """持久化 APP 登录令牌，供 Gunicorn 多 worker 共享。"""
+    token = models.CharField(max_length=64, primary_key=True)
+    customer_id = models.IntegerField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "customer_auth_token"
+        indexes = [
+            models.Index(fields=["customer_id"], name="auth_token_customer_idx"),
+        ]
+        verbose_name = "APP登录令牌"
+        verbose_name_plural = "APP登录令牌"
+
+    def __str__(self):
+        return f"CustomerAuthToken({self.customer_id}, {self.token[:6]}...)"
+
+
 class CustomerProfile(models.Model):
     """会员积分与有效期（Django 托管表，Customer 表为 legacy SQL）。"""
     customer = models.OneToOneField(

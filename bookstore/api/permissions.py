@@ -1,13 +1,23 @@
-"""API 权限：判断 request.user 是否为已登录的 Customer。"""
+"""Permissions for the mobile API."""
+
 from rest_framework.permissions import BasePermission
 
 from bookstore.models import Customer
 
+from .debug_logging import logger, request_context
+
 
 class IsCustomer(BasePermission):
-    """对应 Web 端 @customer_required 装饰器。"""
+    """Require an authenticated Customer for protected API endpoints."""
 
     message = "请先登录"
 
     def has_permission(self, request, view):
-        return isinstance(request.user, Customer)
+        allowed = isinstance(request.user, Customer)
+        if not allowed:
+            logger.warning(
+                "api_permission_denied view=%s context=%s",
+                view.__class__.__name__,
+                request_context(request),
+            )
+        return allowed

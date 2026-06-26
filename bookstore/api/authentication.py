@@ -10,6 +10,7 @@ from rest_framework.authentication import BaseAuthentication
 from bookstore.models import Customer
 
 from .auth_tokens import get_customer_id
+from .debug_logging import logger, mask_token, request_context
 
 
 class CustomerTokenAuthentication(BaseAuthentication):
@@ -25,11 +26,22 @@ class CustomerTokenAuthentication(BaseAuthentication):
         token = auth_header[len(self.keyword) + 1 :].strip()
         customer_id = get_customer_id(token)
         if customer_id is None:
+            logger.warning(
+                "api_token_invalid context=%s",
+                request_context(request, {"token": mask_token(token)}),
+            )
             return None
 
         try:
             customer = Customer.objects.select_related("levelid").get(pk=customer_id)
         except Customer.DoesNotExist:
+            logger.warning(
+                "api_token_customer_missing context=%s",
+                request_context(
+                    request,
+                    {"token": mask_token(token), "resolved_customer_id": customer_id},
+                ),
+            )
             return None
 
         return (customer, token)

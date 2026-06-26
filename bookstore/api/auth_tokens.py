@@ -1,50 +1,70 @@
-"""
-顾客 Token 管理（基于 Django Cache，无需新增数据库表）
+"""Persistent customer tokens for the mobile API.
 
-Web 端用 Session 存 customer_id；APP 端用 Token，映射关系缓存在内存/Redis 中。
+Tokens are stored in MySQL instead of Django's local memory cache so every
+Gunicorn worker can authenticate the same app session.
 """
+
 from __future__ import annotations
 
 import secrets
 
-from django.core.cache import cache
+from django.db import connection
+from django.db.utils import ProgrammingError
+from django.utils import timezone
 
-# Token 有效期：7 天（秒）
-TOKEN_TTL = 60 * 60 * 24 * 7
+from bookstore.models import CustomerAuthToken
 
-_TOKEN_PREFIX = "customer_token:"
-_CUSTOMER_TOKENS_PREFIX = "customer_tokens:"  # 同一顾客仅保留最新 Token（单设备登录）
+_TABLE_READY = False
+
+
+def _ensure_token_table() -> None:
+    global _TABLE_READY
+    if _TABLE_READY:
+        return
+    table_name = CustomerAuthToken._meta.db_table
+    if table_name not in connection.introspection.table_names():
+        with connection.schema_editor() as schema_editor:
+            schema_editor.create_model(CustomerAuthToken)
+    _TABLE_READY = True
 
 
 def create_token(customer_id: int) -> str:
-    """登录/注册成功后签发 Token，并作废该顾客旧 Token。"""
+    """Issue a new token and revoke previous tokens for this customer."""
+
+    _ensure_token_table()
     revoke_tokens_for_customer(customer_id)
     token = secrets.token_hex(20)
-    cache.set(f"{_TOKEN_PREFIX}{token}", customer_id, timeout=TOKEN_TTL)
-    cache.set(f"{_CUSTOMER_TOKENS_PREFIX}{customer_id}", token, timeout=TOKEN_TTL)
+    CustomerAuthToken.objects.create(token=token, customer_id=customer_id)
     return token
 
 
 def get_customer_id(token: str) -> int | None:
-    """根据 Token 解析 customer_id；无效或过期返回 None。"""
+    """Resolve a token to customer_id; return None when it is invalid."""
+
     if not token:
         return None
-    return cache.get(f"{_TOKEN_PREFIX}{token}")
+    _ensure_token_table()
+    try:
+        record = CustomerAuthToken.objects.filter(token=token).only("customer_id").first()
+    except ProgrammingError:
+        _ensure_token_table()
+        record = CustomerAuthToken.objects.filter(token=token).only("customer_id").first()
+    if record is None:
+        return None
+    CustomerAuthToken.objects.filter(token=token).update(last_used_at=timezone.now())
+    return record.customer_id
 
 
 def revoke_token(token: str) -> None:
-    """注销：删除 Token 映射。"""
-    customer_id = cache.get(f"{_TOKEN_PREFIX}{token}")
-    cache.delete(f"{_TOKEN_PREFIX}{token}")
-    if customer_id is not None:
-        cached = cache.get(f"{_CUSTOMER_TOKENS_PREFIX}{customer_id}")
-        if cached == token:
-            cache.delete(f"{_CUSTOMER_TOKENS_PREFIX}{customer_id}")
+    """Delete a single token during logout."""
+
+    if token:
+        _ensure_token_table()
+        CustomerAuthToken.objects.filter(token=token).delete()
 
 
 def revoke_tokens_for_customer(customer_id: int) -> None:
-    """使某顾客全部 Token 失效（重新登录时调用）。"""
-    old = cache.get(f"{_CUSTOMER_TOKENS_PREFIX}{customer_id}")
-    if old:
-        cache.delete(f"{_TOKEN_PREFIX}{old}")
-    cache.delete(f"{_CUSTOMER_TOKENS_PREFIX}{customer_id}")
+    """Delete all tokens for a customer before issuing a new one."""
+
+    _ensure_token_table()
+    CustomerAuthToken.objects.filter(customer_id=customer_id).delete()
